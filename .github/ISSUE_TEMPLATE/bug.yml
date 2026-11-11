@@ -1,0 +1,32 @@
+name: Bug
+description: Something does not work as expected
+labels: ["type: bug", "status: triage"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens?
+      description: The behaviour you observe, ideally with the error message or a screenshot.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a page
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Notiva version and macOS version.
+      placeholder: Notiva 0.1.0, macOS 15.1
