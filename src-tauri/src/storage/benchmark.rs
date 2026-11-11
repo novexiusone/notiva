@@ -87,26 +87,38 @@ impl Random {
     }
 }
 
+/// How long a query took and how many rows it returned.
+type Sample = (Duration, usize);
+
 struct Timings {
     name: &'static str,
     target: Duration,
-    samples: Vec<Duration>,
+    samples: Vec<Sample>,
 }
 
 impl Timings {
-    fn report(mut self) -> String {
-        self.samples.sort();
-        let median = self.samples[self.samples.len() / 2];
-        let p95 = self.samples[(self.samples.len() * 95 / 100).min(self.samples.len() - 1)];
-        let max = *self.samples.last().unwrap();
+    fn report(self) -> String {
+        let mut durations: Vec<Duration> = self.samples.iter().map(|sample| sample.0).collect();
+        durations.sort();
+        let median = durations[durations.len() / 2];
+        let p95 = durations[(durations.len() * 95 / 100).min(durations.len() - 1)];
+        let max = *durations.last().unwrap();
+        let fewest = self.samples.iter().map(|sample| sample.1).min().unwrap();
+        let most = self.samples.iter().map(|sample| sample.1).max().unwrap();
+        let rows = if fewest == most {
+            fewest.to_string()
+        } else {
+            format!("{fewest} to {most}")
+        };
         let verdict = if p95 <= self.target {
             "ok"
         } else {
             "over target"
         };
         format!(
-            "| {} | {:.1} ms | {:.1} ms | {:.1} ms | {} ms | {} |",
+            "| {} | {} | {:.1} ms | {:.1} ms | {:.1} ms | {} ms | {} |",
             self.name,
+            rows,
             median.as_secs_f64() * 1000.0,
             p95.as_secs_f64() * 1000.0,
             max.as_secs_f64() * 1000.0,
@@ -114,14 +126,21 @@ impl Timings {
             verdict
         )
     }
+
+    /// A benchmark over empty results would measure nothing.
+    fn assert_rows(&self, expected: impl Fn(usize) -> bool) {
+        let most = self.samples.iter().map(|sample| sample.1).max().unwrap();
+        assert!(expected(most), "{} returned at most {most} rows", self.name);
+    }
 }
 
 async fn execute(storage: &Storage, statements: String) {
     storage.db.query(statements).await.unwrap().check().unwrap();
 }
 
-/// Runs a query, reads its first result and returns how long both took.
-async fn time(storage: &Storage, query: &str, bindings: Vec<(&'static str, String)>) -> Duration {
+/// Runs a query and reads its first result. Returns the time both took and
+/// the number of rows that came back.
+async fn time(storage: &Storage, query: &str, bindings: Vec<(&'static str, String)>) -> Sample {
     let started = Instant::now();
     let mut request = storage.db.query(query);
     for binding in bindings {
@@ -129,8 +148,12 @@ async fn time(storage: &Storage, query: &str, bindings: Vec<(&'static str, Strin
     }
     let value: Value = request.await.unwrap().take(0).unwrap();
     let elapsed = started.elapsed();
-    std::hint::black_box(value);
-    elapsed
+    let rows = match value {
+        Value::Array(rows) => rows.len(),
+        Value::None | Value::Null => 0,
+        _ => 1,
+    };
+    (elapsed, rows)
 }
 
 async fn seed(storage: &Storage, random: &mut Random) {
@@ -283,6 +306,20 @@ async fn benchmark() {
         );
     }
 
+    // Without a limit, to show how many blocks a term really matches.
+    let mut search_all = Vec::new();
+    for _ in 0..10 {
+        let term = VOCABULARY[random.next(VOCABULARY.len())].to_string();
+        search_all.push(
+            time(
+                &storage,
+                "SELECT VALUE id FROM block WHERE text @@ $term",
+                vec![("term", term)],
+            )
+            .await,
+        );
+    }
+
     let mut search_titles = Vec::new();
     for _ in 0..SAMPLES {
         let term = VOCABULARY[random.next(VOCABULARY.len())].to_string();
@@ -309,9 +346,7 @@ async fn benchmark() {
         directory_size(&path) as f64 / 1024.0 / 1024.0
     );
     println!();
-    println!("| Query | Median | p95 | Max | Target | Result |");
-    println!("| --- | --- | --- | --- | --- | --- |");
-    for timings in [
+    let timings = [
         Timings {
             name: "Load the blocks of a page",
             target: milliseconds(50),
@@ -342,7 +377,23 @@ async fn benchmark() {
             target: milliseconds(200),
             samples: search_titles,
         },
-    ] {
-        println!("{}", timings.report());
+        Timings {
+            name: "Search block text, every match",
+            target: milliseconds(200),
+            samples: search_all,
+        },
+    ];
+    timings[0].assert_rows(|rows| rows == BLOCKS_PER_PAGE);
+    timings[1].assert_rows(|rows| rows > 0);
+    timings[2].assert_rows(|rows| rows > 0);
+    timings[3].assert_rows(|rows| rows == PAGES);
+    timings[4].assert_rows(|rows| rows == 20);
+    timings[5].assert_rows(|rows| rows == 20);
+    timings[6].assert_rows(|rows| rows > 1_000);
+
+    println!("| Query | Rows | Median | p95 | Max | Target | Result |");
+    println!("| --- | --- | --- | --- | --- | --- | --- |");
+    for timing in timings {
+        println!("{}", timing.report());
     }
 }
