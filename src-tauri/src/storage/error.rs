@@ -4,6 +4,12 @@
 /// this module.
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
+    #[error("{0} was not found")]
+    NotFound(String),
+
+    #[error("{0}")]
+    Invalid(String),
+
     #[error("database error: {0}")]
     Database(String),
 

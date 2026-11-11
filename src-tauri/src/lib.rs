@@ -1,4 +1,5 @@
 mod commands;
+mod domain;
 mod storage;
 
 use tauri::Manager;
@@ -24,7 +25,14 @@ pub fn run() {
             app.manage(storage);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::app::app_info])
+        .invoke_handler(tauri::generate_handler![
+            commands::app::app_info,
+            commands::pages::list_pages,
+            commands::pages::create_page,
+            commands::pages::rename_page,
+            commands::pages::move_page,
+            commands::pages::delete_page,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
