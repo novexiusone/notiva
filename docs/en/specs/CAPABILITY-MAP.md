@@ -8,7 +8,7 @@ Notiva is a local-first Notion alternative for macOS: one user, no collaboration
 | --------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------- |
 | `repo-workflow` | Issue forms, labels, CI linting (commits, PR titles, branch names), release and changelog automation, branch protection | —               | [SPEC-repo-workflow.md](SPEC-repo-workflow.md) |
 | `app-shell`     | Tauri + React + Vite scaffold, Tailwind/shadcn, theme, layout with sidebar and main area, build CI                      | `repo-workflow` | [SPEC-app-shell.md](SPEC-app-shell.md)         |
-| `storage`       | Embedded SurrealDB, repository layer, schema, migrations, benchmark                                                     | `app-shell`     | to follow                                      |
+| `storage`       | Embedded SurrealDB, repository layer, schema, migrations, benchmark                                                     | `app-shell`     | [SPEC-storage.md](SPEC-storage.md)             |
 | `pages`         | Create, rename, move and delete pages; hierarchy; sidebar tree                                                          | `storage`       | to follow                                      |
 | `editor`        | BlockNote, mapping block JSON to block records, autosave, slash menu, images, undo/redo, shortcuts                      | `pages`         | to follow                                      |
 | `links`         | `[[...]]` links and backlinks through graph relations                                                                   | `editor`        | to follow                                      |
