@@ -1,21 +1,21 @@
 # Notiva
 
-Lokale Notion-Alternative für macOS. Tauri 2 (Rust-Backend, React-Frontend), Daten in SurrealDB embedded.
+Local-first Notion alternative for macOS. Tauri 2 (Rust backend, React frontend), data in embedded SurrealDB.
 
-## Wo was steht
+## Where things are
 
-- `docs/specs/CAPABILITY-MAP.md`: Module, Abhängigkeiten, Reihenfolge, projektweite Annahmen und Grenzen. Zuerst lesen.
-- `docs/specs/SPEC-<modul-id>.md`: Spec je Modul. Vor der Arbeit an einem Modul lesen, bei geänderten Entscheidungen zuerst die Spec anpassen.
-- Backlog, Ideen und Aufgaben sind GitHub-Issues in `novexlab/notiva`, nie Markdown-Dateien.
+- `docs/en/specs/CAPABILITY-MAP.md`: modules, dependencies, build order, project-wide assumptions and boundaries. Read this first.
+- `docs/en/specs/SPEC-<module-id>.md`: one spec per module. Read it before working on a module; when a decision changes, update the spec first.
+- Backlog, ideas and tasks are GitHub issues in `novexlab/notiva`, never Markdown files.
 
-## Arbeitsablauf
+## Language
 
-- GitHub wird über die `gh` CLI bedient.
-- Kein Commit auf `main`. Branch `type/kurze-beschreibung` (`feat`, `fix`, `hotfix`, `release`, `chore`), dann PR mit `Closes #N`.
-- Commits und PR-Titel nach Conventional Commits, englisch: `type(scope): description`. Scope ist in der Regel die Modul-ID.
-- Merge per Squash. Der PR-Titel wird zur Commit-Message auf `main`.
-- `CHANGELOG.md` und Versionsnummern nie von Hand ändern, das übernehmen release-please und git-cliff.
+Everything is English: code, identifiers, comments, commits, branches, issues, pull requests, docs. Documentation lives under `docs/<language>/`; `docs/en/` is the source of truth, `docs/de/` holds German translations. The UI defaults to English and ships a German locale.
 
-## Sprache
+## Workflow
 
-Code, Bezeichner, Commits: englisch. UI-Texte, Specs, Issues: deutsch.
+- Use the `gh` CLI for GitHub.
+- No commits on `main`. Branch `type/short-description` (`feat`, `fix`, `hotfix`, `release`, `chore`), then a pull request with `Closes #N`.
+- Commits and PR titles follow Conventional Commits: `type(scope): description`. The scope is usually the module id.
+- Squash merge. The PR title becomes the commit message on `main`.
+- Never edit `CHANGELOG.md` or version numbers by hand; release-please and git-cliff own them.
