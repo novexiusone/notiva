@@ -1,0 +1,25 @@
+name: Feature
+description: Eine neue Funktion, die umgesetzt werden soll
+labels: ["type: feature", "status: triage"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Was soll möglich sein?
+      description: Aus Sicht des Nutzers beschreiben.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Fertig, wenn
+      description: Überprüfbare Kriterien.
+      value: |
+        - [ ] 
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Hinweise
+      description: Betroffenes Modul, Abhängigkeiten, Entwürfe.

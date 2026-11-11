@@ -1,0 +1,18 @@
+name: Aufgabe
+description: Arbeit ohne neue Nutzerfunktion (Setup, CI, Refactoring, Doku)
+labels: ["type: task", "status: triage"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Was ist zu tun?
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Fertig, wenn
+      value: |
+        - [ ] 
+    validations:
+      required: true
