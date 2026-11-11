@@ -1,0 +1,13 @@
+{
+  "sidebar": {
+    "search": "Suche",
+    "home": "Start",
+    "pages": "Seiten",
+    "noPages": "Noch keine Seiten",
+    "settings": "Einstellungen"
+  },
+  "home": {
+    "title": "Start",
+    "empty": "Hier erscheinen deine Seiten."
+  }
+}

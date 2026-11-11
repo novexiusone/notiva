@@ -1,6 +1,6 @@
 name: Task
 description: Work without a new user-facing feature (setup, CI, refactoring, docs)
-labels: ["type: task", "status: triage"]
+labels: ['type: task', 'status: triage']
 body:
   - type: textarea
     id: what
@@ -13,6 +13,6 @@ body:
     attributes:
       label: Done when
       value: |
-        - [ ] 
+        - [ ]
     validations:
       required: true

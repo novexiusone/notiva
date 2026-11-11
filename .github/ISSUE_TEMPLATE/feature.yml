@@ -1,6 +1,6 @@
 name: Feature
 description: New functionality that should be built
-labels: ["type: feature", "status: triage"]
+labels: ['type: feature', 'status: triage']
 body:
   - type: textarea
     id: goal
@@ -15,7 +15,7 @@ body:
       label: Done when
       description: Criteria that can be checked.
       value: |
-        - [ ] 
+        - [ ]
     validations:
       required: true
   - type: textarea

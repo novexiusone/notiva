@@ -1,0 +1,8 @@
+dist
+pnpm-lock.yaml
+CHANGELOG.md
+.release-please-manifest.json
+src-tauri/target
+src-tauri/gen
+src-tauri/icons
+src/components/ui

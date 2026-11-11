@@ -1,6 +1,6 @@
 name: Idea
 description: A thought that still has to be checked against the mission
-labels: ["type: idea", "status: triage"]
+labels: ['type: idea', 'status: triage']
 body:
   - type: textarea
     id: idea
