@@ -6,14 +6,14 @@ The repository enforces the agreed workflow itself instead of relying on discipl
 
 ## Tools
 
-| Purpose | Tool |
-|---|---|
-| Check PR titles | `amannn/action-semantic-pull-request` |
-| Check commit messages | `wagoid/commitlint-github-action` with `@commitlint/config-conventional` |
-| Check branch names | Shell step with a regex |
-| Version, tag, GitHub release | `googleapis/release-please-action` (manifest mode) |
-| `CHANGELOG.md` in Keep a Changelog format | `orhun/git-cliff-action` |
-| Branch protection | GitHub ruleset on `main` |
+| Purpose                                   | Tool                                                                     |
+| ----------------------------------------- | ------------------------------------------------------------------------ |
+| Check PR titles                           | `amannn/action-semantic-pull-request`                                    |
+| Check commit messages                     | `wagoid/commitlint-github-action` with `@commitlint/config-conventional` |
+| Check branch names                        | Shell step with a regex                                                  |
+| Version, tag, GitHub release              | `googleapis/release-please-action` (manifest mode)                       |
+| `CHANGELOG.md` in Keep a Changelog format | `orhun/git-cliff-action`                                                 |
+| Branch protection                         | GitHub ruleset on `main`                                                 |
 
 ## Workflow
 

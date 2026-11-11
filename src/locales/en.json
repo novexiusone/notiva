@@ -1,0 +1,13 @@
+{
+  "sidebar": {
+    "search": "Search",
+    "home": "Home",
+    "pages": "Pages",
+    "noPages": "No pages yet",
+    "settings": "Settings"
+  },
+  "home": {
+    "title": "Home",
+    "empty": "Your pages will appear here."
+  }
+}
