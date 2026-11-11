@@ -1,19 +1,19 @@
 name: Feature
-description: Eine neue Funktion, die umgesetzt werden soll
+description: New functionality that should be built
 labels: ["type: feature", "status: triage"]
 body:
   - type: textarea
     id: goal
     attributes:
-      label: Was soll möglich sein?
-      description: Aus Sicht des Nutzers beschreiben.
+      label: What should be possible?
+      description: Describe it from the user's point of view.
     validations:
       required: true
   - type: textarea
     id: done
     attributes:
-      label: Fertig, wenn
-      description: Überprüfbare Kriterien.
+      label: Done when
+      description: Criteria that can be checked.
       value: |
         - [ ] 
     validations:
@@ -21,5 +21,5 @@ body:
   - type: textarea
     id: notes
     attributes:
-      label: Hinweise
-      description: Betroffenes Modul, Abhängigkeiten, Entwürfe.
+      label: Notes
+      description: Affected module, dependencies, sketches.

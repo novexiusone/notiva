@@ -1,5 +1,5 @@
 Closes #
 
-## Was ändert sich?
+## What changes?
 
-## Wie geprüft?
+## How was it verified?

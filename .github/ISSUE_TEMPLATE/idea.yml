@@ -1,15 +1,15 @@
-name: Idee
-description: Ein Gedanke, der noch gegen die Hauptmission geprüft werden muss
+name: Idea
+description: A thought that still has to be checked against the mission
 labels: ["type: idea", "status: triage"]
 body:
   - type: textarea
     id: idea
     attributes:
-      label: Idee
+      label: Idea
     validations:
       required: true
   - type: textarea
     id: why
     attributes:
-      label: Warum passt das zu Notiva?
-      description: Notiva ist lokal, für einen Nutzer, ohne Cloud-Zwang.
+      label: Why does this fit Notiva?
+      description: Notiva is local, single-user and has no cloud requirement.

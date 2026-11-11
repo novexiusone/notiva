@@ -1,17 +1,17 @@
-name: Aufgabe
-description: Arbeit ohne neue Nutzerfunktion (Setup, CI, Refactoring, Doku)
+name: Task
+description: Work without a new user-facing feature (setup, CI, refactoring, docs)
 labels: ["type: task", "status: triage"]
 body:
   - type: textarea
     id: what
     attributes:
-      label: Was ist zu tun?
+      label: What needs to be done?
     validations:
       required: true
   - type: textarea
     id: done
     attributes:
-      label: Fertig, wenn
+      label: Done when
       value: |
         - [ ] 
     validations:
