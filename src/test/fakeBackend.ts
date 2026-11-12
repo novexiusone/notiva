@@ -1,6 +1,6 @@
 import { mockIPC } from '@tauri-apps/api/mocks';
 import { canMove, childIds, descendantIds, movePage } from '@/features/pages/tree';
-import type { Block, CommandError, Page } from '@/lib/commands';
+import type { Block, CommandError, Page, SearchHit } from '@/lib/commands';
 
 const STORAGE_KEY = 'notiva.fake.pages';
 const BLOCKS_KEY = 'notiva.fake.blocks';
@@ -12,6 +12,56 @@ type Options = {
   /** Documents by page id. */
   blocks?: Record<string, Block[]>;
 };
+
+/** Lower case, without accents, the way the real analyzer folds text. */
+function fold(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+}
+
+function blockTexts(document: Block[]): string[] {
+  return document.flatMap((block) => {
+    const inline = Array.isArray(block.content) ? (block.content as { text?: unknown }[]) : [];
+    const text = inline.map((part) => (typeof part.text === 'string' ? part.text : '')).join('');
+    return [text, ...blockTexts(block.children)];
+  });
+}
+
+/** A small stand-in for the full-text search: every word has to start some word of the text. */
+function search(pages: Page[], blocks: Record<string, Block[]>, query: string): SearchHit[] {
+  const words = fold(query)
+    .split(/\s+/)
+    .filter((word) => word.length >= 2);
+  if (words.length === 0) return [];
+
+  const startsQueryWord = (token: string) => words.some((word) => fold(token).startsWith(word));
+  const matches = (text: string) => {
+    const tokens = fold(text).split(/[^\p{L}\p{N}]+/u);
+    return words.every((word) => tokens.some((token) => token.startsWith(word)));
+  };
+  const excerptOf = (text: string) =>
+    text
+      .split(/([\p{L}\p{N}]+)/u)
+      .filter((part) => part !== '')
+      .map((part) => ({ text: part, matched: startsQueryWord(part) }));
+
+  const hits = pages.map((page) => {
+    const text = blockTexts(blocks[page.id] ?? []).find(matches);
+    return {
+      inTitle: matches(page.title),
+      hit: { pageId: page.id, title: page.title, excerpt: text ? excerptOf(text) : null },
+    };
+  });
+
+  return [
+    ...hits.filter((entry) => entry.inTitle),
+    ...hits.filter((entry) => !entry.inTitle && entry.hit.excerpt !== null),
+  ]
+    .map((entry) => entry.hit)
+    .slice(0, 20);
+}
 
 /** Whether any block of a document contains a link to the page. */
 function linksTo(document: Block[], pageId: string): boolean {
@@ -151,6 +201,9 @@ export function installFakeBackend({
           .map((page) => ({ id: page.id, title: page.title }))
           .sort((a, b) => a.title.localeCompare(b.title));
       }
+
+      case 'search':
+        return search(pages, blocks, args.query as string);
 
       case 'save_image': {
         const bytes = payload as unknown as Uint8Array;

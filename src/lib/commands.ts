@@ -13,6 +13,14 @@ export type Page = {
 /** A reference to a page: enough to show it in a list and open it. */
 export type PageRef = { id: string; title: string };
 
+/** A page found by search. */
+export type SearchHit = {
+  pageId: string;
+  title: string;
+  /** Text from the page that matches; `null` when only the title matched. */
+  excerpt: { text: string; matched: boolean }[] | null;
+};
+
 /**
  * A block in the shape the editor uses. The frontend passes documents through
  * without interpreting them; how blocks are stored is the backend's business.
@@ -48,6 +56,8 @@ export const commands = {
 
   /** The pages that link to a page. */
   listBacklinks: (pageId: string) => invoke<PageRef[]>('list_backlinks', { pageId }),
+
+  search: (query: string) => invoke<SearchHit[]>('search', { query }),
 
   /** Stores an image and resolves to the URL to put into the image block. */
   saveImage: async (file: Blob) =>

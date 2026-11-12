@@ -40,6 +40,12 @@
 
     --card: color-mix(in oklab, var(--background), white 3%);
     --popover: color-mix(in oklab, var(--background), white 5%);
+
+    /* On a dark background the steps have to be larger to be seen at all. */
+    --muted: color-mix(in oklab, var(--background), var(--foreground) 9%);
+    --accent: color-mix(in oklab, var(--background), var(--foreground) 12%);
+    --border: color-mix(in oklab, var(--background), var(--foreground) 14%);
+    --input: color-mix(in oklab, var(--background), var(--foreground) 18%);
   }
 }
 

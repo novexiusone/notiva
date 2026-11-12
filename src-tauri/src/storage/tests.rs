@@ -3,7 +3,7 @@ use surrealdb::types::SurrealValue;
 use super::migrations::{self, MIGRATIONS, Migration};
 use super::{Storage, StorageError};
 
-const LATEST: u32 = 2;
+const LATEST: u32 = 3;
 
 async fn storage() -> Storage {
     Storage::open_in_memory()

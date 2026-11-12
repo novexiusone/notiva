@@ -7,3 +7,4 @@ pub mod error;
 pub mod images;
 pub mod links;
 pub mod pages;
+pub mod search;

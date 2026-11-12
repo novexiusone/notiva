@@ -9,6 +9,7 @@ mod error;
 mod links;
 mod migrations;
 mod pages;
+mod search;
 
 #[cfg(test)]
 mod benchmark;
