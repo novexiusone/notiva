@@ -6,7 +6,8 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
-  globalIgnores(['dist', 'src-tauri/target', 'src-tauri/gen']),
+  // shadcn/ui components are generated and kept as they come.
+  globalIgnores(['dist', 'src-tauri/target', 'src-tauri/gen', 'src/components/ui']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

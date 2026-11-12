@@ -9,5 +9,21 @@
   "home": {
     "title": "Start",
     "empty": "Hier erscheinen deine Seiten."
+  },
+  "pages": {
+    "untitled": "Ohne Titel",
+    "new": "Neue Seite",
+    "addSubpage": "Unterseite hinzufügen",
+    "actions": "Seitenaktionen",
+    "rename": "Umbenennen",
+    "delete": "Löschen",
+    "expand": "Aufklappen",
+    "collapse": "Zuklappen",
+    "title": "Seitentitel",
+    "deleteTitle": "„{{title}}“ löschen?",
+    "deleteDescription": "Das lässt sich nicht rückgängig machen.",
+    "deleteDescriptionWithSubpages_one": "Dabei wird auch {{count}} Unterseite gelöscht. Das lässt sich nicht rückgängig machen.",
+    "deleteDescriptionWithSubpages_other": "Dabei werden auch {{count}} Unterseiten gelöscht. Das lässt sich nicht rückgängig machen.",
+    "cancel": "Abbrechen"
   }
 }

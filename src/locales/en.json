@@ -9,5 +9,21 @@
   "home": {
     "title": "Home",
     "empty": "Your pages will appear here."
+  },
+  "pages": {
+    "untitled": "Untitled",
+    "new": "New page",
+    "addSubpage": "Add a subpage",
+    "actions": "Page actions",
+    "rename": "Rename",
+    "delete": "Delete",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "title": "Page title",
+    "deleteTitle": "Delete “{{title}}”?",
+    "deleteDescription": "This cannot be undone.",
+    "deleteDescriptionWithSubpages_one": "This also deletes {{count}} subpage. This cannot be undone.",
+    "deleteDescriptionWithSubpages_other": "This also deletes {{count}} subpages. This cannot be undone.",
+    "cancel": "Cancel"
   }
 }

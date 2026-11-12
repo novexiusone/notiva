@@ -6,6 +6,7 @@
 
 mod error;
 mod migrations;
+mod pages;
 
 #[cfg(test)]
 mod benchmark;
@@ -24,13 +25,6 @@ const DATABASE: &str = "main";
 
 /// A handle to the embedded database with its schema up to date.
 pub struct Storage {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "read by the repositories that the pages module adds"
-        )
-    )]
     db: Surreal<Db>,
 }
 
