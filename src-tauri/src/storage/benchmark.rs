@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 use surrealdb::types::Value;
 
 use super::Storage;
+use crate::domain::Block;
 
 const PAGES: usize = 10_000;
 const BLOCKS_PER_PAGE: usize = 20;
@@ -333,6 +334,37 @@ async fn benchmark() {
         );
     }
 
+    // Editing: the editor sends the whole document, the repository writes the difference.
+    let edited_page = storage.create_page(None).await.unwrap().id;
+    let mut document: Vec<Block> = (0..200)
+        .map(|index| Block {
+            id: format!("edit{index}"),
+            kind: "paragraph".into(),
+            props: serde_json::Map::new(),
+            content: Some(serde_json::json!([
+                { "type": "text", "text": format!("paragraph {index} about the garden"), "styles": {} }
+            ])),
+            children: Vec::new(),
+        })
+        .collect();
+    storage.save_blocks(&edited_page, &document).await.unwrap();
+    let mut save_edit = Vec::new();
+    for sample in 0..SAMPLES {
+        let block = &mut document[random.next(200)];
+        block.content = Some(serde_json::json!([
+            { "type": "text", "text": format!("edited {sample} times near the river"), "styles": {} }
+        ]));
+        let started = Instant::now();
+        let summary = storage.save_blocks(&edited_page, &document).await.unwrap();
+        save_edit.push((started.elapsed(), summary.written));
+    }
+    let mut load_document = Vec::new();
+    for _ in 0..SAMPLES {
+        let started = Instant::now();
+        let blocks = storage.load_blocks(&edited_page).await.unwrap();
+        load_document.push((started.elapsed(), blocks.len()));
+    }
+
     let milliseconds = Duration::from_millis;
     println!();
     println!(
@@ -382,6 +414,16 @@ async fn benchmark() {
             target: milliseconds(200),
             samples: search_all,
         },
+        Timings {
+            name: "Save a 200-block page after editing one block",
+            target: milliseconds(50),
+            samples: save_edit,
+        },
+        Timings {
+            name: "Load a 200-block page into the editor",
+            target: milliseconds(50),
+            samples: load_document,
+        },
     ];
     timings[0].assert_rows(|rows| rows == BLOCKS_PER_PAGE);
     timings[1].assert_rows(|rows| rows > 0);
@@ -390,6 +432,8 @@ async fn benchmark() {
     timings[4].assert_rows(|rows| rows == 20);
     timings[5].assert_rows(|rows| rows == 20);
     timings[6].assert_rows(|rows| rows > 1_000);
+    timings[7].assert_rows(|rows| rows == 1);
+    timings[8].assert_rows(|rows| rows == 200);
 
     println!("| Query | Rows | Median | p95 | Max | Target | Result |");
     println!("| --- | --- | --- | --- | --- | --- | --- |");

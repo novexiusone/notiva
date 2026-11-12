@@ -4,6 +4,7 @@
 //! uses plain domain types and [`StorageError`], so the rest of the backend
 //! does not depend on the database.
 
+mod blocks;
 mod error;
 mod migrations;
 mod pages;

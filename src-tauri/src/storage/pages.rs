@@ -155,7 +155,7 @@ impl Storage {
         Ok(())
     }
 
-    async fn require_page(&self, id: &str) -> Result<(), StorageError> {
+    pub(super) async fn require_page(&self, id: &str) -> Result<(), StorageError> {
         let exists: Option<bool> = self
             .db
             .query("RETURN record::exists(type::record('page', $id))")

@@ -1,13 +1,16 @@
 import { mockIPC } from '@tauri-apps/api/mocks';
 import { canMove, childIds, descendantIds, movePage } from '@/features/pages/tree';
-import type { CommandError, Page } from '@/lib/commands';
+import type { Block, CommandError, Page } from '@/lib/commands';
 
 const STORAGE_KEY = 'notiva.fake.pages';
+const BLOCKS_KEY = 'notiva.fake.blocks';
 
 type Options = {
   /** Keep the data in localStorage so that it survives a reload. */
   persist?: boolean;
   pages?: Page[];
+  /** Documents by page id. */
+  blocks?: Record<string, Block[]>;
 };
 
 function fail(kind: CommandError['kind'], message: string): never {
@@ -19,16 +22,28 @@ function fail(kind: CommandError['kind'], message: string): never {
  * An in-memory implementation of the backend commands, following the same
  * rules as the repository layer. For development and tests only.
  */
-export function installFakeBackend({ persist = false, pages: initial = [] }: Options = {}) {
+export function installFakeBackend({
+  persist = false,
+  pages: initial = [],
+  blocks: initialBlocks = {},
+}: Options = {}) {
   let pages: Page[] = initial;
+  let blocks: Record<string, Block[]> = initialBlocks;
   if (persist) {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored !== null) pages = JSON.parse(stored) as Page[];
+    const storedBlocks = window.localStorage.getItem(BLOCKS_KEY);
+    if (storedBlocks !== null) blocks = JSON.parse(storedBlocks) as Record<string, Block[]>;
   }
 
   const save = (next: Page[]) => {
     pages = next;
     if (persist) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(pages));
+  };
+
+  const saveBlocks = (next: Record<string, Block[]>) => {
+    blocks = next;
+    if (persist) window.localStorage.setItem(BLOCKS_KEY, JSON.stringify(blocks));
   };
 
   const require = (id: string) => {
@@ -82,6 +97,22 @@ export function installFakeBackend({ persist = false, pages: initial = [] }: Opt
         require(id);
         const removed = new Set([id, ...descendantIds(pages, id)]);
         save(pages.filter((page) => !removed.has(page.id)));
+        saveBlocks(
+          Object.fromEntries(Object.entries(blocks).filter(([pageId]) => !removed.has(pageId))),
+        );
+        return null;
+      }
+
+      case 'load_blocks': {
+        const pageId = args.pageId as string;
+        require(pageId);
+        return blocks[pageId] ?? [];
+      }
+
+      case 'save_blocks': {
+        const pageId = args.pageId as string;
+        require(pageId);
+        saveBlocks({ ...blocks, [pageId]: structuredClone(args.blocks as Block[]) });
         return null;
       }
 

@@ -25,5 +25,8 @@
     "deleteDescriptionWithSubpages_one": "Dabei wird auch {{count}} Unterseite gelöscht. Das lässt sich nicht rückgängig machen.",
     "deleteDescriptionWithSubpages_other": "Dabei werden auch {{count}} Unterseiten gelöscht. Das lässt sich nicht rückgängig machen.",
     "cancel": "Abbrechen"
+  },
+  "editor": {
+    "saveFailed": "Die letzte Änderung konnte nicht gespeichert werden. Mit der nächsten Änderung wird es erneut versucht."
   }
 }

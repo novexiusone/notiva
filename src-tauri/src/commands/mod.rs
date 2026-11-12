@@ -2,5 +2,6 @@
 //! and plain functions that can be tested without Tauri.
 
 pub mod app;
+pub mod blocks;
 pub mod error;
 pub mod pages;

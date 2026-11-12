@@ -39,7 +39,8 @@ export function PageTree() {
   const movePage = useMovePage();
   const deletePage = useDeletePage();
   const tree = useRef<TreeApi<PageNode>>(null);
-  const [container, size] = useElementSize<HTMLDivElement>();
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const size = useElementSize(container);
   const [initialOpenState] = useState(openPages);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
@@ -92,15 +93,18 @@ export function PageTree() {
         </button>
       </header>
 
-      <div ref={container} className="min-h-0 flex-1">
+      <div ref={setContainer} className="min-h-0 flex-1">
         {pages.isSuccess && list.length === 0 ? (
           <p className="text-muted-foreground px-4 py-1 text-sm opacity-70">
             {t('sidebar.noPages')}
           </p>
-        ) : (
+        ) : container === null ? null : (
           <PageRowActionsContext.Provider value={actions}>
             <Tree<PageNode>
               ref={tree}
+              // Without a root the drag-and-drop backend listens on the whole window and
+              // cancels every drag it does not know, including block drags in the editor.
+              dndRootElement={container}
               data={nodes}
               width="100%"
               // Until the container has been measured there is room for a few rows.

@@ -25,5 +25,8 @@
     "deleteDescriptionWithSubpages_one": "This also deletes {{count}} subpage. This cannot be undone.",
     "deleteDescriptionWithSubpages_other": "This also deletes {{count}} subpages. This cannot be undone.",
     "cancel": "Cancel"
+  },
+  "editor": {
+    "saveFailed": "The last change could not be saved. It will be tried again with the next change."
   }
 }

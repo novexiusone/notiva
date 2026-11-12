@@ -2,6 +2,9 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
+/* BlockNote's shadcn components bring their own utility classes. */
+@source '../../node_modules/@blocknote/shadcn';
+
 /* Dark mode follows the system colour scheme. */
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
@@ -82,4 +85,53 @@
     @apply bg-background text-foreground antialiased;
     overscroll-behavior: none;
   }
+}
+
+/*
+ * The editor sits directly on the page: no surface of its own, the app's
+ * colours and font, and its text lined up with the page title.
+ */
+.bn-root.bn-container.bn-shadcn {
+  --bn-colors-editor-background: transparent;
+  --bn-colors-editor-text: var(--foreground);
+  --bn-colors-side-menu: var(--muted-foreground);
+  --bn-font-family: inherit;
+}
+
+.bn-root.bn-container.bn-shadcn .bn-editor {
+  padding-inline: 0;
+  font-family: inherit;
+}
+
+/* Headings stay below the page title in size. */
+.bn-root.bn-container.bn-shadcn [data-content-type='heading'] {
+  --level: 1.875em;
+}
+
+.bn-root.bn-container.bn-shadcn [data-content-type='heading'][data-level='2'] {
+  --level: 1.5em;
+}
+
+.bn-root.bn-container.bn-shadcn [data-content-type='heading'][data-level='3'] {
+  --level: 1.25em;
+}
+
+/* Code blocks are a quiet surface in both colour schemes instead of a black box. */
+.bn-root.bn-container.bn-shadcn .bn-block-content[data-content-type='codeBlock'] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+.bn-root.bn-container.bn-shadcn .bn-block-content[data-content-type='codeBlock'] > pre {
+  padding: 16px 20px;
+}
+
+.bn-root.bn-container.bn-shadcn .bn-block-content[data-content-type='codeBlock'] > div > select {
+  color: var(--muted-foreground);
+}
+
+.bn-root.bn-container.bn-shadcn input[type='checkbox'] {
+  accent-color: var(--foreground);
 }

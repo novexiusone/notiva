@@ -32,6 +32,8 @@ pub fn run() {
             commands::pages::rename_page,
             commands::pages::move_page,
             commands::pages::delete_page,
+            commands::blocks::load_blocks,
+            commands::blocks::save_blocks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
