@@ -9,3 +9,10 @@ pub struct Page {
     pub parent_id: Option<String>,
     pub position: f64,
 }
+
+/// A reference to a page: enough to show it in a list and open it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PageRef {
+    pub id: String,
+    pub title: String,
+}

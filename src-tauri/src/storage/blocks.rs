@@ -33,6 +33,8 @@ struct BlockWrite {
     props: Value,
     content: Option<Value>,
     text: String,
+    /// The pages this block links to.
+    links: Vec<String>,
 }
 
 /// What a save changed in the database.
@@ -42,7 +44,11 @@ pub struct SaveSummary {
     pub removed: usize,
 }
 
-fn flatten(blocks: &[Block], parent_id: Option<&str>, rows: &mut Vec<(BlockRow, String)>) {
+/// A flattened block with what is derived from its content: the plain text
+/// and the pages it links to.
+type Flat = (BlockRow, String, Vec<String>);
+
+fn flatten(blocks: &[Block], parent_id: Option<&str>, rows: &mut Vec<Flat>) {
     for (index, block) in blocks.iter().enumerate() {
         rows.push((
             BlockRow {
@@ -54,6 +60,7 @@ fn flatten(blocks: &[Block], parent_id: Option<&str>, rows: &mut Vec<(BlockRow, 
                 content: block.content.clone(),
             },
             block.plain_text(),
+            block.page_links(),
         ));
         flatten(&block.children, Some(&block.id), rows);
     }
@@ -109,7 +116,7 @@ impl Storage {
         flatten(blocks, None, &mut incoming);
 
         let mut seen = HashSet::new();
-        for (row, _) in &incoming {
+        for (row, _, _) in &incoming {
             if !seen.insert(row.id.as_str()) {
                 return Err(StorageError::Invalid(format!(
                     "block {} appears more than once in the document",
@@ -128,8 +135,8 @@ impl Storage {
         // An id that is new to this page must not exist anywhere else.
         let new_ids: Vec<String> = incoming
             .iter()
-            .filter(|(row, _)| !stored.contains_key(&row.id))
-            .map(|(row, _)| row.id.clone())
+            .filter(|(row, _, _)| !stored.contains_key(&row.id))
+            .map(|(row, _, _)| row.id.clone())
             .collect();
         if !new_ids.is_empty() {
             let taken: Vec<String> = self
@@ -154,8 +161,8 @@ impl Storage {
             .collect();
         let writes: Vec<BlockWrite> = incoming
             .into_iter()
-            .filter(|(row, _)| stored.get(&row.id) != Some(row))
-            .map(|(row, text)| BlockWrite {
+            .filter(|(row, _, _)| stored.get(&row.id) != Some(row))
+            .map(|(row, text, links)| BlockWrite {
                 id: row.id,
                 parent_id: row.parent_id,
                 position: row.position,
@@ -163,6 +170,7 @@ impl Storage {
                 props: row.props,
                 content: row.content,
                 text,
+                links,
             })
             .collect();
 
@@ -190,6 +198,14 @@ impl Storage {
                          props: $block.props,
                          content: $block.content,
                          text: $block.text,
+                     };
+                     -- The links of a block are replaced as a whole.
+                     DELETE links_to WHERE block = type::record('block', $block.id);
+                     FOR $target IN $block.links {
+                         LET $to = type::record('page', $target);
+                         IF record::exists($to) {
+                             RELATE $page->links_to->$to SET block = type::record('block', $block.id);
+                         };
                      };
                  };
                  FOR $id IN $removed {

@@ -6,6 +6,7 @@
 
 mod blocks;
 mod error;
+mod links;
 mod migrations;
 mod pages;
 

@@ -27,6 +27,44 @@ impl Block {
         }
         text.trim().to_owned()
     }
+
+    /// The ids of the pages this block links to, each once, in order of
+    /// first appearance.
+    pub fn page_links(&self) -> Vec<String> {
+        let mut targets = Vec::new();
+        if let Some(content) = &self.content {
+            collect_page_links(content, &mut targets);
+        }
+        targets
+    }
+}
+
+fn collect_page_links(value: &Value, targets: &mut Vec<String>) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                collect_page_links(item, targets);
+            }
+        }
+        Value::Object(object) => {
+            if object.get("type") == Some(&Value::from("pageLink")) {
+                let target = object
+                    .get("props")
+                    .and_then(|props| props.get("pageId"))
+                    .and_then(Value::as_str)
+                    .filter(|target| !target.is_empty());
+                if let Some(target) = target
+                    && !targets.iter().any(|known| known == target)
+                {
+                    targets.push(target.to_owned());
+                }
+            }
+            for nested in object.values() {
+                collect_page_links(nested, targets);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Walks inline content: styled text, links that wrap text, and table cells.
@@ -109,6 +147,31 @@ mod tests {
         assert_eq!(
             block.plain_text().split_whitespace().collect::<Vec<_>>(),
             ["A1", "B1"]
+        );
+    }
+
+    #[test]
+    fn page_links_are_read_from_the_content_once_each() {
+        let block = block(json!([
+            { "type": "text", "text": "See ", "styles": {} },
+            { "type": "pageLink", "props": { "pageId": "a" } },
+            { "type": "text", "text": " and ", "styles": {} },
+            { "type": "pageLink", "props": { "pageId": "b" } },
+            { "type": "pageLink", "props": { "pageId": "a" } },
+            { "type": "pageLink", "props": { "pageId": "" } },
+            { "type": "link", "href": "https://example.com", "content": [] }
+        ]));
+
+        assert_eq!(block.page_links(), ["a", "b"]);
+        assert_eq!(block.plain_text(), "See  and");
+    }
+
+    #[test]
+    fn a_block_without_links_has_no_page_links() {
+        assert!(
+            block(json!([{ "type": "text", "text": "plain", "styles": {} }]))
+                .page_links()
+                .is_empty()
         );
     }
 
