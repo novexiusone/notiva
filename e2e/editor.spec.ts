@@ -102,16 +102,17 @@ test('each page has its own content', async ({ page }) => {
 });
 
 test('undo and redo work', async ({ page }) => {
+  // The shortcut uses Cmd on macOS and Ctrl elsewhere, such as on the CI runner.
   await newPage(page, 'Undo');
   await page.keyboard.type('Keep this');
   await page.keyboard.press('Enter');
   await page.keyboard.type('Remove this');
   await expect(editor(page)).toContainText('Remove this');
 
-  await page.keyboard.press('Meta+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect(editor(page)).not.toContainText('Remove this');
 
-  await page.keyboard.press('Meta+Shift+z');
+  await page.keyboard.press('ControlOrMeta+Shift+z');
   await expect(editor(page)).toContainText('Remove this');
 });
 
