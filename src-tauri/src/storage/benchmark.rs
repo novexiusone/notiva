@@ -358,6 +358,22 @@ async fn benchmark() {
         let summary = storage.save_blocks(&edited_page, &document).await.unwrap();
         save_edit.push((started.elapsed(), summary.written));
     }
+    // Removing a block and deleting a page go through the delete cascade of the schema.
+    let mut remove_block = Vec::new();
+    for _ in 0..20 {
+        document.pop();
+        let started = Instant::now();
+        let summary = storage.save_blocks(&edited_page, &document).await.unwrap();
+        remove_block.push((started.elapsed(), summary.removed));
+    }
+    let mut delete_page = Vec::new();
+    for _ in 0..20 {
+        let page = format!("p{}", 5_000 + random.next(5_000));
+        let started = Instant::now();
+        let deleted = storage.delete_page(&page).await.is_ok();
+        delete_page.push((started.elapsed(), usize::from(deleted)));
+    }
+
     let mut load_document = Vec::new();
     for _ in 0..SAMPLES {
         let started = Instant::now();
@@ -424,6 +440,16 @@ async fn benchmark() {
             target: milliseconds(50),
             samples: load_document,
         },
+        Timings {
+            name: "Save a page after removing one block",
+            target: milliseconds(50),
+            samples: remove_block,
+        },
+        Timings {
+            name: "Delete a page with 20 blocks and its subpages",
+            target: milliseconds(50),
+            samples: delete_page,
+        },
     ];
     timings[0].assert_rows(|rows| rows == BLOCKS_PER_PAGE);
     timings[1].assert_rows(|rows| rows > 0);
@@ -433,7 +459,9 @@ async fn benchmark() {
     timings[5].assert_rows(|rows| rows == 20);
     timings[6].assert_rows(|rows| rows > 1_000);
     timings[7].assert_rows(|rows| rows == 1);
-    timings[8].assert_rows(|rows| rows == 200);
+    timings[8].assert_rows(|rows| rows == 180);
+    timings[9].assert_rows(|rows| rows == 1);
+    timings[10].assert_rows(|rows| rows == 1);
 
     println!("| Query | Rows | Median | p95 | Max | Target | Result |");
     println!("| --- | --- | --- | --- | --- | --- | --- |");
