@@ -272,8 +272,8 @@ mod tests {
 
         storage.move_page(&b, Some(&a), 0).await.unwrap();
 
-        assert_eq!(children(&storage, None).await, [a.clone()]);
         assert_eq!(children(&storage, Some(&a)).await, [b, existing]);
+        assert_eq!(children(&storage, None).await, [a]);
     }
 
     #[tokio::test]

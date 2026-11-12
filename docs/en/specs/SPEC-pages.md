@@ -8,13 +8,13 @@ A page has a title only. Its content is the `editor` module's job; until then th
 
 ## Tech stack
 
-| Area               | Choice                                                                        |
-| ------------------ | ----------------------------------------------------------------------------- |
-| Tree               | react-arborist (virtualised, drag and drop, inline rename)                    |
-| Routing            | TanStack Router, code-based routes, hash history                              |
-| Menus and dialogs  | shadcn/ui `dropdown-menu` and `alert-dialog`                                  |
-| Data fetching      | TanStack Query on top of the page commands                                    |
-| End-to-end tests   | Playwright against the frontend with an in-memory fake backend                |
+| Area              | Choice                                                         |
+| ----------------- | -------------------------------------------------------------- |
+| Tree              | react-arborist (virtualised, drag and drop, inline rename)     |
+| Routing           | TanStack Router, code-based routes, hash history               |
+| Menus and dialogs | shadcn/ui `dropdown-menu` and `alert-dialog`                   |
+| Data fetching     | TanStack Query on top of the page commands                     |
+| End-to-end tests  | Playwright against the frontend with an in-memory fake backend |
 
 ## Behaviour
 
@@ -29,13 +29,13 @@ There is no trash yet (#25), so deleting is final. The confirmation says so.
 
 ## Commands
 
-| Command        | Arguments                                    | Returns      |
-| -------------- | -------------------------------------------- | ------------ |
-| `list_pages`   | none                                         | `Page[]`     |
-| `create_page`  | `parentId: string \| null`                   | `Page`       |
-| `rename_page`  | `id: string`, `title: string`                | `Page`       |
-| `move_page`    | `id: string`, `parentId: string \| null`, `index: number` | nothing |
-| `delete_page`  | `id: string`                                 | nothing      |
+| Command       | Arguments                                                 | Returns  |
+| ------------- | --------------------------------------------------------- | -------- |
+| `list_pages`  | none                                                      | `Page[]` |
+| `create_page` | `parentId: string \| null`                                | `Page`   |
+| `rename_page` | `id: string`, `title: string`                             | `Page`   |
+| `move_page`   | `id: string`, `parentId: string \| null`, `index: number` | nothing  |
+| `delete_page` | `id: string`                                              | nothing  |
 
 ```ts
 type Page = { id: string; title: string; parentId: string | null; position: number };

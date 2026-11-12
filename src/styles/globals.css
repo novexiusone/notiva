@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
 /* Dark mode follows the system colour scheme. */
 @custom-variant dark (@media (prefers-color-scheme: dark));
