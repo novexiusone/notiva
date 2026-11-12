@@ -189,7 +189,8 @@ impl Storage {
                 "BEGIN TRANSACTION;
                  LET $page = type::record('page', $page_id);
                  FOR $block IN $writes {
-                     UPSERT type::record('block', $block.id) CONTENT {
+                     LET $record = type::record('block', $block.id);
+                     UPSERT $record CONTENT {
                          page: $page,
                          parent: IF $block.parent_id = NONE { NONE }
                              ELSE { type::record('block', $block.parent_id) },
@@ -200,11 +201,13 @@ impl Storage {
                          text: $block.text,
                      };
                      -- The links of a block are replaced as a whole.
-                     DELETE links_to WHERE block = type::record('block', $block.id);
+                     -- Found through the index on `block` first: a DELETE with the same
+                     -- condition scans the whole table.
+                     DELETE (SELECT VALUE id FROM links_to WHERE block = $record);
                      FOR $target IN $block.links {
                          LET $to = type::record('page', $target);
                          IF record::exists($to) {
-                             RELATE $page->links_to->$to SET block = type::record('block', $block.id);
+                             RELATE $page->links_to->$to SET block = $record;
                          };
                      };
                  };
