@@ -1,11 +1,14 @@
 import { de, en } from '@blocknote/core/locales';
-import { useCreateBlockNote } from '@blocknote/react';
+import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import '@blocknote/shadcn/style.css';
-import { useImperativeHandle, type Ref } from 'react';
+import { useImperativeHandle, useState, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBlocks, useSaveBlocks } from '@/features/editor/api';
 import { schema } from '@/features/editor/schema';
+import { SlashMenu } from '@/features/editor/SlashMenu';
+import { getSlashMenuItems, type SlashMenuItem } from '@/features/editor/slashMenuItems';
+import { SlashMenuQueryContext } from '@/features/editor/slashMenuQuery';
 import { useAutosave } from '@/features/editor/useAutosave';
 import type { Block } from '@/lib/commands';
 import { useColorScheme } from '@/lib/useColorScheme';
@@ -27,6 +30,7 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
   const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme();
   const autosave = useAutosave(useSaveBlocks(pageId));
+  const [slashQuery, setSlashQuery] = useState('');
 
   const editor = useCreateBlockNote({
     schema,
@@ -39,11 +43,24 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
 
   return (
     <>
-      <BlockNoteView
-        editor={editor}
-        theme={colorScheme}
-        onChange={() => autosave.schedule(() => editor.document as unknown as Block[])}
-      />
+      <SlashMenuQueryContext.Provider value={slashQuery}>
+        <BlockNoteView
+          editor={editor}
+          theme={colorScheme}
+          slashMenu={false}
+          onChange={() => autosave.schedule(() => editor.document as unknown as Block[])}
+        >
+          <SuggestionMenuController<(query: string) => Promise<SlashMenuItem[]>>
+            triggerCharacter="/"
+            suggestionMenuComponent={SlashMenu}
+            getItems={async (query) => {
+              setSlashQuery(query);
+              return getSlashMenuItems(editor, t, query);
+            }}
+            onItemClick={(item) => item.onItemClick()}
+          />
+        </BlockNoteView>
+      </SlashMenuQueryContext.Provider>
       {autosave.failed ? (
         <p role="status" className="text-destructive mt-4 text-sm">
           {t('editor.saveFailed')}

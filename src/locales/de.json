@@ -28,5 +28,23 @@
   },
   "editor": {
     "saveFailed": "Die letzte Änderung konnte nicht gespeichert werden. Mit der nächsten Änderung wird es erneut versucht."
+  },
+  "slashMenu": {
+    "filter": "Zum Filtern tippen",
+    "suggested": "Vorgeschlagen",
+    "basic": "Basis-Blöcke",
+    "close": "Menü schließen",
+    "empty": "Keine passenden Blöcke",
+    "items": {
+      "paragraph": "Text",
+      "heading1": "Überschrift 1",
+      "heading2": "Überschrift 2",
+      "heading3": "Überschrift 3",
+      "bulletList": "Aufzählung",
+      "numberedList": "Nummerierte Liste",
+      "checkList": "Aufgabenliste",
+      "quote": "Zitat",
+      "codeBlock": "Code"
+    }
   }
 }
