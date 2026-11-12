@@ -24,6 +24,21 @@ Routing and client state (Zustand) are added by the first module that needs them
 
 ## Commands
 
+The `justfile` is the entry point. `just` lists every recipe; the ones used most:
+
+```bash
+just dev                # run the desktop app with hot reload
+just dev-fake           # run only the frontend against the fake backend
+just fmt                # format the frontend and the Rust code
+just lint               # lint, format check, typecheck, clippy
+just test               # frontend and Rust tests
+just test-e2e           # end-to-end tests
+just check              # everything CI runs
+just benchmark          # the 10,000 page benchmark
+```
+
+The recipes wrap these commands, which also work on their own:
+
 ```bash
 pnpm install            # install frontend dependencies
 pnpm tauri dev          # run the desktop app with hot reload
