@@ -15,7 +15,7 @@ describe('getSlashMenuItems', () => {
       'Bulleted list',
       'To-do list',
     ]);
-    expect(all.filter((item) => item.group === 'basic')).toHaveLength(9);
+    expect(all.filter((item) => item.group === 'basic')).toHaveLength(10);
   });
 
   it('gives every entry an id of its own, so one block can appear in both groups', () => {
@@ -41,6 +41,7 @@ describe('getSlashMenuItems', () => {
       'To-do list': '[]',
       Quote: '>',
       Code: '```',
+      Image: undefined,
     });
   });
 
@@ -56,6 +57,7 @@ describe('getSlashMenuItems', () => {
   it('matches extra search terms in other languages', () => {
     expect(items('todo').map((item) => item.title)).toEqual(['To-do list']);
     expect(items('aufz').map((item) => item.title)).toEqual(['Bulleted list']);
+    expect(items('foto').map((item) => item.title)).toEqual(['Image']);
   });
 
   it('returns nothing for a filter that matches no block', () => {

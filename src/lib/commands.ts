@@ -42,4 +42,8 @@ export const commands = {
 
   loadBlocks: (pageId: string) => invoke<Block[]>('load_blocks', { pageId }),
   saveBlocks: (pageId: string, blocks: Block[]) => invoke<void>('save_blocks', { pageId, blocks }),
+
+  /** Stores an image and resolves to the URL to put into the image block. */
+  saveImage: async (file: Blob) =>
+    invoke<string>('save_image', new Uint8Array(await file.arrayBuffer())),
 };

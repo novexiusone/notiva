@@ -27,7 +27,9 @@
     "cancel": "Abbrechen"
   },
   "editor": {
-    "saveFailed": "Die letzte Änderung konnte nicht gespeichert werden. Mit der nächsten Änderung wird es erneut versucht."
+    "saveFailed": "Die letzte Änderung konnte nicht gespeichert werden. Mit der nächsten Änderung wird es erneut versucht.",
+    "imageRefused": "Es lassen sich nur PNG-, JPEG-, GIF- und WebP-Bilder bis 20 MiB hinzufügen.",
+    "imageFailed": "Das Bild konnte nicht gespeichert werden."
   },
   "slashMenu": {
     "filter": "Zum Filtern tippen",
@@ -44,7 +46,8 @@
       "numberedList": "Nummerierte Liste",
       "checkList": "Aufgabenliste",
       "quote": "Zitat",
-      "codeBlock": "Code"
+      "codeBlock": "Code",
+      "image": "Bild"
     }
   }
 }

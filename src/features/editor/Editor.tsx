@@ -10,7 +10,7 @@ import { SlashMenu } from '@/features/editor/SlashMenu';
 import { getSlashMenuItems, type SlashMenuItem } from '@/features/editor/slashMenuItems';
 import { SlashMenuQueryContext } from '@/features/editor/slashMenuQuery';
 import { useAutosave } from '@/features/editor/useAutosave';
-import type { Block } from '@/lib/commands';
+import { commands, type Block, type CommandError } from '@/lib/commands';
 import { useColorScheme } from '@/lib/useColorScheme';
 
 export type EditorHandle = { focus: () => void };
@@ -31,10 +31,23 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
   const colorScheme = useColorScheme();
   const autosave = useAutosave(useSaveBlocks(pageId));
   const [slashQuery, setSlashQuery] = useState('');
+  const [imageError, setImageError] = useState<string | null>(null);
 
   const editor = useCreateBlockNote({
     schema,
     dictionary: i18n.language === 'de' ? de : en,
+    // Used for the file picker as well as for dropped and pasted images.
+    uploadFile: async (file) => {
+      setImageError(null);
+      try {
+        return await commands.saveImage(file);
+      } catch (error) {
+        // The editor only reports that the upload failed; say why.
+        const refused = (error as Partial<CommandError>).kind === 'invalid';
+        setImageError(t(refused ? 'editor.imageRefused' : 'editor.imageFailed'));
+        throw error;
+      }
+    },
     // The backend stores exactly what the editor produced, so this is the editor's own shape.
     initialContent: initialBlocks.length > 0 ? (initialBlocks as never) : undefined,
   });
@@ -61,6 +74,11 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
           />
         </BlockNoteView>
       </SlashMenuQueryContext.Provider>
+      {imageError !== null ? (
+        <p role="alert" className="text-destructive mt-4 text-sm">
+          {imageError}
+        </p>
+      ) : null}
       {autosave.failed ? (
         <p role="status" className="text-destructive mt-4 text-sm">
           {t('editor.saveFailed')}

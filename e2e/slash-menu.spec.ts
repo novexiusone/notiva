@@ -30,6 +30,7 @@ test('typing a slash opens the menu with its groups, shortcuts and footer', asyn
     'To-do list[]',
     'Quote>',
     'Code```',
+    'Image',
   ]);
   await expect(page.getByText('Type to filter')).toBeVisible();
   await expect(page.getByText('Close menu')).toBeVisible();

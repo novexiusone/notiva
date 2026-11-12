@@ -13,5 +13,6 @@ export const schema = BlockNoteSchema.create({
     checkListItem: defaultBlockSpecs.checkListItem,
     codeBlock: defaultBlockSpecs.codeBlock,
     quote: defaultBlockSpecs.quote,
+    image: defaultBlockSpecs.image,
   },
 });

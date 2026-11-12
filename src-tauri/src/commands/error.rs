@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::media::ImageError;
 use crate::storage::StorageError;
 
 /// What the frontend sees when a command fails.
@@ -15,6 +16,20 @@ impl From<StorageError> for CommandError {
             StorageError::NotFound(_) => "not_found",
             StorageError::Invalid(_) => "invalid",
             _ => "internal",
+        };
+
+        Self {
+            kind,
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<ImageError> for CommandError {
+    fn from(error: ImageError) -> Self {
+        let kind = match error {
+            ImageError::TooLarge | ImageError::Unsupported => "invalid",
+            ImageError::Io(_) => "internal",
         };
 
         Self {

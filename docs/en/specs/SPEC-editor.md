@@ -14,12 +14,12 @@ It is delivered in three steps, one pull request each:
 
 ## Tech stack
 
-| Area          | Choice                                                                   |
-| ------------- | ------------------------------------------------------------------------ |
-| Editor        | `@blocknote/core`, `@blocknote/react`                                    |
-| Editor UI     | `@blocknote/shadcn`, so menus and toolbars use the app's theme variables |
-| Localisation  | BlockNote's own dictionaries for `en` and `de`                           |
-| Image display | Tauri's asset protocol, scoped to the image directory                    |
+| Area          | Choice                                                                         |
+| ------------- | ------------------------------------------------------------------------------ |
+| Editor        | `@blocknote/core`, `@blocknote/react`                                          |
+| Editor UI     | `@blocknote/shadcn`, so menus and toolbars use the app's theme variables       |
+| Localisation  | BlockNote's own dictionaries for `en` and `de`                                 |
+| Image display | The app's own `notiva-image` URL scheme, which serves the image directory only |
 
 ## Behaviour
 
@@ -49,8 +49,8 @@ It is delivered in three steps, one pull request each:
 ### Images (#15)
 
 - An image can be added from the slash menu with a file picker, by dropping a file on the editor and by pasting from the clipboard.
-- The file is copied into `<app data dir>/images` under a new name. The block stores a reference, `notiva-image://<file name>`, never the bytes and never an absolute path.
-- Accepted: PNG, JPEG, GIF, WebP, up to 20 MiB. Anything else is refused with a message.
+- The file is stored in `<app data dir>/images` under a new, random name. The block stores a URL of the app's own scheme, `notiva-image://localhost/<file name>`, never the bytes and never an absolute path.
+- Accepted: PNG, JPEG, GIF, WebP, up to 20 MiB. The format is recognised from the content, not from the file name. Anything else is refused with a message below the editor.
 - Deleting an image block leaves the file in place for now; removing unused files belongs to trash and history (#25).
 
 ## Commands
@@ -59,7 +59,7 @@ It is delivered in three steps, one pull request each:
 | ------------- | ----------------------------------- | ----------------------- |
 | `load_blocks` | `pageId: string`                    | `Block[]`               |
 | `save_blocks` | `pageId: string`, `blocks: Block[]` | nothing                 |
-| `save_image`  | `name: string`, `bytes: number[]`   | `string`, the reference |
+| `save_image`  | the file as the raw request body    | `string`, the image URL |
 
 ```ts
 // The shape BlockNote uses, so the frontend passes documents through unchanged.
@@ -123,7 +123,7 @@ impl Storage {
 
 - **Always:** Save through `save_blocks`. Keep the fake backend in step. Store image references, not paths.
 - **Ask first:** Switching on further BlockNote block types. Changing the format of stored blocks.
-- **Never:** Read files outside the image directory through the asset protocol. Store image bytes in the database.
+- **Never:** Serve anything but stored images through the `notiva-image` scheme. Store image bytes in the database.
 
 ## Success criteria
 

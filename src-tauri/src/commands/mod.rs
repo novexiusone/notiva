@@ -4,4 +4,5 @@
 pub mod app;
 pub mod blocks;
 pub mod error;
+pub mod images;
 pub mod pages;

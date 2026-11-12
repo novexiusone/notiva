@@ -13,6 +13,20 @@ type Options = {
   blocks?: Record<string, Block[]>;
 };
 
+/** Recognises an image by its first bytes, like the real backend. */
+function imageType(bytes: Uint8Array): string | null {
+  const startsWith = (...signature: number[]) =>
+    signature.every((byte, index) => bytes[index] === byte);
+
+  if (startsWith(0x89, 0x50, 0x4e, 0x47)) return 'image/png';
+  if (startsWith(0xff, 0xd8, 0xff)) return 'image/jpeg';
+  if (startsWith(0x47, 0x49, 0x46, 0x38)) return 'image/gif';
+  if (startsWith(0x52, 0x49, 0x46, 0x46) && bytes[8] === 0x57 && bytes[9] === 0x45) {
+    return 'image/webp';
+  }
+  return null;
+}
+
 function fail(kind: CommandError['kind'], message: string): never {
   // Commands reject with a plain object, exactly like the real backend.
   throw { kind, message } satisfies CommandError;
@@ -114,6 +128,19 @@ export function installFakeBackend({
         require(pageId);
         saveBlocks({ ...blocks, [pageId]: structuredClone(args.blocks as Block[]) });
         return null;
+      }
+
+      case 'save_image': {
+        const bytes = payload as unknown as Uint8Array;
+        const type = imageType(bytes);
+        if (bytes.length > 20 * 1024 * 1024) fail('invalid', 'the image is larger than 20 MiB');
+        if (type === null) {
+          fail('invalid', 'only PNG, JPEG, GIF and WebP images are supported');
+        }
+        // The real backend returns a notiva-image URL; a data URL shows the same picture here.
+        let binary = '';
+        for (const byte of bytes) binary += String.fromCharCode(byte);
+        return `data:${type};base64,${btoa(binary)}`;
       }
 
       default:
