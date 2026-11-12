@@ -1,0 +1,4 @@
+# SurrealDB recurses deeply while parsing and planning queries. Unoptimised
+# builds overflow the default 2 MiB stack of test threads, so tests get 16 MiB.
+[env]
+RUST_MIN_STACK = "16777216"
