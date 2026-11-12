@@ -27,12 +27,20 @@ The repository enforces the agreed workflow itself instead of relying on discipl
 ### Versioning
 
 - Semantic Versioning. Before `1.0.0`, `feat` bumps the minor and `fix` the patch version; breaking changes bump the minor version.
-- The version lives in `package.json`. release-please also updates `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock`; `tauri.conf.json` reads the version from `package.json`.
-- Release automation is therefore set up once the app scaffold (`app-shell`) exists.
+- The version lives in `package.json` and nowhere else. `tauri.conf.json` reads it from there, so the app and its bundle carry the released version. The crate version in `src-tauri/Cargo.toml` stays at `0.0.0` and is not used.
+- The first release is `0.1.0`.
 
 ### Known limitation
 
-Pull requests created with the `GITHUB_TOKEN` do not trigger workflows, so the required checks never run on the release PR. Admins may bypass the ruleset through a pull request and can still merge it. A direct push to `main` stays blocked for admins too.
+Pull requests created with the `GITHUB_TOKEN` do not trigger workflows, so the required checks do not start on the release PR by themselves. Close and reopen the release PR once: that event comes from a person and starts the checks. The ruleset stays strict and has no bypass.
+
+### Repository settings the automation needs
+
+- Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests" must be on, otherwise release-please cannot open the release PR.
+
+### Release builds
+
+When a release is created, the `bundle` job builds the app on macOS and attaches the `.dmg` to the GitHub release. The build is unsigned (#27).
 
 ## Commands
 
@@ -101,4 +109,4 @@ This module is verified against the real repository, not with unit tests:
 ## Open questions
 
 - The GitHub Project (board) needs the `project` token scope (#6).
-- Attaching release builds (`.dmg`) to the GitHub release comes with `app-shell`; signing comes later (#27).
+- Release builds are unsigned until #27, so macOS warns when the downloaded app is opened.
