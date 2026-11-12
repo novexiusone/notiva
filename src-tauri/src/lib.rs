@@ -1,5 +1,6 @@
 mod commands;
 mod domain;
+mod export;
 mod media;
 mod storage;
 
@@ -21,6 +22,8 @@ pub fn run() {
     tauri::async_runtime::set(runtime.handle().clone());
 
     tauri::Builder::default()
+        // The folder dialog for exports.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data = app.path().app_data_dir()?;
             let storage = tauri::async_runtime::block_on(Storage::open(&data.join("db")))?;
@@ -59,6 +62,8 @@ pub fn run() {
             commands::images::save_image,
             commands::links::list_backlinks,
             commands::search::search,
+            commands::export::export_page,
+            commands::export::export_all,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -4,6 +4,7 @@
 pub mod app;
 pub mod blocks;
 pub mod error;
+pub mod export;
 pub mod images;
 pub mod links;
 pub mod pages;

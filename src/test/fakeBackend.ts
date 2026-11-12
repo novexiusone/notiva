@@ -205,6 +205,29 @@ export function installFakeBackend({
       case 'search':
         return search(pages, blocks, args.query as string);
 
+      // The system folder dialog of the dialog plugin.
+      case 'plugin:dialog|open':
+        return window.localStorage.getItem('notiva.fake.dialog') === 'cancel'
+          ? null
+          : '/Users/demo/Documents';
+
+      case 'export_page':
+      case 'export_all': {
+        if (window.localStorage.getItem('notiva.fake.export') === 'fail') {
+          fail('internal', 'could not write the export: the disk is full');
+        }
+        const exported =
+          command === 'export_all'
+            ? pages.length
+            : 1 + descendantIds(pages, require(args.pageId as string).id).length;
+        // Nothing is written here; the real export is covered by the backend tests.
+        return {
+          directory: `${args.directory as string}/Notiva export`,
+          pages: exported,
+          images: 0,
+        };
+      }
+
       case 'save_image': {
         const bytes = payload as unknown as Uint8Array;
         const type = imageType(bytes);

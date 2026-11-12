@@ -10,6 +10,7 @@ import {
   usePages,
   useRenamePage,
 } from '@/features/pages/api';
+import { useExport } from '@/features/export/useExport';
 import { DeletePageDialog } from '@/features/pages/DeletePageDialog';
 import { PageRow } from '@/features/pages/PageRow';
 import { PageRowActionsContext } from '@/features/pages/pageRowActions';
@@ -38,6 +39,7 @@ export function PageTree() {
   const renamePage = useRenamePage();
   const movePage = useMovePage();
   const deletePage = useDeletePage();
+  const exportMarkdown = useExport();
   const tree = useRef<TreeApi<PageNode>>(null);
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const size = useElementSize(container);
@@ -75,6 +77,7 @@ export function PageTree() {
     open,
     addSubpage: (id: string) => void create(id),
     remove: setPendingDelete,
+    exportMarkdown: (id: string) => void exportMarkdown(id),
   };
 
   const pageToDelete = list.find((page) => page.id === pendingDelete);

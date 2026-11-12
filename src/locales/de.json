@@ -62,5 +62,13 @@
     "placeholder": "Seiten und Inhalte durchsuchen",
     "hint": "Mindestens zwei Buchstaben eingeben",
     "empty": "Keine Treffer für „{{query}}“"
+  },
+  "export": {
+    "page": "Als Markdown exportieren …",
+    "all": "Alle Seiten exportieren …",
+    "chooseFolder": "Zielordner für den Export wählen",
+    "done_one": "{{count}} Seite nach {{directory}} exportiert",
+    "done_other": "{{count}} Seiten nach {{directory}} exportiert",
+    "failed": "Der Export ist fehlgeschlagen: {{message}}"
   }
 }
