@@ -25,5 +25,26 @@
     "deleteDescriptionWithSubpages_one": "This also deletes {{count}} subpage. This cannot be undone.",
     "deleteDescriptionWithSubpages_other": "This also deletes {{count}} subpages. This cannot be undone.",
     "cancel": "Cancel"
+  },
+  "editor": {
+    "saveFailed": "The last change could not be saved. It will be tried again with the next change."
+  },
+  "slashMenu": {
+    "filter": "Type to filter",
+    "suggested": "Suggested",
+    "basic": "Basic blocks",
+    "close": "Close menu",
+    "empty": "No matching blocks",
+    "items": {
+      "paragraph": "Text",
+      "heading1": "Heading 1",
+      "heading2": "Heading 2",
+      "heading3": "Heading 3",
+      "bulletList": "Bulleted list",
+      "numberedList": "Numbered list",
+      "checkList": "To-do list",
+      "quote": "Quote",
+      "codeBlock": "Code"
+    }
   }
 }

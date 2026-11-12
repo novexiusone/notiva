@@ -15,11 +15,18 @@ pub(super) struct Migration {
     pub sql: &'static str,
 }
 
-pub(super) const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial",
-    sql: include_str!("migrations/0001_initial.surql"),
-}];
+pub(super) const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial",
+        sql: include_str!("migrations/0001_initial.surql"),
+    },
+    Migration {
+        version: 2,
+        name: "block_content",
+        sql: include_str!("migrations/0002_block_content.surql"),
+    },
+];
 
 const BOOTSTRAP: &str = "
     DEFINE TABLE IF NOT EXISTS migration SCHEMAFULL;

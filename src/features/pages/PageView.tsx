@@ -1,6 +1,7 @@
 import { Navigate } from '@tanstack/react-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Editor, type EditorHandle } from '@/features/editor/Editor';
 import { usePages, useRenamePage } from '@/features/pages/api';
 import { rememberLastPage } from '@/lib/localState';
 
@@ -8,6 +9,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const { t } = useTranslation();
   const pages = usePages();
   const renamePage = useRenamePage();
+  const editor = useRef<EditorHandle>(null);
   const page = pages.data?.find((candidate) => candidate.id === pageId);
 
   useEffect(() => {
@@ -28,8 +30,15 @@ export function PageView({ pageId }: { pageId: string }) {
         placeholder={t('pages.untitled')}
         value={page.title}
         onChange={(event) => renamePage(page.id, event.currentTarget.value)}
-        className="placeholder:text-muted-foreground/50 w-full bg-transparent text-4xl font-bold tracking-tight outline-none"
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            editor.current?.focus();
+          }
+        }}
+        className="placeholder:text-muted-foreground/50 mb-4 w-full bg-transparent text-4xl font-bold tracking-tight outline-none"
       />
+      <Editor pageId={page.id} ref={editor} />
     </article>
   );
 }

@@ -10,6 +10,19 @@ export type Page = {
   position: number;
 };
 
+/**
+ * A block in the shape the editor uses. The frontend passes documents through
+ * without interpreting them; how blocks are stored is the backend's business.
+ */
+export type Block = {
+  id: string;
+  type: string;
+  props: Record<string, unknown>;
+  /** Inline content. Absent for blocks without text. */
+  content?: unknown;
+  children: Block[];
+};
+
 /** What a failed command rejects with. */
 export type CommandError = {
   kind: 'not_found' | 'invalid' | 'internal';
@@ -26,4 +39,7 @@ export const commands = {
   movePage: (id: string, parentId: string | null, index: number) =>
     invoke<void>('move_page', { id, parentId, index }),
   deletePage: (id: string) => invoke<void>('delete_page', { id }),
+
+  loadBlocks: (pageId: string) => invoke<Block[]>('load_blocks', { pageId }),
+  saveBlocks: (pageId: string, blocks: Block[]) => invoke<void>('save_blocks', { pageId, blocks }),
 };
