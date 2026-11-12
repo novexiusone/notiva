@@ -13,6 +13,9 @@ export type Page = {
 /** A reference to a page: enough to show it in a list and open it. */
 export type PageRef = { id: string; title: string };
 
+/** What an export wrote. */
+export type ExportSummary = { directory: string; pages: number; images: number };
+
 /** A page found by search. */
 export type SearchHit = {
   pageId: string;
@@ -58,6 +61,12 @@ export const commands = {
   listBacklinks: (pageId: string) => invoke<PageRef[]>('list_backlinks', { pageId }),
 
   search: (query: string) => invoke<SearchHit[]>('search', { query }),
+
+  /** Exports a page with its subpages into a new folder inside `directory`. */
+  exportPage: (pageId: string, directory: string) =>
+    invoke<ExportSummary>('export_page', { pageId, directory }),
+  /** Exports every page into a new folder inside `directory`. */
+  exportAll: (directory: string) => invoke<ExportSummary>('export_all', { directory }),
 
   /** Stores an image and resolves to the URL to put into the image block. */
   saveImage: async (file: Blob) =>

@@ -104,6 +104,9 @@ export function PageRow({ node, style, dragHandle }: NodeRendererProps<PageNode>
             >
               {t('pages.rename')}
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => actions?.exportMarkdown(node.id)}>
+              {t('export.page')}
+            </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onSelect={() => actions?.remove(node.id)}>
               {t('pages.delete')}
             </DropdownMenuItem>

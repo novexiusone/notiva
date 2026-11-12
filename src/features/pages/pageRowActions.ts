@@ -6,6 +6,7 @@ export type PageRowActions = {
   open: (id: string) => void;
   addSubpage: (id: string) => void;
   remove: (id: string) => void;
+  exportMarkdown: (id: string) => void;
 };
 
 /** react-arborist renders the rows itself, so the actions reach them through context. */

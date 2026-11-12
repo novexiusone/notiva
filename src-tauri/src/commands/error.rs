@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::export::ExportError;
 use crate::media::ImageError;
 use crate::storage::StorageError;
 
@@ -35,6 +36,22 @@ impl From<ImageError> for CommandError {
         Self {
             kind,
             message: error.to_string(),
+        }
+    }
+}
+
+impl From<ExportError> for CommandError {
+    fn from(error: ExportError) -> Self {
+        match error {
+            ExportError::Storage(error) => error.into(),
+            ExportError::NotAFolder(_) => Self {
+                kind: "invalid",
+                message: error.to_string(),
+            },
+            ExportError::Io(_) => Self {
+                kind: "internal",
+                message: error.to_string(),
+            },
         }
     }
 }
