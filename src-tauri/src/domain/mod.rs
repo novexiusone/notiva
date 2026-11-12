@@ -4,4 +4,4 @@ pub mod block;
 pub mod page;
 
 pub use block::Block;
-pub use page::Page;
+pub use page::{Page, PageRef};

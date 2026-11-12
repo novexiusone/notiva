@@ -2,6 +2,7 @@ import { Navigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Editor, type EditorHandle } from '@/features/editor/Editor';
+import { Backlinks } from '@/features/links/Backlinks';
 import { usePages, useRenamePage } from '@/features/pages/api';
 import { rememberLastPage } from '@/lib/localState';
 
@@ -39,6 +40,7 @@ export function PageView({ pageId }: { pageId: string }) {
         className="placeholder:text-muted-foreground/50 mb-4 w-full bg-transparent text-4xl font-bold tracking-tight outline-none"
       />
       <Editor pageId={page.id} ref={editor} />
+      <Backlinks pageId={page.id} />
     </article>
   );
 }

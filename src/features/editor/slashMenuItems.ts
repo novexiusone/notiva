@@ -1,10 +1,15 @@
-import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core/extensions';
+import {
+  FilePanelExtension,
+  filterSuggestionItems,
+  insertOrUpdateBlockForSlashMenu,
+} from '@blocknote/core/extensions';
 import type { TFunction } from 'i18next';
 import {
   Code,
   Heading1,
   Heading2,
   Heading3,
+  Image,
   List,
   ListChecks,
   ListOrdered,
@@ -47,7 +52,8 @@ type Definition = {
     | 'numberedList'
     | 'checkList'
     | 'quote'
-    | 'codeBlock';
+    | 'codeBlock'
+    | 'image';
   icon: LucideIcon;
   shortcut?: string;
   /** Extra search terms, in every UI language. */
@@ -118,6 +124,12 @@ const definitions: Definition[] = [
     aliases: ['code', 'pre', 'snippet'],
     block: { type: 'codeBlock' },
   },
+  {
+    key: 'image',
+    icon: Image,
+    aliases: ['image', 'picture', 'photo', 'img', 'bild', 'foto'],
+    block: { type: 'image' },
+  },
 ];
 
 const suggested: Definition['key'][] = ['paragraph', 'heading1', 'bulletList', 'checkList'];
@@ -135,7 +147,13 @@ export function getSlashMenuItems(editor: Editor, t: TFunction, query: string): 
     aliases: definition.aliases,
     icon: definition.icon,
     shortcut: definition.shortcut,
-    onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, definition.block),
+    onItemClick: () => {
+      const inserted = insertOrUpdateBlockForSlashMenu(editor, definition.block);
+      // An empty image block is of no use, so ask for the file right away.
+      if (definition.key === 'image') {
+        editor.getExtension(FilePanelExtension)?.showMenu(inserted.id);
+      }
+    },
   });
 
   const basic = definitions.map((definition) => item(definition, 'basic'));

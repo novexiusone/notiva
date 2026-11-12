@@ -27,7 +27,9 @@
     "cancel": "Cancel"
   },
   "editor": {
-    "saveFailed": "The last change could not be saved. It will be tried again with the next change."
+    "saveFailed": "The last change could not be saved. It will be tried again with the next change.",
+    "imageRefused": "Only PNG, JPEG, GIF and WebP images up to 20 MiB can be added.",
+    "imageFailed": "The image could not be stored."
   },
   "slashMenu": {
     "filter": "Type to filter",
@@ -44,7 +46,14 @@
       "numberedList": "Numbered list",
       "checkList": "To-do list",
       "quote": "Quote",
-      "codeBlock": "Code"
+      "codeBlock": "Code",
+      "image": "Image"
     }
+  },
+  "links": {
+    "deletedPage": "Deleted page",
+    "backlinks": "Backlinks",
+    "noPages": "No matching pages",
+    "pick": "Link to a page"
   }
 }

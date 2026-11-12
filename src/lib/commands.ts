@@ -10,6 +10,9 @@ export type Page = {
   position: number;
 };
 
+/** A reference to a page: enough to show it in a list and open it. */
+export type PageRef = { id: string; title: string };
+
 /**
  * A block in the shape the editor uses. The frontend passes documents through
  * without interpreting them; how blocks are stored is the backend's business.
@@ -42,4 +45,11 @@ export const commands = {
 
   loadBlocks: (pageId: string) => invoke<Block[]>('load_blocks', { pageId }),
   saveBlocks: (pageId: string, blocks: Block[]) => invoke<void>('save_blocks', { pageId, blocks }),
+
+  /** The pages that link to a page. */
+  listBacklinks: (pageId: string) => invoke<PageRef[]>('list_backlinks', { pageId }),
+
+  /** Stores an image and resolves to the URL to put into the image block. */
+  saveImage: async (file: Blob) =>
+    invoke<string>('save_image', new Uint8Array(await file.arrayBuffer())),
 };

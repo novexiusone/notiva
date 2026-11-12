@@ -20,6 +20,7 @@ serde_json = "1"
 surrealdb = { version = "4", default-features = false, features = ["kv-mem", "kv-surrealkv"] }
 thiserror = "2.0.21"
 tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread"] }
+uuid = { version = "1", features = ["v4"] }
 
 [profile.release]
 codegen-units = 1
