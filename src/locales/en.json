@@ -49,5 +49,11 @@
       "codeBlock": "Code",
       "image": "Image"
     }
+  },
+  "links": {
+    "deletedPage": "Deleted page",
+    "backlinks": "Backlinks",
+    "noPages": "No matching pages",
+    "pick": "Link to a page"
   }
 }

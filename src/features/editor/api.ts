@@ -23,7 +23,10 @@ export function useSaveBlocks(pageId: string) {
     (blocks: Block[]) => {
       // Reopening the page shows the document as it was left, even while the save is under way.
       queryClient.setQueryData(blocksKey(pageId), blocks);
-      return commands.saveBlocks(pageId, blocks);
+      return commands.saveBlocks(pageId, blocks).then(() => {
+        // A saved page may have gained or lost links to other pages.
+        void queryClient.invalidateQueries({ queryKey: ['backlinks'] });
+      });
     },
     [pageId, queryClient],
   );

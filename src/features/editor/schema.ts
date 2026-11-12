@@ -1,4 +1,10 @@
-import { BlockNoteSchema, createHeadingBlockSpec, defaultBlockSpecs } from '@blocknote/core';
+import {
+  BlockNoteSchema,
+  createHeadingBlockSpec,
+  defaultBlockSpecs,
+  defaultInlineContentSpecs,
+} from '@blocknote/core';
+import { pageLink } from '@/features/links/pageLinkSpec';
 
 /**
  * The block types of the MVP. BlockNote's other default blocks stay off until
@@ -14,5 +20,9 @@ export const schema = BlockNoteSchema.create({
     codeBlock: defaultBlockSpecs.codeBlock,
     quote: defaultBlockSpecs.quote,
     image: defaultBlockSpecs.image,
+  },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    pageLink,
   },
 });

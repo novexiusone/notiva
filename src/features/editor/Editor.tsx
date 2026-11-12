@@ -10,6 +10,9 @@ import { SlashMenu } from '@/features/editor/SlashMenu';
 import { getSlashMenuItems, type SlashMenuItem } from '@/features/editor/slashMenuItems';
 import { SlashMenuQueryContext } from '@/features/editor/slashMenuQuery';
 import { useAutosave } from '@/features/editor/useAutosave';
+import { getPageLinkItems, type PageLinkItem } from '@/features/links/pageLinkItems';
+import { PageLinkMenu } from '@/features/links/PageLinkMenu';
+import { usePages } from '@/features/pages/api';
 import { commands, type Block, type CommandError } from '@/lib/commands';
 import { useColorScheme } from '@/lib/useColorScheme';
 
@@ -31,6 +34,7 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
   const colorScheme = useColorScheme();
   const autosave = useAutosave(useSaveBlocks(pageId));
   const [slashQuery, setSlashQuery] = useState('');
+  const pages = usePages().data ?? [];
   const [imageError, setImageError] = useState<string | null>(null);
 
   const editor = useCreateBlockNote({
@@ -71,6 +75,14 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
               return getSlashMenuItems(editor, t, query);
             }}
             onItemClick={(item) => item.onItemClick()}
+          />
+          <SuggestionMenuController<(query: string) => Promise<PageLinkItem[]>>
+            triggerCharacter="[["
+            suggestionMenuComponent={PageLinkMenu}
+            getItems={async (query) => getPageLinkItems(pages, query)}
+            onItemClick={(item) =>
+              editor.insertInlineContent([{ type: 'pageLink', props: { pageId: item.id } }, ' '])
+            }
           />
         </BlockNoteView>
       </SlashMenuQueryContext.Provider>
