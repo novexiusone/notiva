@@ -62,5 +62,13 @@
     "placeholder": "Search pages and content",
     "hint": "Type at least two letters",
     "empty": "No results for “{{query}}”"
+  },
+  "export": {
+    "page": "Export as Markdown…",
+    "all": "Export all pages…",
+    "chooseFolder": "Choose where to put the export",
+    "done_one": "Exported {{count}} page to {{directory}}",
+    "done_other": "Exported {{count}} pages to {{directory}}",
+    "failed": "The export failed: {{message}}"
   }
 }

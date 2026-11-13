@@ -13,7 +13,7 @@ Notiva is a local-first Notion alternative for macOS: one user, no collaboration
 | `editor`        | BlockNote, mapping block JSON to block records, autosave, slash menu, images, undo/redo, shortcuts                      | `pages`         | [SPEC-editor.md](SPEC-editor.md)               |
 | `links`         | `[[...]]` links and backlinks through graph relations                                                                   | `editor`        | [SPEC-links.md](SPEC-links.md)                 |
 | `search`        | Full-text search including the search UI                                                                                | `editor`        | [SPEC-search.md](SPEC-search.md)               |
-| `export`        | Export to Markdown                                                                                                      | `editor`        | to follow                                      |
+| `export`        | Export to Markdown                                                                                                      | `editor`        | [SPEC-export.md](SPEC-export.md)               |
 
 Build order: `repo-workflow` → `app-shell` → `storage` → `pages` → `editor` → `links`, `search`, `export`.
 

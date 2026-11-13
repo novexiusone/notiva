@@ -3,12 +3,20 @@ import { useNavigate } from '@tanstack/react-router';
 import { Home, Search, Settings } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SidebarItem } from '@/components/layout/SidebarItem';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useExport } from '@/features/export/useExport';
 import { PageTree } from '@/features/pages/PageTree';
 import { commands } from '@/lib/commands';
 
 export function Sidebar({ onSearch }: { onSearch: () => void }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const exportMarkdown = useExport();
   const appInfo = useQuery({ queryKey: ['app-info'], queryFn: commands.appInfo, retry: false });
 
   return (
@@ -25,7 +33,16 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
 
       <footer className="flex items-center gap-2 border-t p-2">
         <div className="min-w-0 flex-1">
-          <SidebarItem icon={Settings} label={t('sidebar.settings')} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <SidebarItem icon={Settings} label={t('sidebar.settings')} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-56">
+              <DropdownMenuItem onSelect={() => void exportMarkdown(null)}>
+                {t('export.all')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         {appInfo.data ? (
           <span className="text-muted-foreground pr-2 text-xs tabular-nums opacity-70">

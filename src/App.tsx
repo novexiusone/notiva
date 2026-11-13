@@ -2,6 +2,7 @@ import { Outlet } from '@tanstack/react-router';
 import { useCallback, useState } from 'react';
 import { MainArea } from '@/components/layout/MainArea';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { Toaster } from '@/components/ui/sonner';
 import { SearchDialog } from '@/features/search/SearchDialog';
 import { useSearchShortcut } from '@/features/search/useSearchShortcut';
 
@@ -16,6 +17,7 @@ export function App() {
         <Outlet />
       </MainArea>
       <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      <Toaster position="bottom-right" />
     </div>
   );
 }

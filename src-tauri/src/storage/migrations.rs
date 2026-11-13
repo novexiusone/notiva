@@ -31,6 +31,11 @@ pub(super) const MIGRATIONS: &[Migration] = &[
         name: "search_prefixes",
         sql: include_str!("migrations/0003_search_prefixes.surql"),
     },
+    Migration {
+        version: 4,
+        name: "indexed_cascades",
+        sql: include_str!("migrations/0004_indexed_cascades.surql"),
+    },
 ];
 
 const BOOTSTRAP: &str = "
