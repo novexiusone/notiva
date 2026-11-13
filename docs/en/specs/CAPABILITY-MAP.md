@@ -54,6 +54,8 @@ Three files are shared by many packages and are not owned by one: the command re
 
 The spec is the contract between frontend and backend, which is why #55 does not wait for #53 and #54.
 
+Packages built at the same time live in separate worktrees. Each runs its end-to-end tests on a port of its own, `E2E_PORT=1441 just test-e2e`, so that no worktree tests against another one's server.
+
 ## Applies to every module
 
 ### Architecture

@@ -26,3 +26,6 @@ dist-ssr
 # Playwright
 test-results
 playwright-report
+
+# Worktrees of work packages built side by side
+.claude/worktrees
