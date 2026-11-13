@@ -163,6 +163,8 @@ mod tests {
             title: title.into(),
             parent_id: parent.map(str::to_owned),
             position,
+            kind: crate::domain::PageKind::Page,
+            database_id: None,
         }
     }
 

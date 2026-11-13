@@ -5,14 +5,18 @@ use std::collections::HashMap;
 use surrealdb::types::SurrealValue;
 
 use super::{Storage, StorageError};
-use crate::domain::Page;
+use crate::domain::{Page, PageKind};
 
 /// Selects a page with its ids as plain strings.
 const PAGE_FIELDS: &str = "record::id(id) AS id, title, \
-     IF parent = NONE { NONE } ELSE { record::id(parent) } AS parent_id, position";
+     IF parent = NONE { NONE } ELSE { record::id(parent) } AS parent_id, position, kind, \
+     IF database = NONE { NONE } ELSE { record::id(database) } AS database_id";
 
 /// Turns an optional page id into an optional record link.
 const PARENT: &str = "IF $parent_id = NONE { NONE } ELSE { type::record('page', $parent_id) }";
+
+/// The value of `page.kind` that marks a database. Ordinary pages have none.
+const DATABASE_KIND: &str = "database";
 
 #[derive(SurrealValue)]
 struct PageRow {
@@ -20,6 +24,8 @@ struct PageRow {
     title: String,
     parent_id: Option<String>,
     position: f64,
+    kind: Option<String>,
+    database_id: Option<String>,
 }
 
 impl From<PageRow> for Page {
@@ -29,6 +35,12 @@ impl From<PageRow> for Page {
             title: row.title,
             parent_id: row.parent_id,
             position: row.position,
+            // Pages written before schema version 5 have no kind.
+            kind: match row.kind.as_deref() {
+                Some(DATABASE_KIND) => PageKind::Database,
+                _ => PageKind::Page,
+            },
+            database_id: row.database_id,
         }
     }
 }
@@ -49,21 +61,45 @@ impl Storage {
         Ok(rows.into_iter().map(Page::from).collect())
     }
 
-    /// Creates an untitled page after the last child of `parent_id`.
+    /// Creates an untitled page after the last child of `parent_id`. The
+    /// children of a database are its rows, so a database cannot be the parent.
     pub async fn create_page(&self, parent_id: Option<&str>) -> Result<Page, StorageError> {
+        self.insert_page(parent_id, PageKind::Page).await
+    }
+
+    /// Creates an untitled page of the given kind after the last child of
+    /// `parent_id`, which must not be a database.
+    pub(super) async fn insert_page(
+        &self,
+        parent_id: Option<&str>,
+        kind: PageKind,
+    ) -> Result<Page, StorageError> {
         if let Some(parent_id) = parent_id {
-            self.require_page(parent_id).await?;
+            let parent = self
+                .find_page(parent_id)
+                .await?
+                .ok_or_else(|| not_found(parent_id))?;
+            if parent.kind == PageKind::Database {
+                return Err(StorageError::Invalid(
+                    "a page cannot be created inside a database".into(),
+                ));
+            }
         }
 
+        let kind = match kind {
+            PageKind::Page => None,
+            PageKind::Database => Some(DATABASE_KIND),
+        };
         let row: Option<PageRow> = self
             .db
             .query(format!(
                 "LET $parent = {PARENT};
                  LET $last = (SELECT VALUE position FROM page WHERE parent = $parent ORDER BY position DESC LIMIT 1)[0];
-                 CREATE page SET title = '', parent = $parent, position = ($last ?? -1.0) + 1.0
+                 CREATE page SET title = '', parent = $parent, position = ($last ?? -1.0) + 1.0, kind = $kind
                      RETURN {PAGE_FIELDS};"
             ))
             .bind(("parent_id", parent_id.map(str::to_owned)))
+            .bind(("kind", kind))
             .await?
             .check()?
             .take(2)?;
@@ -89,7 +125,8 @@ impl Storage {
     }
 
     /// Moves a page to `index` among the children of `parent_id` and renumbers
-    /// those children. A page cannot be moved into itself or a descendant.
+    /// those children. A page cannot be moved into itself or a descendant. The
+    /// rows of a database stay where they are, and nothing is moved into one.
     pub async fn move_page(
         &self,
         id: &str,
@@ -97,13 +134,14 @@ impl Storage {
         index: usize,
     ) -> Result<(), StorageError> {
         let pages = self.list_pages().await?;
-        let parents: HashMap<&str, Option<&str>> = pages
-            .iter()
-            .map(|page| (page.id.as_str(), page.parent_id.as_deref()))
-            .collect();
+        let by_id: HashMap<&str, &Page> =
+            pages.iter().map(|page| (page.id.as_str(), page)).collect();
 
-        if !parents.contains_key(id) {
-            return Err(not_found(id));
+        let moved = by_id.get(id).ok_or_else(|| not_found(id))?;
+        if moved.database_id.is_some() {
+            return Err(StorageError::Invalid(
+                "a row of a database cannot be moved".into(),
+            ));
         }
 
         // Walk up from the new parent: meeting the moved page means a cycle.
@@ -114,7 +152,20 @@ impl Storage {
                     "a page cannot be moved into itself or one of its subpages".into(),
                 ));
             }
-            ancestor = *parents.get(current).ok_or_else(|| not_found(current))?;
+            ancestor = by_id
+                .get(current)
+                .ok_or_else(|| not_found(current))?
+                .parent_id
+                .as_deref();
+        }
+
+        let into_database = parent_id
+            .and_then(|parent_id| by_id.get(parent_id))
+            .is_some_and(|parent| parent.kind == PageKind::Database);
+        if into_database {
+            return Err(StorageError::Invalid(
+                "a page cannot be moved into a database".into(),
+            ));
         }
 
         let mut order: Vec<String> = pages
@@ -155,6 +206,21 @@ impl Storage {
         Ok(())
     }
 
+    /// The page with the given id, if there is one.
+    pub(super) async fn find_page(&self, id: &str) -> Result<Option<Page>, StorageError> {
+        let row: Option<PageRow> = self
+            .db
+            .query(format!(
+                "SELECT {PAGE_FIELDS} FROM type::record('page', $id)"
+            ))
+            .bind(("id", id.to_owned()))
+            .await?
+            .check()?
+            .take(0)?;
+
+        Ok(row.map(Page::from))
+    }
+
     pub(super) async fn require_page(&self, id: &str) -> Result<(), StorageError> {
         let exists: Option<bool> = self
             .db
@@ -173,10 +239,27 @@ impl Storage {
 
 #[cfg(test)]
 mod tests {
+    use super::super::tests::run_with_pages;
     use super::*;
 
     async fn storage() -> Storage {
         Storage::open_in_memory().await.unwrap()
+    }
+
+    /// A database with the rows `page:row_a` and `page:row_b`. Rows are written
+    /// directly, the way `create_row` will write them.
+    async fn database_with_rows(storage: &Storage) -> Page {
+        let database = storage.create_database(None).await.unwrap().page;
+        run_with_pages(
+            storage,
+            &[("database", &database.id)],
+            "CREATE page:row_a SET title = 'Row A', parent = $database, database = $database,
+                 position = 0.0;
+             CREATE page:row_b SET title = 'Row B', parent = $database, database = $database,
+                 position = 1.0;",
+        )
+        .await;
+        database
     }
 
     /// The ids of the children of `parent`, in order.
@@ -223,6 +306,58 @@ mod tests {
 
         assert!(matches!(error, StorageError::NotFound(_)));
         assert!(storage.list_pages().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn pages_are_listed_with_their_kind_and_their_database() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap();
+        let database = database_with_rows(&storage).await;
+        let below_row = storage.create_page(Some("row_a")).await.unwrap();
+
+        let pages = storage.list_pages().await.unwrap();
+        let listed = |id: &str| pages.iter().find(|page| page.id == id).unwrap();
+
+        assert_eq!(pages.len(), 5);
+        assert_eq!(listed(&page.id).kind, PageKind::Page);
+        assert_eq!(listed(&page.id).database_id, None);
+        assert_eq!(listed(&database.id).kind, PageKind::Database);
+        assert_eq!(listed(&database.id).database_id, None);
+        for row in ["row_a", "row_b"] {
+            assert_eq!(listed(row).kind, PageKind::Page);
+            assert_eq!(listed(row).parent_id.as_deref(), Some(database.id.as_str()));
+            assert_eq!(
+                listed(row).database_id.as_deref(),
+                Some(database.id.as_str())
+            );
+        }
+        assert_eq!(listed(&below_row.id).kind, PageKind::Page);
+        assert_eq!(listed(&below_row.id).parent_id.as_deref(), Some("row_a"));
+        assert_eq!(listed(&below_row.id).database_id, None);
+    }
+
+    #[tokio::test]
+    async fn a_page_cannot_be_created_inside_a_database() {
+        let storage = storage().await;
+        let database = storage.create_database(None).await.unwrap().page;
+
+        let error = storage.create_page(Some(&database.id)).await.unwrap_err();
+
+        assert!(matches!(error, StorageError::Invalid(_)));
+        assert_eq!(storage.list_pages().await.unwrap(), [database]);
+    }
+
+    #[tokio::test]
+    async fn renaming_keeps_the_kind_and_the_database() {
+        let storage = storage().await;
+        let database = database_with_rows(&storage).await;
+
+        let renamed = storage.rename_page(&database.id, "Books").await.unwrap();
+        let row = storage.rename_page("row_a", "Dune").await.unwrap();
+
+        assert_eq!(renamed.kind, PageKind::Database);
+        assert_eq!(row.kind, PageKind::Page);
+        assert_eq!(row.database_id.as_deref(), Some(database.id.as_str()));
     }
 
     #[tokio::test]
@@ -292,6 +427,65 @@ mod tests {
         }
 
         assert_eq!(children(&storage, None).await, [parent]);
+    }
+
+    #[tokio::test]
+    async fn a_row_cannot_be_moved() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap().id;
+        let database = database_with_rows(&storage).await.id;
+
+        let within = storage.move_page("row_b", Some(&database), 0).await;
+        let to_a_page = storage.move_page("row_b", Some(&page), 0).await;
+        let to_the_top = storage.move_page("row_b", None, 0).await;
+
+        for result in [within, to_a_page, to_the_top] {
+            assert!(matches!(result, Err(StorageError::Invalid(_))));
+        }
+        assert_eq!(
+            children(&storage, Some(&database)).await,
+            ["row_a", "row_b"]
+        );
+        assert_eq!(children(&storage, None).await, [page, database]);
+    }
+
+    #[tokio::test]
+    async fn nothing_can_be_moved_into_a_database() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap().id;
+        let other = storage.create_database(None).await.unwrap().page.id;
+        let database = database_with_rows(&storage).await.id;
+
+        let a_page = storage.move_page(&page, Some(&database), 0).await;
+        let a_database = storage.move_page(&other, Some(&database), 0).await;
+
+        for result in [a_page, a_database] {
+            assert!(matches!(result, Err(StorageError::Invalid(_))));
+        }
+        assert_eq!(
+            children(&storage, Some(&database)).await,
+            ["row_a", "row_b"]
+        );
+        assert_eq!(children(&storage, None).await, [page, other, database]);
+    }
+
+    #[tokio::test]
+    async fn a_database_is_moved_like_a_page_and_keeps_its_rows() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap().id;
+        let database = database_with_rows(&storage).await.id;
+
+        storage.move_page(&database, Some(&page), 0).await.unwrap();
+
+        assert_eq!(children(&storage, None).await, [page.as_str()]);
+        assert_eq!(children(&storage, Some(&page)).await, [database.as_str()]);
+        assert_eq!(
+            children(&storage, Some(&database)).await,
+            ["row_a", "row_b"]
+        );
+        let moved = storage.load_database(&database).await.unwrap().page;
+        assert_eq!(moved.kind, PageKind::Database);
+        assert_eq!(moved.parent_id, Some(page));
     }
 
     #[tokio::test]

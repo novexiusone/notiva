@@ -3,6 +3,7 @@
 
 pub mod app;
 pub mod blocks;
+pub mod databases;
 pub mod error;
 pub mod export;
 pub mod images;

@@ -57,6 +57,8 @@ pub fn run() {
             commands::pages::rename_page,
             commands::pages::move_page,
             commands::pages::delete_page,
+            commands::databases::create_database,
+            commands::databases::load_database,
             commands::blocks::load_blocks,
             commands::blocks::save_blocks,
             commands::images::save_image,

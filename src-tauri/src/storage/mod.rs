@@ -5,6 +5,7 @@
 //! does not depend on the database.
 
 mod blocks;
+mod databases;
 mod error;
 mod links;
 mod migrations;
