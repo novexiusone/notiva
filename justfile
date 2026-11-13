@@ -48,7 +48,7 @@ test-frontend *args:
 test-rust *args:
     cargo test --manifest-path {{ manifest }} {{ args }}
 
-# Run the end-to-end tests in WebKit against the fake backend
+# Run the end-to-end tests in WebKit against the fake backend (E2E_PORT picks the port)
 test-e2e *args:
     pnpm test:e2e {{ args }}
 
