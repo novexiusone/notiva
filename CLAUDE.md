@@ -15,6 +15,7 @@ Everything is English: code, identifiers, comments, commits, branches, issues, p
 ## Workflow
 
 - Use the `gh` CLI for GitHub.
+- `just` lists the commands for running, checking and testing. Run `just check` before opening a pull request; it runs what CI runs.
 - No commits on `main`. Branch `type/short-description` (`feat`, `fix`, `hotfix`, `release`, `chore`), then a pull request with `Closes #N`.
 - Commits and PR titles follow Conventional Commits: `type(scope): description`. The scope is usually the module id.
 - Squash merge. The PR title becomes the commit message on `main`.
