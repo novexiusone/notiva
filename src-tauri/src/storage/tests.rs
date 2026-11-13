@@ -1,9 +1,12 @@
+use surrealdb::Surreal;
+use surrealdb::engine::local::SurrealKv;
 use surrealdb::types::SurrealValue;
 
 use super::migrations::{self, MIGRATIONS, Migration};
-use super::{Storage, StorageError};
+use super::{DATABASE, NAMESPACE, Storage, StorageError};
+use crate::domain::PageKind;
 
-const LATEST: u32 = 4;
+const LATEST: u32 = 5;
 
 async fn storage() -> Storage {
     Storage::open_in_memory()
@@ -16,6 +19,27 @@ async fn run(storage: &Storage, statements: &str) {
     storage
         .db
         .query(statements)
+        .await
+        .expect("query runs")
+        .check()
+        .expect("statements succeed");
+}
+
+/// Runs statements with a variable bound to the record of each named page:
+/// `("books", id)` makes `$books` the page with that id.
+pub(super) async fn run_with_pages(storage: &Storage, pages: &[(&str, &str)], statements: &str) {
+    let mut bindings = String::new();
+    for (name, _) in pages {
+        bindings.push_str(&format!(
+            "LET ${name} = type::record('page', ${name}_id);\n"
+        ));
+    }
+
+    let mut query = storage.db.query(format!("{bindings}{statements}"));
+    for (name, id) in pages {
+        query = query.bind((format!("{name}_id"), (*id).to_owned()));
+    }
+    query
         .await
         .expect("query runs")
         .check()
@@ -122,6 +146,106 @@ async fn a_failing_migration_leaves_no_trace() {
 }
 
 #[tokio::test]
+async fn a_database_at_version_4_migrates_and_its_pages_load_unchanged() {
+    /// What schema version 4 stored for a page.
+    #[derive(Debug, PartialEq, SurrealValue)]
+    struct Stored {
+        id: String,
+        title: String,
+        parent_id: Option<String>,
+        position: f64,
+        created_at: String,
+        updated_at: String,
+    }
+    const STORED: &str = "SELECT record::id(id) AS id, title,
+        IF parent = NONE { NONE } ELSE { record::id(parent) } AS parent_id, position,
+        <string> created_at AS created_at, <string> updated_at AS updated_at
+        FROM page ORDER BY id";
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("db");
+
+    // A database as the last release left it: schema version 4, with pages.
+    let old = Surreal::new::<SurrealKv>(path.as_path()).await.unwrap();
+    old.use_ns(NAMESPACE).use_db(DATABASE).await.unwrap();
+    migrations::run(&old, &MIGRATIONS[..4]).await.unwrap();
+    assert_eq!(migrations::current_version(&old).await.unwrap(), 4);
+    old.query(
+        "CREATE page:parent SET title = 'Parent', parent = NONE, position = 0.0;
+         CREATE page:child SET title = 'Child', parent = page:parent, position = 0.0;
+         CREATE page:other SET title = '', parent = NONE, position = 1.0;
+         CREATE block:b1 SET page = page:child, type = 'paragraph', text = 'Kept';
+         RELATE page:child->links_to->page:other SET block = block:b1;",
+    )
+    .await
+    .unwrap()
+    .check()
+    .unwrap();
+    let before: Vec<Stored> = old.query(STORED).await.unwrap().take(0).unwrap();
+    assert_eq!(before.len(), 3);
+    drop(old);
+
+    let storage = reopen(&path).await;
+
+    assert_eq!(
+        migrations::current_version(&storage.db).await.unwrap(),
+        LATEST
+    );
+    let after: Vec<Stored> = storage.db.query(STORED).await.unwrap().take(0).unwrap();
+    assert_eq!(after, before, "the migration does not rewrite pages");
+    let fields: Vec<String> = storage
+        .db
+        .query(
+            "RETURN array::sort(array::distinct(array::flatten(
+                 SELECT VALUE object::keys($this) FROM page
+             )))",
+        )
+        .await
+        .unwrap()
+        .take(0)
+        .unwrap();
+    assert!(fields.iter().any(|field| field == "title"), "{fields:?}");
+    assert!(
+        !fields
+            .iter()
+            .any(|field| ["kind", "database", "props"].contains(&field.as_str())),
+        "old pages get none of the new fields, found {fields:?}"
+    );
+
+    let pages = storage.list_pages().await.unwrap();
+    let listed: Vec<(&str, &str, Option<&str>, f64)> = pages
+        .iter()
+        .map(|page| {
+            (
+                page.id.as_str(),
+                page.title.as_str(),
+                page.parent_id.as_deref(),
+                page.position,
+            )
+        })
+        .collect();
+    assert_eq!(pages.len(), 3);
+    for expected in [
+        ("parent", "Parent", None, 0.0),
+        ("child", "Child", Some("parent"), 0.0),
+        ("other", "", None, 1.0),
+    ] {
+        assert!(listed.contains(&expected), "{expected:?} in {listed:?}");
+    }
+    for page in &pages {
+        assert_eq!(page.kind, PageKind::Page, "{}", page.id);
+        assert_eq!(page.database_id, None, "{}", page.id);
+    }
+    assert_eq!(storage.load_blocks("child").await.unwrap().len(), 1);
+    assert_eq!(storage.list_backlinks("other").await.unwrap().len(), 1);
+
+    // The old pages and the new model work together.
+    let database = storage.create_database(Some("parent")).await.unwrap();
+    assert_eq!(database.page.kind, PageKind::Database);
+    assert!(database.page.position > 0.0);
+}
+
+#[tokio::test]
 async fn data_survives_closing_and_reopening_the_database() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("db");
@@ -216,6 +340,184 @@ async fn deleting_a_page_removes_its_subpages_blocks_and_links() {
         "only the unrelated page's block is left"
     );
     assert_eq!(count(&storage, "links_to").await, 0);
+}
+
+#[tokio::test]
+async fn deleting_a_database_removes_its_rows_properties_and_views() {
+    let storage = storage().await;
+    let page = storage.create_page(None).await.unwrap();
+    let authors = storage.create_database(None).await.unwrap().page;
+    let books = storage.create_database(Some(&page.id)).await.unwrap().page;
+    run_with_pages(
+        &storage,
+        &[("authors", &authors.id), ("books", &books.id)],
+        "CREATE page:author SET title = 'Herbert', parent = $authors, database = $authors;
+         CREATE page:dune SET title = 'Dune', parent = $books, database = $books,
+             props = { pages: 612 };
+         CREATE page:emma SET title = 'Emma', parent = $books, database = $books;
+         CREATE page:notes SET title = 'Notes', parent = page:dune;
+         CREATE block:d1 SET page = page:dune, type = 'paragraph';
+         CREATE block:n1 SET page = page:notes, type = 'paragraph';
+
+         CREATE property:born SET database = $authors, name = 'Born', type = 'date';
+         CREATE property:wrote SET database = $authors, name = 'Wrote', type = 'relation',
+             target = $books;
+         CREATE property:pages SET database = $books, name = 'Pages', type = 'number';
+         CREATE property:author SET database = $books, name = 'Author', type = 'relation',
+             target = $authors;
+         CREATE property:sequel SET database = $books, name = 'Sequel', type = 'relation',
+             target = $books;
+
+         CREATE view:authors_table SET database = $authors, name = 'Table',
+             config = { type: 'table' };
+         CREATE view:books_table SET database = $books, name = 'Table',
+             config = { type: 'table' };
+         CREATE view:books_board SET database = $books, name = 'Board', position = 1.0,
+             config = { type: 'board', groupBy: 'author' };
+
+         RELATE page:dune->row_link->page:author SET property = property:author;
+         RELATE page:dune->row_link->page:emma SET property = property:sequel;
+         RELATE page:author->row_link->page:dune SET property = property:wrote;
+         RELATE page:author->row_link->page:emma SET property = property:wrote, position = 1.0;",
+    )
+    .await;
+    assert_eq!(count(&storage, "row_link").await, 4);
+
+    storage.delete_page(&books.id).await.unwrap();
+
+    let mut left: Vec<String> = storage
+        .list_pages()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|page| page.id)
+        .collect();
+    left.sort();
+    let mut expected = vec![page.id, authors.id.clone(), "author".to_owned()];
+    expected.sort();
+    assert_eq!(left, expected, "the rows and their subpages are gone");
+    assert_eq!(count(&storage, "block").await, 0);
+    assert_eq!(count(&storage, "view").await, 1);
+    assert_eq!(count(&storage, "row_link").await, 0);
+
+    let properties: Vec<String> = storage
+        .load_database(&authors.id)
+        .await
+        .unwrap()
+        .properties
+        .into_iter()
+        .map(|property| property.id)
+        .collect();
+    assert_eq!(
+        properties,
+        ["born"],
+        "the relation that pointed at the deleted database is gone too"
+    );
+    assert_eq!(count(&storage, "property").await, 1);
+}
+
+#[tokio::test]
+async fn deleting_a_row_removes_the_relation_edges_at_both_ends() {
+    let storage = storage().await;
+    let database = storage.create_database(None).await.unwrap().page;
+    run_with_pages(
+        &storage,
+        &[("database", &database.id)],
+        "CREATE page:a SET title = 'A', parent = $database, database = $database;
+         CREATE page:b SET title = 'B', parent = $database, database = $database;
+         CREATE page:c SET title = 'C', parent = $database, database = $database;
+         CREATE property:related SET database = $database, name = 'Related', type = 'relation',
+             target = $database;
+         RELATE page:a->row_link->page:b SET property = property:related;
+         RELATE page:b->row_link->page:c SET property = property:related;
+         RELATE page:a->row_link->page:c SET property = property:related, position = 1.0;",
+    )
+    .await;
+
+    storage.delete_page("b").await.unwrap();
+
+    assert_eq!(count(&storage, "row_link").await, 1);
+    assert_eq!(count(&storage, "property").await, 1);
+    assert_eq!(count(&storage, "page").await, 3);
+}
+
+#[tokio::test]
+async fn deleting_a_property_removes_its_relation_edges() {
+    let storage = storage().await;
+    let database = storage.create_database(None).await.unwrap().page;
+    run_with_pages(
+        &storage,
+        &[("database", &database.id)],
+        "CREATE page:a SET title = 'A', parent = $database, database = $database;
+         CREATE page:b SET title = 'B', parent = $database, database = $database;
+         CREATE property:first SET database = $database, name = 'First', type = 'relation',
+             target = $database;
+         CREATE property:second SET database = $database, name = 'Second', type = 'relation',
+             target = $database;
+         RELATE page:a->row_link->page:b SET property = property:first;
+         RELATE page:b->row_link->page:a SET property = property:first;
+         RELATE page:a->row_link->page:b SET property = property:second;",
+    )
+    .await;
+
+    run(&storage, "DELETE property:first").await;
+
+    assert_eq!(count(&storage, "row_link").await, 1);
+    assert_eq!(count(&storage, "page").await, 3);
+}
+
+#[tokio::test]
+async fn the_schema_refuses_unknown_page_kinds_and_property_types() {
+    let storage = storage().await;
+    run(&storage, "CREATE page:db SET kind = 'database'").await;
+
+    for statement in [
+        "CREATE page:odd SET kind = 'spreadsheet'",
+        "CREATE property:odd SET database = page:db, type = 'checkbox'",
+        "CREATE property:orphan SET type = 'text'",
+        "CREATE property:half SET database = page:db, type = 'select', options = [{ id: 'a' }]",
+        "CREATE view:orphan SET name = 'Table', config = {}",
+    ] {
+        let result = storage.db.query(statement).await.unwrap().check();
+        assert!(result.is_err(), "{statement}");
+    }
+}
+
+#[tokio::test]
+async fn cell_values_keep_their_shape_and_a_key_is_removed_by_setting_none() {
+    let storage = storage().await;
+    run(
+        &storage,
+        "CREATE page:db SET kind = 'database';
+         CREATE page:row SET parent = page:db, database = page:db,
+             props = { name: 'Dune', pages: 612, read: '2026-11-13' };
+         UPDATE page:row SET props['pages'] = NONE;",
+    )
+    .await;
+
+    #[derive(SurrealValue)]
+    struct Cells {
+        name: Option<String>,
+        pages: Option<i64>,
+        read: Option<String>,
+        keys: Vec<String>,
+    }
+    let cells: Option<Cells> = storage
+        .db
+        .query(
+            "SELECT props.name AS name, props.pages AS pages, props.read AS read,
+                 array::sort(object::keys(props)) AS keys FROM ONLY page:row",
+        )
+        .await
+        .unwrap()
+        .take(0)
+        .unwrap();
+    let cells = cells.unwrap();
+
+    assert_eq!(cells.name.as_deref(), Some("Dune"));
+    assert_eq!(cells.pages, None);
+    assert_eq!(cells.read.as_deref(), Some("2026-11-13"));
+    assert_eq!(cells.keys, ["name", "read"]);
 }
 
 #[tokio::test]
