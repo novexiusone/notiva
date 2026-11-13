@@ -55,5 +55,12 @@
     "backlinks": "Backlinks",
     "noPages": "Keine passenden Seiten",
     "pick": "Seite verlinken"
+  },
+  "search": {
+    "title": "Suche",
+    "description": "Seitentitel und Inhalte durchsuchen",
+    "placeholder": "Seiten und Inhalte durchsuchen",
+    "hint": "Mindestens zwei Buchstaben eingeben",
+    "empty": "Keine Treffer für „{{query}}“"
   }
 }

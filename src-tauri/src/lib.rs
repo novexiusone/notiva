@@ -58,6 +58,7 @@ pub fn run() {
             commands::blocks::save_blocks,
             commands::images::save_image,
             commands::links::list_backlinks,
+            commands::search::search,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -6,7 +6,7 @@ import { SidebarItem } from '@/components/layout/SidebarItem';
 import { PageTree } from '@/features/pages/PageTree';
 import { commands } from '@/lib/commands';
 
-export function Sidebar() {
+export function Sidebar({ onSearch }: { onSearch: () => void }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const appInfo = useQuery({ queryKey: ['app-info'], queryFn: commands.appInfo, retry: false });
@@ -17,7 +17,7 @@ export function Sidebar() {
       <div data-tauri-drag-region className="h-11 shrink-0" />
 
       <nav className="flex flex-col gap-px px-2">
-        <SidebarItem icon={Search} label={t('sidebar.search')} hint="⌘K" />
+        <SidebarItem icon={Search} label={t('sidebar.search')} hint="⌘K" onClick={onSearch} />
         <SidebarItem icon={Home} label={t('sidebar.home')} onClick={() => navigate({ to: '/' })} />
       </nav>
 

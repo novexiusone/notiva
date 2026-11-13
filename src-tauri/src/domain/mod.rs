@@ -2,6 +2,8 @@
 
 pub mod block;
 pub mod page;
+pub mod search;
 
 pub use block::Block;
 pub use page::{Page, PageRef};
+pub use search::SearchHit;
