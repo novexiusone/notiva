@@ -2,7 +2,7 @@ import { de, en } from '@blocknote/core/locales';
 import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import '@blocknote/shadcn/style.css';
-import { useImperativeHandle, useState, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useState, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBlocks, useSaveBlocks } from '@/features/editor/api';
 import { schema } from '@/features/editor/schema';
@@ -55,6 +55,11 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
     // The backend stores exactly what the editor produced, so this is the editor's own shape.
     initialContent: initialBlocks.length > 0 ? (initialBlocks as never) : undefined,
   });
+
+  // Spike #52, throwaway: lets the end-to-end tests read the document.
+  useEffect(() => {
+    (window as unknown as { __editor?: unknown }).__editor = editor;
+  }, [editor]);
 
   useImperativeHandle(ref, () => ({ focus: () => editor.focus() }), [editor]);
 

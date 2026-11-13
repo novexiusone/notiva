@@ -6,7 +6,7 @@ import type { SlashMenuGroup, SlashMenuItem } from '@/features/editor/slashMenuI
 import { SlashMenuQueryContext } from '@/features/editor/slashMenuQuery';
 import { cn } from '@/lib/utils';
 
-const groups: SlashMenuGroup[] = ['suggested', 'basic'];
+const groups: SlashMenuGroup[] = ['suggested', 'basic', 'spike'];
 
 export function SlashMenu({
   items,

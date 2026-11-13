@@ -5,6 +5,7 @@ import {
   defaultInlineContentSpecs,
 } from '@blocknote/core';
 import { pageLink } from '@/features/links/pageLinkSpec';
+import { spikeBlock, spikeSelectableBlock } from '@/features/spike/spikeBlockSpec';
 
 /**
  * The block types of the MVP. BlockNote's other default blocks stay off until
@@ -20,6 +21,9 @@ export const schema = BlockNoteSchema.create({
     codeBlock: defaultBlockSpecs.codeBlock,
     quote: defaultBlockSpecs.quote,
     image: defaultBlockSpecs.image,
+    // Spike #52, throwaway.
+    spike: spikeBlock(),
+    spikeSelectable: spikeSelectableBlock(),
   },
   inlineContentSpecs: {
     ...defaultInlineContentSpecs,

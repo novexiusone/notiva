@@ -6,6 +6,7 @@ import {
 import type { TFunction } from 'i18next';
 import {
   Code,
+  FlaskConical,
   Heading1,
   Heading2,
   Heading3,
@@ -28,7 +29,7 @@ type NewBlock = Parameters<
   >
 >[1];
 
-export type SlashMenuGroup = 'suggested' | 'basic';
+export type SlashMenuGroup = 'suggested' | 'basic' | 'spike';
 
 export type SlashMenuItem = {
   /** Unique within the menu, also across groups. */
@@ -53,7 +54,9 @@ type Definition = {
     | 'checkList'
     | 'quote'
     | 'codeBlock'
-    | 'image';
+    | 'image'
+    | 'spike'
+    | 'spikeSelectable';
   icon: LucideIcon;
   shortcut?: string;
   /** Extra search terms, in every UI language. */
@@ -132,6 +135,17 @@ const definitions: Definition[] = [
   },
 ];
 
+// Spike #52, throwaway: listed in a group of their own so the menu's other groups stay as they are.
+const spikeDefinitions: Definition[] = [
+  { key: 'spike', icon: FlaskConical, aliases: ['spike'], block: { type: 'spike' } },
+  {
+    key: 'spikeSelectable',
+    icon: FlaskConical,
+    aliases: ['spike', 'selectable'],
+    block: { type: 'spikeSelectable' },
+  },
+];
+
 const suggested: Definition['key'][] = ['paragraph', 'heading1', 'bulletList', 'checkList'];
 
 /**
@@ -157,10 +171,11 @@ export function getSlashMenuItems(editor: Editor, t: TFunction, query: string): 
   });
 
   const basic = definitions.map((definition) => item(definition, 'basic'));
-  if (query.trim() !== '') return filterSuggestionItems(basic, query);
+  const spike = spikeDefinitions.map((definition) => item(definition, 'spike'));
+  if (query.trim() !== '') return filterSuggestionItems([...basic, ...spike], query);
 
   const top = definitions
     .filter((definition) => suggested.includes(definition.key))
     .map((definition) => item(definition, 'suggested'));
-  return [...top, ...basic];
+  return [...top, ...basic, ...spike];
 }

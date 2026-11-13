@@ -11,13 +11,13 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: 'http://localhost:1430',
+    baseURL: 'http://localhost:1441',
     trace: 'on-first-retry',
   },
   projects: [{ name: 'webkit', use: { ...devices['Desktop Safari'] } }],
   webServer: {
-    command: 'pnpm dev:fake',
-    url: 'http://localhost:1430',
-    reuseExistingServer: !process.env.CI,
+    command: 'VITE_FAKE_BACKEND=1 pnpm exec vite --port 1441 --strictPort',
+    url: 'http://localhost:1441',
+    reuseExistingServer: false,
   },
 });
