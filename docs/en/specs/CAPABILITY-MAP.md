@@ -21,9 +21,38 @@ Module ids are stable. They appear as a label (`area: <module-id>`), as the comm
 
 ## Not in the MVP
 
-Databases and their views, tags, favourites, recently opened, quick switcher, templates, import, trash, version history, backup and encryption each have an issue labelled `priority: low` and only get a spec after the MVP.
+Tags, favourites, recently opened, quick switcher, templates, import, trash, version history, backup and encryption each have an issue labelled `priority: low` and only get a spec after the MVP. Databases are planned below.
 
 Deliberately excluded: real-time sync, permissions, comments, web clipper.
+
+## After the MVP: databases
+
+Notion-style databases are the first feature after the MVP (#19, #20). They are three modules:
+
+| Module id        | Responsibility                                                                        | Depends on            | Spec                                             |
+| ---------------- | ------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------ |
+| `databases`      | Database pages, typed properties, rows as pages, cells, relations, the table          | `pages`, `storage`    | [SPEC-databases.md](SPEC-databases.md)           |
+| `database-views` | Stored views per database; filter, sort and group; drag and drop; kanban and calendar | `databases`           | [SPEC-database-views.md](SPEC-database-views.md) |
+| `database-embed` | A database as a block inside a normal page, inserted from the slash menu              | `databases`, `editor` | [SPEC-database-embed.md](SPEC-database-embed.md) |
+
+Build order: `databases` → `database-views`, `database-embed`. `search` and `export` each get one extension (#69, #68).
+
+### Work packages
+
+Each package is one issue, built by one subagent on its own branch and delivered as one pull request. The issue lists the files the package owns. Packages in the same wave own different files and can be built at the same time; a wave starts when the packages it depends on are merged.
+
+| Wave | Packages                                                                                                                                 | Needs                             |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| 1    | #52 spike: interactive block in BlockNote · #53 schema version 5 and database pages · #55 frontend commands, fake backend and page shell | the MVP on `main`                 |
+| 2    | #54 properties, rows and cells · #58 stored views in the backend · #56 property types                                                    | #53; #53; #55                     |
+| 3    | #57 table view · #59 deleting and converting properties · #62 benchmark                                                                  | #55, #56; #54, #58; #54           |
+| 4    | #60 row pages · #63 view tabs and toolbar · #67 inline block · #68 export · #69 search                                                   | #57; #57, #58; #52, #57; #54; #54 |
+| 5    | #64 drag and drop in the table · #66 calendar view                                                                                       | #63                               |
+| 6    | #65 kanban view · #61 relation property                                                                                                  | #64; #60, #64                     |
+
+Three files are shared by many packages and are not owned by one: the command registration in `src-tauri/src/lib.rs`, the two locale files, and `pnpm-lock.yaml`. A package adds its lines there; whichever pull request is merged second takes `main` in first and, for the lock file, runs `pnpm install` again.
+
+The spec is the contract between frontend and backend, which is why #55 does not wait for #53 and #54.
 
 ## Applies to every module
 
@@ -32,7 +61,7 @@ Deliberately excluded: real-time sync, permissions, comments, web clipper.
 - The app shell is Tauri 2: Rust backend, React frontend in the WebView.
 - The frontend talks to the backend only through Tauri commands (`invoke`). SurrealDB is never accessed from the WebView.
 - Database access sits behind a repository layer in the Rust backend. No SurrealDB types appear outside that layer.
-- Frontend features are solved with an existing library first (BlockNote, shadcn/ui, react-arborist, cmdk, TanStack Query, Zustand). A library is only replaced when it demonstrably fails a requirement.
+- Frontend features are solved with an existing library first (BlockNote, shadcn/ui, react-arborist, cmdk, TanStack Query, TanStack Table, dnd-kit, Zustand). A library is only replaced when it demonstrably fails a requirement.
 
 ### Language
 
