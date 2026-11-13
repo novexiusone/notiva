@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { commands, type Page } from '@/lib/commands';
+import { databaseKeys } from '@/features/databases/api';
+import { pagesKey } from '@/features/pages/queryKeys';
 import { descendantIds, movePage } from '@/features/pages/tree';
+import { commands, type Database, type Page, type Row } from '@/lib/commands';
 
-const pagesKey = ['pages'] as const;
 const renameKey = ['rename-page'] as const;
 
 export function usePages() {
@@ -48,7 +49,20 @@ export function useRenamePage() {
   });
 
   return (id: string, title: string) => {
+    const renamed = queryClient.getQueryData<Page[]>(pagesKey)?.find((page) => page.id === id);
     setPages((pages) => pages.map((page) => (page.id === id ? { ...page, title } : page)));
+    // A database and its rows are pages too, and what was loaded about them carries the title.
+    if (renamed?.kind === 'database') {
+      queryClient.setQueryData<Database>(
+        databaseKeys.database(id),
+        (database) => database && { ...database, page: { ...database.page, title } },
+      );
+    }
+    if (renamed?.databaseId) {
+      queryClient.setQueryData<Row[]>(databaseKeys.rows(renamed.databaseId), (rows) =>
+        rows?.map((row) => (row.id === id ? { ...row, title } : row)),
+      );
+    }
     mutation.mutate({ id, title });
   };
 }
@@ -75,11 +89,26 @@ export function useDeletePage() {
 
   return useMutation({
     mutationFn: (id: string) => commands.deletePage(id),
-    onSuccess: (_, id) =>
+    onSuccess: (_, id) => {
+      const databaseId = queryClient
+        .getQueryData<Page[]>(pagesKey)
+        ?.find((page) => page.id === id)?.databaseId;
       setPages((pages) => {
         const removed = new Set([id, ...descendantIds(pages, id)]);
         return pages.filter((page) => !removed.has(page.id));
-      }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: pagesKey }),
+      });
+      if (databaseId) {
+        queryClient.setQueryData<Row[]>(databaseKeys.rows(databaseId), (rows) =>
+          rows?.filter((row) => row.id !== id),
+        );
+      }
+    },
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: pagesKey }),
+        // Deleting a row empties relation cells, and deleting a database removes
+        // the relation properties that pointed at it.
+        queryClient.invalidateQueries({ queryKey: databaseKeys.all }),
+      ]),
   });
 }

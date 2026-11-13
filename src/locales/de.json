@@ -3,6 +3,7 @@
     "search": "Suche",
     "home": "Start",
     "pages": "Seiten",
+    "pagesMenu": "Weiteres erstellen",
     "noPages": "Noch keine Seiten",
     "settings": "Einstellungen"
   },
@@ -24,7 +25,22 @@
     "deleteDescription": "Das lässt sich nicht rückgängig machen.",
     "deleteDescriptionWithSubpages_one": "Dabei wird auch {{count}} Unterseite gelöscht. Das lässt sich nicht rückgängig machen.",
     "deleteDescriptionWithSubpages_other": "Dabei werden auch {{count}} Unterseiten gelöscht. Das lässt sich nicht rückgängig machen.",
+    "deleteDescriptionWithRows_one": "Dabei wird auch {{count}} Zeile gelöscht. Das lässt sich nicht rückgängig machen.",
+    "deleteDescriptionWithRows_other": "Dabei werden auch {{count}} Zeilen gelöscht. Das lässt sich nicht rückgängig machen.",
+    "deleteDescriptionWithSubpagesAndRows": "Dabei werden auch {{subpages}} und {{rows}} gelöscht. Das lässt sich nicht rückgängig machen.",
+    "subpageCount_one": "{{count}} Unterseite",
+    "subpageCount_other": "{{count}} Unterseiten",
     "cancel": "Abbrechen"
+  },
+  "databases": {
+    "new": "Neue Datenbank",
+    "add": "Datenbank hinzufügen",
+    "rows": "Zeilen",
+    "noRows": "Noch keine Zeilen",
+    "newRow": "Neu",
+    "loadFailed": "Die Zeilen konnten nicht geladen werden.",
+    "rowCount_one": "{{count}} Zeile",
+    "rowCount_other": "{{count}} Zeilen"
   },
   "editor": {
     "saveFailed": "Die letzte Änderung konnte nicht gespeichert werden. Mit der nächsten Änderung wird es erneut versucht.",

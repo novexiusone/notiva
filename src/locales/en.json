@@ -3,6 +3,7 @@
     "search": "Search",
     "home": "Home",
     "pages": "Pages",
+    "pagesMenu": "More to create",
     "noPages": "No pages yet",
     "settings": "Settings"
   },
@@ -24,7 +25,22 @@
     "deleteDescription": "This cannot be undone.",
     "deleteDescriptionWithSubpages_one": "This also deletes {{count}} subpage. This cannot be undone.",
     "deleteDescriptionWithSubpages_other": "This also deletes {{count}} subpages. This cannot be undone.",
+    "deleteDescriptionWithRows_one": "This also deletes {{count}} row. This cannot be undone.",
+    "deleteDescriptionWithRows_other": "This also deletes {{count}} rows. This cannot be undone.",
+    "deleteDescriptionWithSubpagesAndRows": "This also deletes {{subpages}} and {{rows}}. This cannot be undone.",
+    "subpageCount_one": "{{count}} subpage",
+    "subpageCount_other": "{{count}} subpages",
     "cancel": "Cancel"
+  },
+  "databases": {
+    "new": "New database",
+    "add": "Add database",
+    "rows": "Rows",
+    "noRows": "No rows yet",
+    "newRow": "New",
+    "loadFailed": "The rows could not be loaded.",
+    "rowCount_one": "{{count}} row",
+    "rowCount_other": "{{count}} rows"
   },
   "editor": {
     "saveFailed": "The last change could not be saved. It will be tried again with the next change.",

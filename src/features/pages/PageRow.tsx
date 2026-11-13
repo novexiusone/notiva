@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FileText, MoreHorizontal, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, MoreHorizontal, Plus, Table } from 'lucide-react';
 import { useContext, useRef } from 'react';
 import type { NodeRendererProps } from 'react-arborist';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +20,10 @@ export function PageRow({ node, style, dragHandle }: NodeRendererProps<PageNode>
   const actions = useContext(PageRowActionsContext);
   const title = node.data.title || t('pages.untitled');
   const hasChildren = node.data.children.length > 0;
-  const startedRenaming = useRef(false);
+  // The children of a database are its rows, which it shows itself.
+  const isDatabase = node.data.kind === 'database';
+  const Icon = isDatabase ? Table : FileText;
+  const movedFocus = useRef(false);
   const isOpenPage = actions?.openPageId === node.id;
   // The indent comes from the tree; the rest lines the icon up with the sidebar items.
   const indent = typeof style.paddingLeft === 'number' ? style.paddingLeft : 0;
@@ -53,7 +56,7 @@ export function PageRow({ node, style, dragHandle }: NodeRendererProps<PageNode>
         </button>
       ) : (
         <span className="flex size-5 shrink-0 items-center justify-center">
-          <FileText size={16} aria-hidden />
+          <Icon size={16} aria-hidden />
         </span>
       )}
 
@@ -88,22 +91,32 @@ export function PageRow({ node, style, dragHandle }: NodeRendererProps<PageNode>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
-            className="w-40"
-            // The menu hands focus back to its trigger when it closes, which
-            // would take it away from the rename input that just appeared.
+            className="w-max min-w-40"
+            // The menu hands focus back to its trigger when it closes, which would take
+            // it away from the rename input or the title of the new database.
             onCloseAutoFocus={(event) => {
-              if (startedRenaming.current) event.preventDefault();
-              startedRenaming.current = false;
+              if (movedFocus.current) event.preventDefault();
+              movedFocus.current = false;
             }}
           >
             <DropdownMenuItem
               onSelect={() => {
-                startedRenaming.current = true;
+                movedFocus.current = true;
                 void node.edit();
               }}
             >
               {t('pages.rename')}
             </DropdownMenuItem>
+            {isDatabase ? null : (
+              <DropdownMenuItem
+                onSelect={() => {
+                  movedFocus.current = true;
+                  actions?.addDatabase(node.id);
+                }}
+              >
+                {t('databases.add')}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => actions?.exportMarkdown(node.id)}>
               {t('export.page')}
             </DropdownMenuItem>
@@ -112,14 +125,16 @@ export function PageRow({ node, style, dragHandle }: NodeRendererProps<PageNode>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <button
-          type="button"
-          aria-label={t('pages.addSubpage')}
-          className={iconButton}
-          onClick={() => actions?.addSubpage(node.id)}
-        >
-          <Plus size={16} aria-hidden />
-        </button>
+        {isDatabase ? null : (
+          <button
+            type="button"
+            aria-label={t('pages.addSubpage')}
+            className={iconButton}
+            onClick={() => actions?.addSubpage(node.id)}
+          >
+            <Plus size={16} aria-hidden />
+          </button>
+        )}
       </div>
     </div>
   );

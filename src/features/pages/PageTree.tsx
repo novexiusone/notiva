@@ -1,8 +1,15 @@
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { Plus } from 'lucide-react';
+import { MoreHorizontal, Plus } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { adjustMoveIndex, Tree, type CursorProps, type TreeApi } from 'react-arborist';
 import { useTranslation } from 'react-i18next';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useCreateDatabase } from '@/features/databases/api';
 import {
   useCreatePage,
   useDeletePage,
@@ -14,12 +21,23 @@ import { useExport } from '@/features/export/useExport';
 import { DeletePageDialog } from '@/features/pages/DeletePageDialog';
 import { PageRow } from '@/features/pages/PageRow';
 import { PageRowActionsContext } from '@/features/pages/pageRowActions';
-import { buildTree, canMove, childIds, descendantIds, type PageNode } from '@/features/pages/tree';
+import {
+  buildTree,
+  canMove,
+  childIds,
+  countDescendants,
+  descendantIds,
+  type PageNode,
+} from '@/features/pages/tree';
+import type { Page } from '@/lib/commands';
 import { openPages, rememberOpenPage } from '@/lib/localState';
 import { useElementSize } from '@/lib/useElementSize';
 
 const ROW_HEIGHT = 28;
 const INDENT = 14;
+
+const headerButton =
+  'text-muted-foreground hover:bg-accent hover:text-foreground flex size-5 items-center justify-center rounded-sm';
 
 function DropCursor({ top, left, indent }: CursorProps) {
   return (
@@ -36,11 +54,13 @@ export function PageTree() {
   const { pageId: openPageId } = useParams({ strict: false });
   const pages = usePages();
   const createPage = useCreatePage();
+  const createDatabase = useCreateDatabase();
   const renamePage = useRenamePage();
   const movePage = useMovePage();
   const deletePage = useDeletePage();
   const exportMarkdown = useExport();
   const tree = useRef<TreeApi<PageNode>>(null);
+  const createdFromMenu = useRef(false);
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const size = useElementSize(container);
   const [initialOpenState] = useState(openPages);
@@ -51,8 +71,11 @@ export function PageTree() {
 
   const open = (id: string) => navigate({ to: '/page/$pageId', params: { pageId: id } });
 
-  const create = async (parentId: string | null) => {
-    const page = await createPage.mutateAsync(parentId);
+  const create = async (parentId: string | null, kind: Page['kind'] = 'page') => {
+    const page =
+      kind === 'database'
+        ? (await createDatabase.mutateAsync(parentId)).page
+        : await createPage.mutateAsync(parentId);
     if (parentId !== null) {
       tree.current?.open(parentId);
       rememberOpenPage(parentId, true);
@@ -76,6 +99,7 @@ export function PageTree() {
     openPageId,
     open,
     addSubpage: (id: string) => void create(id),
+    addDatabase: (id: string) => void create(id, 'database'),
     remove: setPendingDelete,
     exportMarkdown: (id: string) => void exportMarkdown(id),
   };
@@ -86,10 +110,36 @@ export function PageTree() {
     <section className="mt-5 flex min-h-0 flex-1 flex-col">
       <header className="flex h-7 items-center pr-3 pl-4">
         <h2 className="text-muted-foreground flex-1 text-xs font-medium">{t('sidebar.pages')}</h2>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label={t('sidebar.pagesMenu')} className={headerButton}>
+              <MoreHorizontal size={16} aria-hidden />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="w-max min-w-40"
+            // The menu hands focus back to its trigger when it closes, which would
+            // take it away from the title of the new database.
+            onCloseAutoFocus={(event) => {
+              if (createdFromMenu.current) event.preventDefault();
+              createdFromMenu.current = false;
+            }}
+          >
+            <DropdownMenuItem
+              onSelect={() => {
+                createdFromMenu.current = true;
+                void create(null, 'database');
+              }}
+            >
+              {t('databases.new')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <button
           type="button"
           aria-label={t('pages.new')}
-          className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-5 items-center justify-center rounded-sm"
+          className={headerButton}
           onClick={() => void create(null)}
         >
           <Plus size={16} aria-hidden />
@@ -97,7 +147,7 @@ export function PageTree() {
       </header>
 
       <div ref={setContainer} className="min-h-0 flex-1">
-        {pages.isSuccess && list.length === 0 ? (
+        {pages.isSuccess && nodes.length === 0 ? (
           <p className="text-muted-foreground px-4 py-1 text-sm opacity-70">
             {t('sidebar.noPages')}
           </p>
@@ -145,7 +195,7 @@ export function PageTree() {
       <DeletePageDialog
         page={
           pageToDelete
-            ? { title: pageToDelete.title, subpages: descendantIds(list, pageToDelete.id).length }
+            ? { title: pageToDelete.title, ...countDescendants(list, pageToDelete.id) }
             : null
         }
         onConfirm={() => void confirmDelete()}
