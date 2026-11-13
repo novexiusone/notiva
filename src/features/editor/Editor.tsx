@@ -58,7 +58,11 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
 
   // Spike #52, throwaway: lets the end-to-end tests read the document.
   useEffect(() => {
-    (window as unknown as { __editor?: unknown }).__editor = editor;
+    const target = window as unknown as { __editor?: unknown };
+    target.__editor = editor;
+    return () => {
+      if (target.__editor === editor) target.__editor = undefined;
+    };
   }, [editor]);
 
   useImperativeHandle(ref, () => ({ focus: () => editor.focus() }), [editor]);

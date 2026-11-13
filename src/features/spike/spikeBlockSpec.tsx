@@ -49,7 +49,38 @@ function useUndoGuard() {
   }, []);
 }
 
+/**
+ * Workaround "through": a block with `selectable: false` swallows the drop of
+ * a block dragged onto it. While a native drag is under way the node view
+ * takes no pointer events, so the drop lands on the block container around
+ * it, which the editor handles.
+ */
+function useDropThrough(root: React.RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const nodeView = () =>
+      root.current?.closest<HTMLElement>('.bn-react-node-view-renderer') ?? null;
+    const start = () => {
+      if (window.localStorage.getItem('spike.drop') !== 'through') return;
+      // Not in the same task: the browser would cancel a drag whose source changes under it.
+      setTimeout(() => nodeView()?.style.setProperty('pointer-events', 'none'), 0);
+    };
+    const end = () => nodeView()?.style.removeProperty('pointer-events');
+    document.addEventListener('dragstart', start, true);
+    document.addEventListener('dragend', end, true);
+    document.addEventListener('drop', end, false);
+    return () => {
+      document.removeEventListener('dragstart', start, true);
+      document.removeEventListener('dragend', end, true);
+      document.removeEventListener('drop', end, false);
+    };
+  }, [root]);
+}
+
+const interactive = 'input, textarea, select, button, a';
+
 function SpikeBlock({ refId }: { refId: string }) {
+  const root = useRef<HTMLDivElement>(null);
+  useDropThrough(root);
   const [text, setText] = useState('');
   // Workaround "own": the field keeps its own history and the browser's undo never runs.
   const history = useRef<string[]>([]);
@@ -59,9 +90,31 @@ function SpikeBlock({ refId }: { refId: string }) {
 
   return (
     <div
+      ref={root}
       data-testid="spike-block"
       data-ref-id={refId}
-      className="bg-card flex w-full flex-col gap-2 rounded-lg border p-3"
+      // Workaround "clear": with `selectable: false` BlockNote blurs the editor on a mouse
+      // down in the block, but WebKit keeps the text cursor where the click put it, and the
+      // next key still edits the document. Dropping the selection ends that.
+      onMouseDown={(event) => {
+        if (window.localStorage.getItem('spike.chrome') !== 'clear') return;
+        const control = (event.target as Element).closest(interactive);
+        if (control !== null && event.currentTarget.contains(control)) return;
+        event.preventDefault();
+        // Blur first: a focused editor would put its selection back.
+        root.current?.closest<HTMLElement>('.bn-editor')?.blur();
+        window.getSelection()?.removeAllRanges();
+        // Focus goes to the block, not to the body, where WebKit takes Backspace as "back".
+        event.currentTarget.tabIndex = -1;
+        event.currentTarget.focus();
+      }}
+      onKeyDown={(event) => {
+        if (window.localStorage.getItem('spike.chrome') !== 'clear') return;
+        if (event.target === event.currentTarget && ['Backspace', 'Delete'].includes(event.key)) {
+          event.preventDefault();
+        }
+      }}
+      className="bg-card flex w-full flex-col gap-2 rounded-lg border p-3 outline-none"
     >
       <div className="text-muted-foreground text-xs">
         Spike block <span data-testid="spike-ref">{refId}</span>

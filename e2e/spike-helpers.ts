@@ -116,7 +116,12 @@ type Point = { x: number; y: number };
  * hover the block, wait for the side menu to sit next to it, press on the
  * handle, move to `drop` and approach it from `from`.
  */
-export async function dragByHandle(page: Page, source: Locator, drop: Point, from: 'below' | 'above') {
+export async function dragByHandle(
+  page: Page,
+  source: Locator,
+  drop: Point,
+  from: 'below' | 'above',
+) {
   const box = (await source.boundingBox())!;
   const hover = { x: box.x + 60, y: box.y + Math.min(10, box.height / 2) };
   await page.mouse.move(hover.x - 3, hover.y - 3);
@@ -131,8 +136,15 @@ export async function dragByHandle(page: Page, source: Locator, drop: Point, fro
     })
     .toBe(true);
   const grip = (await handle.boundingBox())!;
-  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2, { steps: 3 });
+  const start = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 };
+  await page.mouse.move(start.x, start.y, { steps: 3 });
   await page.mouse.down();
+  // The drag has to start while the pointer is still on the handle, as it does for a person.
+  // With large first steps the pointer is over another block before the browser starts the
+  // drag, the side menu re-renders for that block and the drag never reaches BlockNote.
+  await page.mouse.move(start.x + 2, start.y + 2);
+  await page.mouse.move(start.x + 4, start.y + 4);
+  await page.mouse.move(start.x + 6, start.y + 6);
   await page.mouse.move(drop.x, drop.y + (from === 'below' ? 9 : -9), { steps: 12 });
   await page.mouse.move(drop.x, drop.y, { steps: 4 });
   await page.mouse.up();
