@@ -156,6 +156,19 @@ type Database = { page: Page; properties: Property[]; views: View[] }; // `View`
 - Readers skip property ids and option ids that no longer exist, so a missed clean-up never breaks a view.
 - Errors use the existing `{ kind: 'not_found' | 'invalid' | 'internal', message }`.
 
+Details the fake backend settled first (#55); the real backend follows them:
+
+- **Not a database, not a row.** `load_database`, `list_rows`, `create_row` and a relation target that is not a database are `not_found`. `set_cell` on a page that is not a row, and `list_incoming_relations` on one, are `invalid`.
+- **`create_database`** refuses a database as parent, like `create_page`. Below a row it is allowed.
+- **Empty cells** are left out of `cells`; a missing key means empty. `set_cell` with `null`, and with `[]` for a relation, empties the cell. An empty text `''` is stored as it is.
+- **`set_cell`** refuses a property of another database, and the same row twice in a relation value. The reserved id `title` is `not_found`; titles go through `rename_page`.
+- **`create_property`** refuses a relation without a target and a target on any other type.
+- **`update_property`** refuses options on a property that is not a select, and option ids that are empty or appear twice. An option left out of the new list is gone; cells that held it read as empty.
+- **Select colours** are `gray`, `brown`, `orange`, `yellow`, `green`, `blue`, `purple`, `red`. Options created by a conversion take them in this order, starting again after the eighth.
+- **`change_property_type`** to the type the property already has changes nothing. Text becomes a number when Rust's `f64` parses the trimmed text to a finite number, and a date when the trimmed text is a real calendar date. Text to select skips empty text and creates the options in row order. Leaving select clears the options.
+- **`list_incoming_relations`** orders its groups by the property's position and leaves out groups without rows.
+- **`create_row`** gives the row the highest position plus one.
+
 ## Data model (schema version 5)
 
 One migration carries the model for all three database modules, so that views and relations need no further one.

@@ -1,19 +1,36 @@
 import type { Page } from '@/lib/commands';
 
-export type PageNode = { id: string; title: string; children: PageNode[] };
+export type PageNode = { id: string; title: string; kind: Page['kind']; children: PageNode[] };
 
 function byPosition(a: Page, b: Page) {
   return a.position - b.position;
 }
 
-/** Turns the flat list into a tree. A page whose parent is missing becomes a top-level page. */
+/**
+ * Whether a page is a row of a database. A backend that does not know
+ * databases yet leaves the field out, which means the same as `null`.
+ */
+export function isRow(page: Page): boolean {
+  return Boolean(page.databaseId);
+}
+
+/**
+ * Turns the flat list into a tree. A page whose parent is missing becomes a
+ * top-level page. The rows of a database, and everything below a row, are
+ * left out: a database shows them itself.
+ */
 export function buildTree(pages: readonly Page[]): PageNode[] {
   const nodes = new Map<string, PageNode>(
-    pages.map((page) => [page.id, { id: page.id, title: page.title, children: [] }]),
+    pages.map((page) => [
+      page.id,
+      { id: page.id, title: page.title, kind: page.kind, children: [] },
+    ]),
   );
   const roots: PageNode[] = [];
 
   for (const page of [...pages].sort(byPosition)) {
+    // A row is attached to nothing, so the pages below it never reach the tree either.
+    if (isRow(page)) continue;
     const parent = page.parentId === null ? undefined : nodes.get(page.parentId);
     (parent ? parent.children : roots).push(nodes.get(page.id)!);
   }
@@ -29,27 +46,49 @@ export function childIds(pages: readonly Page[], parentId: string | null): strin
     .map((page) => page.id);
 }
 
-/** The ids of every page below `id`, at any depth. */
+/** The ids of every page below `id`, at any depth. Rows count as well. */
 export function descendantIds(pages: readonly Page[], id: string): string[] {
-  const found: string[] = [];
-  const queue = [id];
+  // One pass over the list, so that a database with thousands of rows stays cheap.
+  const children = new Map<string, string[]>();
+  for (const page of pages) {
+    if (page.parentId === null) continue;
+    const siblings = children.get(page.parentId);
+    if (siblings) siblings.push(page.id);
+    else children.set(page.parentId, [page.id]);
+  }
 
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    for (const page of pages) {
-      if (page.parentId === current) {
-        found.push(page.id);
-        queue.push(page.id);
-      }
-    }
+  const found: string[] = [];
+  let current: string | undefined = id;
+  for (let next = 0; current !== undefined; next += 1) {
+    for (const child of children.get(current) ?? []) found.push(child);
+    current = found[next];
   }
 
   return found;
 }
 
-/** A page cannot be moved into itself or into one of its subpages. */
+/** What goes along when a page is deleted: the rows of databases, and every other page. */
+export function countDescendants(
+  pages: readonly Page[],
+  id: string,
+): { subpages: number; rows: number } {
+  const below = new Set(descendantIds(pages, id));
+  const rows = pages.filter((page) => below.has(page.id) && isRow(page)).length;
+  return { subpages: below.size - rows, rows };
+}
+
+/**
+ * A page cannot be moved into itself, into one of its subpages or into a
+ * database, whose children are its rows. A row cannot be moved at all.
+ */
 export function canMove(pages: readonly Page[], id: string, parentId: string | null): boolean {
-  return parentId !== id && (parentId === null || !descendantIds(pages, id).includes(parentId));
+  const page = pages.find((candidate) => candidate.id === id);
+  if (page && isRow(page)) return false;
+  if (parentId === null) return true;
+  if (parentId === id) return false;
+
+  const parent = pages.find((candidate) => candidate.id === parentId);
+  return parent?.kind !== 'database' && !descendantIds(pages, id).includes(parentId);
 }
 
 /**

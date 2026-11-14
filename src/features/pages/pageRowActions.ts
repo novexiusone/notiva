@@ -5,6 +5,8 @@ export type PageRowActions = {
   openPageId: string | undefined;
   open: (id: string) => void;
   addSubpage: (id: string) => void;
+  /** Creates a database below the page. */
+  addDatabase: (id: string) => void;
   remove: (id: string) => void;
   exportMarkdown: (id: string) => void;
 };
