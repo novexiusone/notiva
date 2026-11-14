@@ -49,10 +49,12 @@ All of them are named in the project brief or come with shadcn/ui. TanStack Tabl
 
 ### Table
 
-- The first column is the title of the row. It cannot be deleted or change its type.
-- **Properties.** `+` at the end of the header adds a property: choose a type, type a name. The header menu of a property offers rename, change type and delete.
-- **Rows.** "New" below the last row adds a row and puts the cursor in its title. Hovering a row shows "Open" in the title cell and a menu with "Delete".
-- **Editing.** Clicking a cell edits it. Text and number are typed in place: Enter or leaving the cell saves, Escape discards. Date opens a calendar, select a searchable list of options.
+- The first column is the title of the row. Its header reads "Name" and has no menu: it cannot be renamed, deleted or change its type.
+- **Properties.** `+` at the end of the header adds a property: choose a type, type a name. Without a name the property is named after its type. The header menu of a property offers rename, change type and delete. An empty name in a rename keeps the old one.
+- **Rows.** "New" below the last row adds a row and puts the cursor in its title. Hovering a row shows "Open" in the title cell and a menu with "Delete". Deleting a row asks for confirmation like deleting a page, because there is no trash.
+- **Editing.** Clicking a cell edits it. Text and number are typed in place: Enter or leaving the cell saves, Escape discards. Date opens a calendar, select a searchable list of options. A value that did not change is not saved.
+- **Keyboard.** The body is one Tab stop. The arrow keys move between cells, Enter or F2 edits the focused cell, Escape leaves the editor.
+- Writes to options and cells of a database go to the backend one after another, in the order they were made, so a cell never names a select option the backend does not know yet.
 - Every change is saved at once. There is no save button. Undo inside a cell is the text field's own; changes to a database are not part of the editor's undo history.
 - Rows are virtualised: only the visible ones are in the page.
 
@@ -333,5 +335,6 @@ type PropertyTypeDefinition = {
 ## Open questions
 
 - Rows can technically have subpages, but nothing in the UI creates or shows them. Whether a row's page should list subpages is left open.
+- A long table scrolls inside itself, and the page around it scrolls a little further by the height of the title. One scroll area for both would need a change to the page view; whether that is worth it is open.
 - Search does not look into property values yet (#69), and the export does not know databases yet (#68).
 - A checkbox and a multi-select type would be cheap additions; they are left out because the project brief names five types.

@@ -35,10 +35,6 @@
   "databases": {
     "new": "Neue Datenbank",
     "add": "Datenbank hinzufügen",
-    "rows": "Zeilen",
-    "noRows": "Noch keine Zeilen",
-    "newRow": "Neu",
-    "loadFailed": "Die Zeilen konnten nicht geladen werden.",
     "rowCount_one": "{{count}} Zeile",
     "rowCount_other": "{{count}} Zeilen",
     "properties": {
@@ -46,6 +42,36 @@
       "searchOptions": "Option suchen oder anlegen",
       "createOption": "„{{name}}“ anlegen",
       "noOptions": "Noch keine Optionen"
+    },
+    "table": {
+      "rows": "Zeilen",
+      "titleColumn": "Name",
+      "noRows": "Noch keine Zeilen",
+      "newRow": "Neu",
+      "loadFailed": "Die Zeilen konnten nicht geladen werden.",
+      "open": "Öffnen",
+      "rowActions": "Zeilenaktionen",
+      "deleteRow": "Löschen",
+      "rename": "Umbenennen",
+      "changeType": "Typ ändern",
+      "deleteProperty": "Eigenschaft löschen",
+      "addProperty": "Eigenschaft hinzufügen",
+      "chooseType": "Typ",
+      "propertyName": "Name der Eigenschaft",
+      "add": "Hinzufügen",
+      "cancel": "Abbrechen",
+      "deletePropertyTitle": "„{{name}}“ löschen?",
+      "deletePropertyDescription": "Ihr Wert wird in jeder Zeile mitgelöscht. Das lässt sich nicht rückgängig machen.",
+      "delete": "Löschen",
+      "changeTypeTitle": "„{{name}}“ in {{type}} ändern?",
+      "changeTypeDescription": "Jeder Wert wird umgewandelt. Werte, die sich nicht umwandeln lassen, werden verworfen.",
+      "types": {
+        "text": "Text",
+        "number": "Zahl",
+        "date": "Datum",
+        "select": "Auswahl",
+        "relation": "Relation"
+      }
     }
   },
   "editor": {

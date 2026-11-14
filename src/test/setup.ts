@@ -21,6 +21,23 @@ window.matchMedia ??= (query: string) =>
     dispatchEvent: () => false,
   }) satisfies MediaQueryList;
 Element.prototype.scrollIntoView ??= () => {};
+Element.prototype.scrollTo ??= () => {};
+
+// jsdom lays nothing out, so every element is 0 pixels in size. A scroll
+// container (marked by an inline `overflow: auto`) gets the size of a window,
+// so that the table's virtualiser renders the rows that would be visible.
+for (const [name, size] of [
+  ['clientWidth', 1024],
+  ['clientHeight', 768],
+] as const) {
+  const native = Object.getOwnPropertyDescriptor(Element.prototype, name);
+  Object.defineProperty(HTMLElement.prototype, name, {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.style.overflow === 'auto' ? size : (native?.get?.call(this) ?? 0);
+    },
+  });
+}
 Element.prototype.hasPointerCapture ??= () => false;
 Element.prototype.releasePointerCapture ??= () => {};
 
