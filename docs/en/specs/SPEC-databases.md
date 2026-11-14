@@ -10,7 +10,7 @@ Tracking issue: #19.
 
 ## Decisions and what they rest on
 
-The numbers were measured on 2026-11-12 with SurrealDB 4.0.1 on disk, in the benchmark profile, with 10,000 ordinary pages and one database of 10,000 rows with seven properties. They come from a research run, not from the project's benchmark; #62 adds them to the benchmark.
+The numbers were measured on 2026-11-12 with SurrealDB 4.0.1 on disk, in the benchmark profile, with 10,000 ordinary pages and one database of 10,000 rows with seven properties. They come from a research run, not from the project's benchmark. What `just benchmark` measured since is under "Performance targets".
 
 | Decision                                                                         | Why                                                                                                                                                                              |
 | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
