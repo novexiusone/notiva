@@ -96,9 +96,16 @@ fn check(property: &Property, value: CellValue) -> Result<CellValue, StorageErro
     }
 }
 
+/// One stored cell of a column: the row and the value as it is in `props`.
+#[derive(SurrealValue)]
+struct StoredCell {
+    id: String,
+    value: Option<Value>,
+}
+
 /// The value a stored cell has for a reader. Anything that no longer fits the
 /// property, such as an option that is gone, reads as empty.
-fn read_cell(property: &Property, stored: &Value) -> CellValue {
+pub(super) fn read_cell(property: &Property, stored: &Value) -> CellValue {
     CellValue::from_json(property.kind, stored)
         .and_then(|value| check(property, value).ok())
         .unwrap_or(CellValue::Empty)
@@ -121,7 +128,7 @@ fn read_cells(properties: &[Property], props: Option<&Value>) -> BTreeMap<String
 }
 
 /// How a value is stored in `props`.
-fn stored(value: CellValue) -> Option<Value> {
+pub(super) fn stored(value: CellValue) -> Option<Value> {
     match value {
         CellValue::Empty => None,
         CellValue::Text(text) | CellValue::Date(text) | CellValue::Select(text) => {
@@ -167,6 +174,35 @@ impl Storage {
                 title: record.title,
                 position: record.position,
             })
+            .collect())
+    }
+
+    /// The stored values of one property in every row of its database that
+    /// has one, in the manual order of the rows. One read through the
+    /// database index, whatever the number of rows.
+    pub(super) async fn read_column(
+        &self,
+        database_id: &str,
+        property_id: &str,
+    ) -> Result<Vec<(String, Value)>, StorageError> {
+        // A key chosen at run time cannot use an index, so the cells are
+        // read for every row and the empty ones are dropped here.
+        let cells: Vec<StoredCell> = self
+            .db
+            .query(
+                "LET $database = type::record('page', $id);
+                 SELECT record::id(id) AS id, props[$key] AS value
+                     FROM page WHERE database = $database ORDER BY position;",
+            )
+            .bind(("id", database_id.to_owned()))
+            .bind(("key", property_id.to_owned()))
+            .await?
+            .check()?
+            .take(1)?;
+
+        Ok(cells
+            .into_iter()
+            .filter_map(|cell| Some((cell.id, cell.value?)))
             .collect())
     }
 

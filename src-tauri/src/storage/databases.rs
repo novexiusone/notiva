@@ -4,13 +4,32 @@
 //! it, its columns are `property` records. Renaming, moving and deleting the
 //! page itself is the page repository's job.
 
-use surrealdb::types::SurrealValue;
+use surrealdb::types::{RecordId, SurrealValue};
 
 use super::{Storage, StorageError};
 use crate::domain::{Database, PageKind, Property, PropertyType, SelectOption, ViewConfig};
 
 /// The name of the view a new database starts with.
 const FIRST_VIEW_NAME: &str = "Table";
+
+/// How many rows of a database one transaction deletes. Deleting a row fires
+/// the delete events for the row and its blocks inside the transaction, and
+/// one transaction for 10,000 rows took 13.8 s in the research run.
+///
+/// Measured on disk in the benchmark profile with 10,000 rows, seven
+/// properties and three blocks per row: 23.8 s in one transaction, 17.5 to
+/// 17.7 s in chunks of 500 to 2,500 rows (18.8 s with 100). Without blocks:
+/// 1.5 s in one transaction, 1.7 to 1.9 s in chunks of 500 to 2,500. The
+/// block events dominate either way; 500 keeps each transaction under a
+/// second without costing anything measurable.
+pub(super) const ROW_CHUNK: usize = 500;
+
+/// A page found while walking down the tree, and whether it is a database.
+#[derive(SurrealValue)]
+struct TreeNode {
+    id: RecordId,
+    database: bool,
+}
 
 #[derive(SurrealValue)]
 struct OptionRow {
@@ -123,12 +142,84 @@ impl Storage {
             views: self.list_views(id).await?,
         })
     }
+
+    /// Deletes the rows of every database at or below the page `id`, `chunk`
+    /// rows per transaction, before the page itself is deleted. Databases
+    /// deeper in the tree go first, so that deleting a row never takes a
+    /// whole database below it along in one transaction.
+    ///
+    /// This is not atomic: if it stops half-way, a database is left with
+    /// fewer rows, which is still a valid database.
+    pub(super) async fn delete_database_rows(
+        &self,
+        id: &str,
+        chunk: usize,
+    ) -> Result<(), StorageError> {
+        let root: Option<TreeNode> = self
+            .db
+            .query("SELECT id, kind = 'database' AS database FROM ONLY type::record('page', $id)")
+            .bind(("id", id.to_owned()))
+            .await?
+            .check()?
+            .take(0)?;
+
+        // Walk down one level per query through the parent index. A later
+        // level is deeper, so the databases end up ordered by depth.
+        let mut databases = Vec::new();
+        let mut level: Vec<TreeNode> = root.into_iter().collect();
+        while !level.is_empty() {
+            let mut parents = Vec::with_capacity(level.len());
+            for node in level {
+                if node.database {
+                    databases.push(node.id.clone());
+                }
+                parents.push(node.id);
+            }
+            level = self
+                .db
+                .query(
+                    "LET $parents = $ids;
+                     SELECT id, kind = 'database' AS database FROM page WHERE parent IN $parents;",
+                )
+                .bind(("ids", parents))
+                .await?
+                .check()?
+                .take(1)?;
+        }
+
+        for database in databases.into_iter().rev() {
+            loop {
+                let deleted: Option<usize> = self
+                    .db
+                    .query(
+                        "BEGIN TRANSACTION;
+                         LET $database = $record;
+                         LET $rows = (SELECT VALUE id FROM page WHERE database = $database
+                             LIMIT $chunk);
+                         DELETE $rows RETURN NONE;
+                         RETURN array::len($rows);
+                         COMMIT TRANSACTION;",
+                    )
+                    .bind(("record", database.clone()))
+                    .bind(("chunk", chunk))
+                    .await?
+                    .check()?
+                    .take(4)?;
+                if deleted.unwrap_or(0) < chunk {
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::tests::run_with_pages;
     use super::*;
+    use crate::domain::{Block, CellValue};
 
     async fn storage() -> Storage {
         Storage::open_in_memory().await.unwrap()
@@ -283,6 +374,191 @@ mod tests {
         let error = storage.load_database("missing").await.unwrap_err();
 
         assert!(matches!(error, StorageError::NotFound(_)));
+    }
+
+    // Deleting databases.
+
+    async fn count(storage: &Storage, table: &str) -> i64 {
+        let count: Option<i64> = storage
+            .db
+            .query(format!("RETURN count(SELECT * FROM {table})"))
+            .await
+            .unwrap()
+            .take(0)
+            .unwrap();
+        count.unwrap()
+    }
+
+    fn paragraph(id: &str) -> Block {
+        Block {
+            id: id.into(),
+            kind: "paragraph".into(),
+            props: serde_json::Map::new(),
+            content: Some(serde_json::json!([{ "type": "text", "text": id, "styles": {} }])),
+            children: Vec::new(),
+        }
+    }
+
+    /// A database below `parent` with a text property, a second view and
+    /// `rows` rows that each have a cell and a block.
+    async fn filled_database(storage: &Storage, parent: Option<&str>, rows: usize) -> Database {
+        let database = storage.create_database(parent).await.unwrap();
+        let notes = storage
+            .create_property(&database.page.id, "Notes", PropertyType::Text, None)
+            .await
+            .unwrap();
+        storage
+            .create_view(&database.page.id, "Board", &ViewConfig::empty_table())
+            .await
+            .unwrap();
+        for index in 0..rows {
+            let row = storage.create_row(&database.page.id).await.unwrap();
+            storage
+                .set_cell(&row.id, &notes.id, CellValue::Text(format!("row {index}")))
+                .await
+                .unwrap();
+            storage
+                .save_blocks(
+                    &row.id,
+                    &[paragraph(&format!("{}-{index}", database.page.id))],
+                )
+                .await
+                .unwrap();
+        }
+        storage.load_database(&database.page.id).await.unwrap()
+    }
+
+    async fn page_ids(storage: &Storage) -> Vec<String> {
+        let mut ids: Vec<String> = storage
+            .list_pages()
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|page| page.id)
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    #[tokio::test]
+    async fn deleting_a_database_removes_its_rows_their_blocks_its_properties_and_views() {
+        let storage = storage().await;
+        let kept = filled_database(&storage, None, 2).await;
+        let database = filled_database(&storage, None, 3).await;
+        assert_eq!(count(&storage, "block").await, 5);
+
+        storage.delete_page(&database.page.id).await.unwrap();
+
+        let mut expected = vec![kept.page.id.clone()];
+        expected.extend(
+            storage
+                .list_rows(&kept.page.id)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|row| row.id),
+        );
+        expected.sort();
+        assert_eq!(page_ids(&storage).await, expected);
+        assert_eq!(count(&storage, "block").await, 2);
+        assert_eq!(count(&storage, "property").await, 1);
+        assert_eq!(count(&storage, "view").await, 2);
+        assert_eq!(storage.load_database(&kept.page.id).await.unwrap(), kept);
+    }
+
+    #[tokio::test]
+    async fn deleting_a_page_removes_the_rows_of_databases_anywhere_below_it() {
+        let storage = storage().await;
+        let top = storage.create_page(None).await.unwrap().id;
+        let middle = storage.create_page(Some(&top)).await.unwrap().id;
+        filled_database(&storage, Some(&top), 2).await;
+        filled_database(&storage, Some(&middle), 3).await;
+        let other = storage.create_page(None).await.unwrap().id;
+
+        storage.delete_page(&top).await.unwrap();
+
+        assert_eq!(page_ids(&storage).await, [other]);
+        assert_eq!(count(&storage, "block").await, 0);
+        assert_eq!(count(&storage, "property").await, 0);
+        assert_eq!(count(&storage, "view").await, 0);
+    }
+
+    #[tokio::test]
+    async fn deleting_a_row_removes_a_database_below_it_with_its_rows() {
+        let storage = storage().await;
+        let outer = filled_database(&storage, None, 2).await;
+        let rows = storage.list_rows(&outer.page.id).await.unwrap();
+        let inner = filled_database(&storage, Some(&rows[0].id), 3).await;
+        // A database below a page below the row.
+        let below_row = storage.create_page(Some(&rows[0].id)).await.unwrap().id;
+        filled_database(&storage, Some(&below_row), 2).await;
+
+        storage.delete_page(&rows[0].id).await.unwrap();
+
+        let mut expected = vec![outer.page.id.clone(), rows[1].id.clone()];
+        expected.sort();
+        assert_eq!(page_ids(&storage).await, expected);
+        assert!(storage.load_database(&inner.page.id).await.is_err());
+        assert_eq!(count(&storage, "block").await, 1);
+        assert_eq!(count(&storage, "property").await, 1);
+        assert_eq!(count(&storage, "view").await, 2);
+    }
+
+    #[tokio::test]
+    async fn rows_are_deleted_in_chunks_and_leave_a_valid_database_between_them() {
+        let storage = storage().await;
+        let database = filled_database(&storage, None, 5).await;
+        let id = &database.page.id;
+
+        // Chunks of two rows: three transactions for five rows.
+        storage.delete_database_rows(id, 2).await.unwrap();
+
+        assert!(storage.list_rows(id).await.unwrap().is_empty());
+        assert_eq!(page_ids(&storage).await, std::slice::from_ref(id));
+        assert_eq!(count(&storage, "block").await, 0);
+        let loaded = storage.load_database(id).await.unwrap();
+        assert_eq!(loaded.properties, database.properties);
+        assert_eq!(loaded.views, database.views);
+
+        storage.delete_page(id).await.unwrap();
+        assert!(page_ids(&storage).await.is_empty());
+        assert_eq!(count(&storage, "property").await, 0);
+        assert_eq!(count(&storage, "view").await, 0);
+    }
+
+    #[tokio::test]
+    async fn chunks_that_divide_the_rows_evenly_delete_them_all() {
+        let storage = storage().await;
+        let top = storage.create_page(None).await.unwrap().id;
+        let outer = filled_database(&storage, Some(&top), 4).await;
+        let row = storage.list_rows(&outer.page.id).await.unwrap().remove(0);
+        let inner = filled_database(&storage, Some(&row.id), 6).await;
+
+        storage.delete_database_rows(&top, 2).await.unwrap();
+
+        assert!(storage.list_rows(&outer.page.id).await.unwrap().is_empty());
+        // The inner database went with its row, after its own rows were gone.
+        assert!(storage.load_database(&inner.page.id).await.is_err());
+        let mut expected = vec![top.clone(), outer.page.id.clone()];
+        expected.sort();
+        assert_eq!(page_ids(&storage).await, expected);
+        assert_eq!(count(&storage, "block").await, 0);
+    }
+
+    #[tokio::test]
+    async fn a_page_without_databases_loses_no_rows_before_it_is_deleted() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap().id;
+        storage.create_page(Some(&page)).await.unwrap();
+        let elsewhere = filled_database(&storage, None, 2).await;
+
+        storage.delete_database_rows(&page, 1).await.unwrap();
+
+        assert_eq!(page_ids(&storage).await.len(), 5);
+        assert_eq!(
+            storage.list_rows(&elsewhere.page.id).await.unwrap().len(),
+            2
+        );
     }
 
     #[tokio::test]
