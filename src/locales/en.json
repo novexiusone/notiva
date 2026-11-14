@@ -71,7 +71,73 @@
         "date": "Date",
         "select": "Select",
         "relation": "Relation"
+      },
+      "noMatches": "No rows match the filters"
+    },
+    "views": {
+      "label": "Views",
+      "add": "Add a view",
+      "chooseType": "Type",
+      "types": {
+        "table": "Table",
+        "kanban": "Board",
+        "calendar": "Calendar"
+      },
+      "actions": "Actions for “{{name}}”",
+      "rename": "Rename",
+      "name": "View name",
+      "delete": "Delete view",
+      "lastView": "A database keeps at least one view.",
+      "deleteTitle": "Delete the view “{{name}}”?",
+      "deleteDescription": "Its filters, sorts and grouping are deleted with it. The rows stay.",
+      "unavailable": "This kind of view cannot be shown in this version yet."
+    },
+    "toolbar": {
+      "label": "View settings",
+      "filter": "Filter",
+      "filters": "Filters",
+      "addFilter": "Add a filter",
+      "noFilters": "No filters. A row is shown when it meets every filter.",
+      "removeFilter": "Remove filter",
+      "property": "Property",
+      "operator": "Condition",
+      "value": "Value",
+      "chooseOption": "Choose an option",
+      "sort": "Sort",
+      "sorts": "Sorts",
+      "addSort": "Add a sort",
+      "noSorts": "No sorts. Rows are in their manual order.",
+      "removeSort": "Remove sort",
+      "direction": "Direction",
+      "ascending": "Ascending",
+      "descending": "Descending",
+      "group": "Group",
+      "groupBy": "Group by",
+      "noGrouping": "None",
+      "properties": "Properties",
+      "shownProperties": "Shown properties",
+      "hiddenCount": "{{count}} hidden",
+      "operators": {
+        "equals": "is",
+        "notEquals": "is not",
+        "contains": "contains",
+        "notContains": "does not contain",
+        "greaterThan": ">",
+        "lessThan": "<",
+        "before": "is before",
+        "after": "is after",
+        "isEmpty": "is empty",
+        "isNotEmpty": "is not empty"
+      },
+      "numberOperators": {
+        "equals": "=",
+        "notEquals": "≠"
       }
+    },
+    "group": {
+      "empty": "No {{name}}",
+      "collapse": "Collapse",
+      "expand": "Expand"
     }
   },
   "editor": {

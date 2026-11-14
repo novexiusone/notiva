@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { pagesKey } from '@/features/pages/queryKeys';
 import {
   commands,
@@ -9,6 +10,8 @@ import {
   type PropertyType,
   type Row,
   type SelectOption,
+  type View,
+  type ViewConfig,
 } from '@/lib/commands';
 
 export const databaseKeys = {
@@ -39,9 +42,11 @@ function withCell(row: Row, propertyId: string, value: CellValue): Row {
 
 /** A database with its properties and views, without its rows. */
 export function useDatabase(id: string) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: databaseKeys.database(id),
-    queryFn: () => commands.loadDatabase(id),
+    // A refetch must not bring back a view as it was before a change that is still being saved.
+    queryFn: async () => withPendingViews(queryClient, await commands.loadDatabase(id)),
   });
 }
 
@@ -286,4 +291,184 @@ export function useSetCell(databaseId: string) {
     );
     mutation.mutate({ rowId, propertyId, value });
   };
+}
+
+/** How long a view waits after the last change before it is saved. */
+export const VIEW_SAVE_DELAY = 500;
+
+type ViewChanges = { name: string | null; config: ViewConfig | null };
+
+/**
+ * A change to a view that the backend has not confirmed yet. `version` counts
+ * the changes, so that a save that comes back knows whether a newer change
+ * arrived meanwhile.
+ */
+type PendingView = ViewChanges & {
+  databaseId: string;
+  version: number;
+  timer: ReturnType<typeof setTimeout> | null;
+};
+
+/** Pending view changes per query client, so that tests with their own client do not meet. */
+const pendingViews = new WeakMap<QueryClient, Map<string, PendingView>>();
+
+function pendingOf(queryClient: QueryClient) {
+  let pending = pendingViews.get(queryClient);
+  if (!pending) {
+    pending = new Map();
+    pendingViews.set(queryClient, pending);
+  }
+  return pending;
+}
+
+function withChanges(view: View, changes: ViewChanges): View {
+  return {
+    ...view,
+    name: changes.name ?? view.name,
+    config: changes.config ?? view.config,
+  };
+}
+
+/** A loaded database with the view changes that are still on their way to the backend. */
+function withPendingViews(queryClient: QueryClient, database: Database): Database {
+  const pending = pendingOf(queryClient);
+  if (pending.size === 0) return database;
+  return {
+    ...database,
+    views: database.views.map((view) => {
+      const changes = pending.get(view.id);
+      return changes ? withChanges(view, changes) : view;
+    }),
+  };
+}
+
+/** Changes the cached views of a database, once the database has been loaded. */
+function useSetViews(databaseId: string) {
+  const queryClient = useQueryClient();
+  return (update: (views: View[]) => View[]) =>
+    queryClient.setQueryData<Database>(
+      databaseKeys.database(databaseId),
+      (database) => database && { ...database, views: update(database.views) },
+    );
+}
+
+/** Adds a view after the last one. It is in the cache once the backend has created it. */
+export function useCreateView(databaseId: string) {
+  const setViews = useSetViews(databaseId);
+
+  return useMutation({
+    mutationFn: ({ name, config }: { name: string; config: ViewConfig }) =>
+      commands.createView(databaseId, name, config),
+    onSuccess: (view) => setViews((views) => [...views, view]),
+  });
+}
+
+/**
+ * Renames a view or changes its configuration. The cache changes at once; the
+ * backend hears of it after `VIEW_SAVE_DELAY` without a further change, or
+ * when `flush` asks for it. Saves of one view reach the backend in order.
+ */
+export function useUpdateView(databaseId: string) {
+  const queryClient = useQueryClient();
+  const setViews = useSetViews(databaseId);
+  const invalidate = useInvalidateDatabase(databaseId);
+
+  const mutation = useMutation({
+    mutationFn: ({ id, name, config }: ViewChanges & { id: string; version: number }) =>
+      commands.updateView(id, name, config),
+    // One queue for the views of a database, so that an older configuration never
+    // overwrites a newer one.
+    scope: { id: `database-view-${databaseId}` },
+    onSuccess: (saved, { id, version }) => {
+      const pending = pendingOf(queryClient);
+      const entry = pending.get(id);
+      if (entry && entry.version !== version) return;
+      pending.delete(id);
+      setViews((views) => views.map((view) => (view.id === id ? saved : view)));
+    },
+    onError: (_, { id, version }) => {
+      // The backend refused the change; what it has is the truth.
+      const pending = pendingOf(queryClient);
+      if (pending.get(id)?.version === version) pending.delete(id);
+      return invalidate();
+    },
+  });
+
+  // Timers outlive a render, so they call the mutation of the latest one.
+  const latest = useRef(mutation.mutate);
+  useLayoutEffect(() => {
+    latest.current = mutation.mutate;
+  });
+
+  return useMemo(() => {
+    const pending = pendingOf(queryClient);
+
+    const sendNow = (id: string) => {
+      const entry = pending.get(id);
+      if (!entry || entry.timer === null) return;
+      clearTimeout(entry.timer);
+      entry.timer = null;
+      const { name, config, version } = entry;
+      latest.current({ id, name, config, version });
+    };
+
+    const flush = (id?: string) => {
+      for (const [viewId, entry] of pending) {
+        if (entry.databaseId === databaseId && (id === undefined || id === viewId)) sendNow(viewId);
+      }
+    };
+
+    const change = (
+      id: string,
+      changes: Partial<ViewChanges>,
+      { immediately = false }: { immediately?: boolean } = {},
+    ) => {
+      const previous = pending.get(id);
+      if (previous?.timer) clearTimeout(previous.timer);
+      const entry: PendingView = {
+        databaseId,
+        name: changes.name ?? previous?.name ?? null,
+        config: changes.config ?? previous?.config ?? null,
+        version: (previous?.version ?? 0) + 1,
+        timer: null,
+      };
+      entry.timer = setTimeout(() => sendNow(id), VIEW_SAVE_DELAY);
+      pending.set(id, entry);
+      queryClient.setQueryData<Database>(
+        databaseKeys.database(databaseId),
+        (database) =>
+          database && {
+            ...database,
+            views: database.views.map((view) =>
+              view.id === id
+                ? withChanges(view, { name: changes.name ?? null, config: changes.config ?? null })
+                : view,
+            ),
+          },
+      );
+      if (immediately) sendNow(id);
+    };
+
+    return { change, flush };
+  }, [databaseId, queryClient]);
+}
+
+/** Deletes a view; the backend refuses the last one of a database. */
+export function useDeleteView(databaseId: string) {
+  const queryClient = useQueryClient();
+  const setViews = useSetViews(databaseId);
+  const invalidate = useInvalidateDatabase(databaseId);
+
+  return useMutation({
+    mutationFn: (id: string) => commands.deleteView(id),
+    onMutate: (id) => {
+      // A change that has not been sent yet is not worth sending any more.
+      const pending = pendingOf(queryClient);
+      const entry = pending.get(id);
+      if (entry?.timer) clearTimeout(entry.timer);
+      pending.delete(id);
+      setViews((views) => views.filter((view) => view.id !== id));
+    },
+    onError: invalidate,
+  });
 }

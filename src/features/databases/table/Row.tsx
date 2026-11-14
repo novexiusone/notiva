@@ -9,6 +9,8 @@ type TableRowProps = {
   row: Row;
   columns: TableColumn[];
   rowIndex: number;
+  /** Whether this is the first row of the table, which holds the table's Tab stop. */
+  first: boolean;
   /** Where the virtualiser puts the row, from the top of the body. */
   top: number;
   width: number;
@@ -22,6 +24,7 @@ export const TableRow = memo(function TableRow({
   row,
   columns,
   rowIndex,
+  first,
   top,
   width,
 }: TableRowProps) {
@@ -39,6 +42,7 @@ export const TableRow = memo(function TableRow({
         const position = {
           rowId: row.id,
           rowIndex,
+          firstRow: first,
           columnIndex,
           width: columnWidth(column),
         };

@@ -1,4 +1,10 @@
-import { commands, type CellValue, type PropertyType, type View } from '@/lib/commands';
+import {
+  commands,
+  type CellValue,
+  type PropertyType,
+  type View,
+  type ViewConfig,
+} from '@/lib/commands';
 import { installFakeBackend } from '@/test/fakeBackend';
 import { database, page, row } from '@/test/renderApp';
 
@@ -807,5 +813,251 @@ describe('persistence', () => {
     expect(await commands.listRows(id)).toEqual(before.rows);
     expect(before.rows[1]!.cells).toEqual({ [status.id]: 'open' });
     expect(before.database.views).toHaveLength(1);
+  });
+});
+
+/** The view commands, rule for rule as in `src-tauri/src/storage/views.rs` and `domain/view.rs`. */
+describe('views', () => {
+  beforeEach(() => installFakeBackend());
+
+  const emptyTable: ViewConfig = {
+    version: 1,
+    type: 'table',
+    filters: [],
+    sorts: [],
+    properties: [],
+    groupBy: null,
+  };
+
+  const table: ViewConfig = {
+    version: 1,
+    type: 'table',
+    filters: [
+      { propertyId: 'status', operator: 'equals', value: 'open' },
+      { propertyId: 'pages', operator: 'greaterThan', value: 300 },
+      { propertyId: 'rating', operator: 'lessThan', value: 4.5 },
+      { propertyId: 'due', operator: 'isNotEmpty', value: null },
+    ],
+    sorts: [{ propertyId: 'title', direction: 'desc' }],
+    properties: [
+      { propertyId: 'title', visible: true, width: 240 },
+      { propertyId: 'pages', visible: false, width: 80.5 },
+      { propertyId: 'status', visible: true, width: null },
+    ],
+    groupBy: { propertyId: 'status', collapsed: ['open', ''] },
+  };
+
+  const kanban: ViewConfig = {
+    version: 1,
+    type: 'kanban',
+    filters: [{ propertyId: 'title', operator: 'notContains', value: 'draft' }],
+    sorts: [],
+    properties: [{ propertyId: 'author', visible: true, width: null }],
+    groupPropertyId: 'status',
+    hiddenGroups: ['done', ''],
+  };
+
+  const calendar: ViewConfig = {
+    version: 1,
+    type: 'calendar',
+    filters: [{ propertyId: 'due', operator: 'before', value: '2026-12-24' }],
+    sorts: [{ propertyId: 'due', direction: 'asc' }],
+    properties: [],
+    datePropertyId: null,
+  };
+
+  type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  /** `config` as plain JSON with `change` applied, to send shapes the types do not allow. */
+  function changed(config: ViewConfig, change: (json: Json) => unknown): ViewConfig {
+    const json = structuredClone(config) as unknown as Json;
+    change(json);
+    return json as unknown as ViewConfig;
+  }
+
+  async function newDatabase() {
+    return (await commands.createDatabase(null)).page.id;
+  }
+
+  async function viewsOf(databaseId: string) {
+    return (await commands.loadDatabase(databaseId)).views;
+  }
+
+  it('creates every view type after the last view and loads them in order', async () => {
+    const id = await newDatabase();
+    const other = await newDatabase();
+
+    const board = await commands.createView(id, 'Board', kanban);
+    await commands.createView(id, 'Month', calendar);
+    await commands.createView(id, 'Grouped', table);
+    await commands.createView(other, 'Elsewhere', emptyTable);
+
+    const views = await viewsOf(id);
+    expect(views.map((view) => view.name)).toEqual(['Table', 'Board', 'Month', 'Grouped']);
+    expect(views.map((view) => view.config)).toEqual([emptyTable, kanban, calendar, table]);
+    expect(views.map((view) => view.position)).toEqual([0, 1, 2, 3]);
+    expect(board).toEqual(views[1]);
+    expect(board.databaseId).toBe(id);
+    expect((await viewsOf(other)).map((view) => view.name)).toEqual(['Table', 'Elsewhere']);
+  });
+
+  it('puts a new view after the highest position and keeps the name as it is given', async () => {
+    installFakeBackend({
+      pages: [database('db', 'Tasks')],
+      views: [
+        { id: 'b', databaseId: 'db', name: 'Board', position: -5, config: kanban },
+        { id: 'a', databaseId: 'db', name: 'Table', position: 10, config: emptyTable },
+      ],
+    });
+
+    const view = await commands.createView('db', '  ', calendar);
+
+    expect(view.position).toBe(11);
+    expect(view.name).toBe('  ');
+    expect((await viewsOf('db')).map((entry) => entry.id)).toEqual(['b', 'a', view.id]);
+  });
+
+  it('updates the name, the configuration or both, and null keeps either', async () => {
+    const id = await newDatabase();
+    const view = await commands.createView(id, 'Board', kanban);
+
+    const renamed = await commands.updateView(view.id, 'Pipeline', null);
+    expect(renamed).toEqual({ ...view, name: 'Pipeline' });
+
+    // A view can change its type; nothing of the old configuration is left.
+    const reconfigured = await commands.updateView(view.id, null, table);
+    expect(reconfigured).toEqual({ ...view, name: 'Pipeline', config: table });
+
+    expect(await commands.updateView(view.id, null, null)).toEqual(reconfigured);
+    expect(await commands.updateView(view.id, '', null)).toMatchObject({ name: '' });
+    expect((await viewsOf(id))[1]).toMatchObject({ name: '', config: table });
+  });
+
+  it('deletes a view, but never the last one of a database', async () => {
+    const id = await newDatabase();
+    const other = await newDatabase();
+    await commands.createView(other, 'Spare', emptyTable);
+    const [first] = await viewsOf(id);
+    const second = await commands.createView(id, 'Board', kanban);
+
+    await commands.deleteView(first!.id);
+    expect(await viewsOf(id)).toEqual([second]);
+
+    // The views of another database do not count as spare.
+    await expect(commands.deleteView(second.id)).rejects.toMatchObject(invalid);
+    expect(await viewsOf(id)).toEqual([second]);
+  });
+
+  it('refuses unknown ids and anything that is not a database', async () => {
+    const id = await newDatabase();
+    const { id: rowId } = await commands.createRow(id);
+    const ordinary = await commands.createPage(null);
+
+    for (const target of [ordinary.id, rowId, 'missing']) {
+      await expect(commands.createView(target, 'Table', emptyTable)).rejects.toMatchObject(
+        notFound,
+      );
+    }
+    await expect(commands.updateView('missing', 'Ghost', emptyTable)).rejects.toMatchObject(
+      notFound,
+    );
+    await expect(commands.updateView('missing', null, null)).rejects.toMatchObject(notFound);
+    await expect(commands.deleteView('missing')).rejects.toMatchObject(notFound);
+    expect(await viewsOf(id)).toHaveLength(1);
+  });
+
+  it('accepts property and option ids that do not exist', async () => {
+    const id = await newDatabase();
+    const config = changed(kanban, (json) => {
+      json.filters[0].propertyId = 'nowhere';
+      json.groupPropertyId = 'never';
+      json.hiddenGroups = ['no-such-option'];
+    });
+
+    expect((await commands.createView(id, 'Board', config)).config).toEqual(config);
+  });
+
+  it('removes the views of a deleted database', async () => {
+    const id = await newDatabase();
+    const board = await commands.createView(id, 'Board', kanban);
+
+    await commands.deletePage(id);
+
+    await expect(commands.updateView(board.id, 'Gone', null)).rejects.toMatchObject(notFound);
+  });
+
+  const refused: [string, ViewConfig][] = [
+    ['an unknown type', changed(table, (json) => (json.type = 'gallery'))],
+    ['no type', changed(table, (json) => delete json.type)],
+    ['version 2', changed(kanban, (json) => (json.version = 2))],
+    ['version 0', changed(kanban, (json) => (json.version = 0))],
+    ['version "1"', changed(kanban, (json) => (json.version = '1'))],
+    ['version 1.5', changed(kanban, (json) => (json.version = 1.5))],
+    ['version null', changed(kanban, (json) => (json.version = null))],
+    ['no version', changed(kanban, (json) => delete json.version)],
+    ['an unknown operator', changed(table, (json) => (json.filters[0].operator = 'startsWith'))],
+    ['an unknown direction', changed(table, (json) => (json.sorts[0].direction = 'up'))],
+    ['no filters', changed(table, (json) => delete json.filters)],
+    ['no sorts', changed(table, (json) => delete json.sorts)],
+    ['no properties', changed(table, (json) => delete json.properties)],
+    ['no groupBy', changed(table, (json) => delete json.groupBy)],
+    ['no groupPropertyId', changed(kanban, (json) => delete json.groupPropertyId)],
+    ['no hiddenGroups', changed(kanban, (json) => delete json.hiddenGroups)],
+    ['no datePropertyId', changed(calendar, (json) => delete json.datePropertyId)],
+    ['a filter without a value', changed(table, (json) => delete json.filters[3].value)],
+    ['a filter without an operator', changed(table, (json) => delete json.filters[0].operator)],
+    ['a sort without a property', changed(table, (json) => delete json.sorts[0].propertyId)],
+    ['a property without a width', changed(table, (json) => delete json.properties[1].width)],
+    ['a property without visible', changed(table, (json) => delete json.properties[1].visible)],
+    ['groupBy without collapsed', changed(table, (json) => delete json.groupBy.collapsed)],
+    ['an unknown key', changed(table, (json) => (json.colour = 'red'))],
+    ['an unknown key in a kanban', changed(kanban, (json) => (json.colour = 'red'))],
+    ['an unknown key in a calendar', changed(calendar, (json) => (json.colour = 'red'))],
+    ['an unknown key in a filter', changed(table, (json) => (json.filters[0].colour = 'red'))],
+    ['an unknown key in a sort', changed(table, (json) => (json.sorts[0].colour = 'red'))],
+    ['an unknown key in a property', changed(table, (json) => (json.properties[0].colour = 1))],
+    ['an unknown key in groupBy', changed(table, (json) => (json.groupBy.colour = 'red'))],
+    ['a key of another type', changed(table, (json) => (json.datePropertyId = null))],
+    ['a boolean filter value', changed(table, (json) => (json.filters[0].value = true))],
+    ['a list as filter value', changed(table, (json) => (json.filters[0].value = ['open']))],
+    ['an object as filter value', changed(table, (json) => (json.filters[0].value = { id: 1 }))],
+    ['a width as text', changed(table, (json) => (json.properties[0].width = '240px'))],
+    ['visible as text', changed(table, (json) => (json.properties[0].visible = 'yes'))],
+    ['filters as an object', changed(table, (json) => (json.filters = {}))],
+    ['groupBy as text', changed(table, (json) => (json.groupBy = 'status'))],
+    ['a number as hidden group', changed(kanban, (json) => (json.hiddenGroups = [1]))],
+    ['a number as date property', changed(calendar, (json) => (json.datePropertyId = 7))],
+    ['null', null as unknown as ViewConfig],
+    ['a string', 'table' as unknown as ViewConfig],
+  ];
+
+  it.each(refused)(
+    'refuses a configuration with %s, before it looks up the id',
+    async (_, config) => {
+      const id = await newDatabase();
+      const [view] = await viewsOf(id);
+
+      await expect(commands.createView(id, 'Broken', config)).rejects.toMatchObject(invalid);
+      await expect(commands.createView('missing', 'Broken', config)).rejects.toMatchObject(invalid);
+      // For an update, `null` keeps the configuration.
+      if (config !== null) {
+        await expect(commands.updateView(view!.id, 'Broken', config)).rejects.toMatchObject(
+          invalid,
+        );
+        await expect(commands.updateView('missing', null, config)).rejects.toMatchObject(invalid);
+      }
+      expect(await viewsOf(id)).toEqual([view]);
+    },
+  );
+
+  it('keeps views across a reload', async () => {
+    installFakeBackend({ persist: true });
+    const id = await newDatabase();
+    const view = await commands.createView(id, 'Board', kanban);
+    await commands.updateView(view.id, 'Pipeline', null);
+
+    installFakeBackend({ persist: true });
+
+    expect((await viewsOf(id)).map((entry) => entry.name)).toEqual(['Table', 'Pipeline']);
   });
 });
