@@ -13,6 +13,7 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  Table,
   TextQuote,
   Type,
   type LucideIcon,
@@ -42,6 +43,14 @@ export type SlashMenuItem = {
   onItemClick: () => void;
 };
 
+/** What the menu needs from the page it is open on. */
+export type SlashMenuActions = {
+  /** Creates a database below the page and resolves with its id. */
+  createDatabase: () => Promise<string>;
+  /** Tells that a block could not be inserted. */
+  onFailure: (error: unknown) => void;
+};
+
 type Definition = {
   key:
     | 'paragraph'
@@ -53,12 +62,14 @@ type Definition = {
     | 'checkList'
     | 'quote'
     | 'codeBlock'
-    | 'image';
+    | 'image'
+    | 'database';
   icon: LucideIcon;
   shortcut?: string;
   /** Extra search terms, in every UI language. */
   aliases: string[];
-  block: NewBlock;
+  /** What is inserted; `null` for an entry that builds its block itself. */
+  block: NewBlock | null;
 };
 
 const definitions: Definition[] = [
@@ -130,16 +141,50 @@ const definitions: Definition[] = [
     aliases: ['image', 'picture', 'photo', 'img', 'bild', 'foto'],
     block: { type: 'image' },
   },
+  {
+    key: 'database',
+    icon: Table,
+    aliases: ['database', 'table', 'db', 'datenbank', 'tabelle'],
+    block: null,
+  },
 ];
 
 const suggested: Definition['key'][] = ['paragraph', 'heading1', 'bulletList', 'checkList'];
+
+/**
+ * Creates a database and only then inserts the block that shows it, so the
+ * document never names a database that does not exist. When creating fails,
+ * nothing is inserted.
+ */
+async function insertDatabase(editor: Editor, actions: SlashMenuActions) {
+  let databaseId: string;
+  try {
+    databaseId = await actions.createDatabase();
+  } catch (error) {
+    actions.onFailure(error);
+    return;
+  }
+  const block = { type: 'database', props: { databaseId } } as const;
+  try {
+    // Where the slash was typed, or below the block the cursor moved to meanwhile.
+    insertOrUpdateBlockForSlashMenu(editor, block);
+  } catch {
+    // The cursor moved onto a block without text, such as an image, which the helper refuses.
+    editor.insertBlocks([block], editor.getTextCursorPosition().block, 'after');
+  }
+}
 
 /**
  * The entries of the slash menu for a filter text. Without a filter the menu
  * opens with a few suggestions followed by every block; with a filter each
  * matching block is listed once.
  */
-export function getSlashMenuItems(editor: Editor, t: TFunction, query: string): SlashMenuItem[] {
+export function getSlashMenuItems(
+  editor: Editor,
+  t: TFunction,
+  query: string,
+  actions: SlashMenuActions,
+): SlashMenuItem[] {
   const item = (definition: Definition, group: SlashMenuGroup): SlashMenuItem => ({
     id: `${group}-${definition.key}`,
     group,
@@ -148,6 +193,10 @@ export function getSlashMenuItems(editor: Editor, t: TFunction, query: string): 
     icon: definition.icon,
     shortcut: definition.shortcut,
     onItemClick: () => {
+      if (definition.block === null) {
+        void insertDatabase(editor, actions);
+        return;
+      }
       const inserted = insertOrUpdateBlockForSlashMenu(editor, definition.block);
       // An empty image block is of no use, so ask for the file right away.
       if (definition.key === 'image') {

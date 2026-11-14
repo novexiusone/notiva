@@ -2,12 +2,17 @@ import { de, en } from '@blocknote/core/locales';
 import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import '@blocknote/shadcn/style.css';
-import { useImperativeHandle, useState, type Ref } from 'react';
+import { useImperativeHandle, useMemo, useState, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useCreateDatabase } from '@/features/databases/api';
 import { useBlocks, useSaveBlocks } from '@/features/editor/api';
 import { schema } from '@/features/editor/schema';
 import { SlashMenu } from '@/features/editor/SlashMenu';
-import { getSlashMenuItems, type SlashMenuItem } from '@/features/editor/slashMenuItems';
+import {
+  getSlashMenuItems,
+  type SlashMenuActions,
+  type SlashMenuItem,
+} from '@/features/editor/slashMenuItems';
 import { SlashMenuQueryContext } from '@/features/editor/slashMenuQuery';
 import { useAutosave } from '@/features/editor/useAutosave';
 import { getPageLinkItems, type PageLinkItem } from '@/features/links/pageLinkItems';
@@ -35,20 +40,32 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
   const autosave = useAutosave(useSaveBlocks(pageId));
   const [slashQuery, setSlashQuery] = useState('');
   const pages = usePages().data ?? [];
-  const [imageError, setImageError] = useState<string | null>(null);
+  // What went wrong with the last image or block that was to be added.
+  const [insertError, setInsertError] = useState<string | null>(null);
+  const { mutateAsync: createDatabase } = useCreateDatabase();
+  const slashActions = useMemo<SlashMenuActions>(
+    () => ({
+      createDatabase: async () => {
+        setInsertError(null);
+        return (await createDatabase(pageId)).page.id;
+      },
+      onFailure: () => setInsertError(t('editor.databaseFailed')),
+    }),
+    [createDatabase, pageId, t],
+  );
 
   const editor = useCreateBlockNote({
     schema,
     dictionary: i18n.language === 'de' ? de : en,
     // Used for the file picker as well as for dropped and pasted images.
     uploadFile: async (file) => {
-      setImageError(null);
+      setInsertError(null);
       try {
         return await commands.saveImage(file);
       } catch (error) {
         // The editor only reports that the upload failed; say why.
         const refused = (error as Partial<CommandError>).kind === 'invalid';
-        setImageError(t(refused ? 'editor.imageRefused' : 'editor.imageFailed'));
+        setInsertError(t(refused ? 'editor.imageRefused' : 'editor.imageFailed'));
         throw error;
       }
     },
@@ -72,7 +89,7 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
             suggestionMenuComponent={SlashMenu}
             getItems={async (query) => {
               setSlashQuery(query);
-              return getSlashMenuItems(editor, t, query);
+              return getSlashMenuItems(editor, t, query, slashActions);
             }}
             onItemClick={(item) => item.onItemClick()}
           />
@@ -86,9 +103,9 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
           />
         </BlockNoteView>
       </SlashMenuQueryContext.Provider>
-      {imageError !== null ? (
+      {insertError !== null ? (
         <p role="alert" className="text-destructive mt-4 text-sm">
-          {imageError}
+          {insertError}
         </p>
       ) : null}
       {autosave.failed ? (

@@ -180,12 +180,18 @@
       "properties": "Eigenschaften",
       "empty": "Leer",
       "loadFailed": "Die Eigenschaften konnten nicht geladen werden."
+    },
+    "embed": {
+      "label": "Datenbank {{title}}",
+      "open": "Als Seite öffnen",
+      "deleted": "Gelöschte Datenbank"
     }
   },
   "editor": {
     "saveFailed": "Die letzte Änderung konnte nicht gespeichert werden. Mit der nächsten Änderung wird es erneut versucht.",
     "imageRefused": "Es lassen sich nur PNG-, JPEG-, GIF- und WebP-Bilder bis 20 MiB hinzufügen.",
-    "imageFailed": "Das Bild konnte nicht gespeichert werden."
+    "imageFailed": "Das Bild konnte nicht gespeichert werden.",
+    "databaseFailed": "Die Datenbank konnte nicht erstellt werden."
   },
   "slashMenu": {
     "filter": "Zum Filtern tippen",
@@ -203,7 +209,8 @@
       "checkList": "Aufgabenliste",
       "quote": "Zitat",
       "codeBlock": "Code",
-      "image": "Bild"
+      "image": "Bild",
+      "database": "Datenbank"
     }
   },
   "links": {
