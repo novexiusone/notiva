@@ -83,24 +83,48 @@ fn line(out: &mut String, cells: &[String]) {
     out.push_str(" |\n");
 }
 
-/// The list of a row's properties that have a value, as `- Name: value`
+/// The marker of the items in a row's property list. The lists in a page's
+/// content use `-`; a different marker keeps a list at the top of the content
+/// from joining this one.
+const PROPERTY_MARKER: char = '*';
+
+/// The list of a row's properties that have a value, as `* Name: value`
 /// lines. Empty when no property has a value.
 pub fn property_list(properties: &[Property], values: &[String]) -> String {
     let mut out = String::new();
     for (property, value) in properties.iter().zip(values) {
-        let value = value.trim();
-        if value.is_empty() {
+        // A line break continues the item instead of ending it. Lines without
+        // text are dropped: they would end the paragraph.
+        let lines: Vec<String> = value
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .enumerate()
+            .map(|(index, line)| match index {
+                // The first line follows the name, so it starts nothing.
+                0 => escape(line),
+                _ => guard_continuation(&escape(line)),
+            })
+            .collect();
+        if lines.is_empty() {
             continue;
         }
-        // A line break continues the item instead of ending it.
-        let value = escape(value)
-            .replace("\r\n", "\n")
-            .replace('\r', "\n")
-            .replace('\n', "  \n  ");
         let label = guard_line_start(&escape(name(&property.name)));
-        out.push_str(&format!("- {label}: {value}\n"));
+        let value = lines.join("  \n  ");
+        out.push_str(&format!("{PROPERTY_MARKER} {label}: {value}\n"));
     }
     out
+}
+
+/// A further line of a value must not start a list inside the item or turn
+/// the line above it into a heading.
+fn guard_continuation(line: &str) -> String {
+    let underline = line.chars().all(|c| c == '-') || line.chars().all(|c| c == '=');
+    if underline {
+        format!("\\{line}")
+    } else {
+        guard_line_start(line)
+    }
 }
 
 #[cfg(test)]
@@ -242,7 +266,7 @@ mod tests {
 
         assert_eq!(
             property_list(&properties, &["412".into(), "".into(), "Read".into()]),
-            "- Pages: 412\n- Status: Read\n"
+            "* Pages: 412\n* Status: Read\n"
         );
         assert_eq!(
             property_list(&properties, &["".into(), "  ".into(), "".into()]),
@@ -267,10 +291,21 @@ mod tests {
 
         assert_eq!(
             property_list(&properties, &values),
-            "- 1\\. First: two  \n  lines\n\
-             - \\- dash: \\| pipe\n\
-             - Untitled: \\*a\\*\n\
-             - \\[x\\]: \\\\\n"
+            "* 1\\. First: two  \n  lines\n\
+             * \\- dash: \\| pipe\n\
+             * Untitled: \\*a\\*\n\
+             * \\[x\\]: \\\\\n"
+        );
+    }
+
+    #[test]
+    fn further_lines_of_a_value_stay_text_of_the_same_item() {
+        let properties = [property("Notes", PropertyType::Text)];
+        let values = ["1. first\r\n- second\n\n   2. third\n---\n===\nlast".to_owned()];
+
+        assert_eq!(
+            property_list(&properties, &values),
+            "* Notes: 1. first  \n  \\- second  \n  2\\. third  \n  \\---  \n  \\===  \n  last\n"
         );
     }
 }

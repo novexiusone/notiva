@@ -695,16 +695,16 @@ mod tests {
         assert_eq!(
             read(&folder, "Books/Dune.md"),
             "# Dune\n\n\
-             - Notes: A classic \\| must read\n\
-             - Pages: 412\n\
-             - Read: 2026-11-13\n\
-             - Status: Done\n\
+             * Notes: A classic \\| must read\n\
+             * Pages: 412\n\
+             * Read: 2026-11-13\n\
+             * Status: Done\n\
              \n\
              Spice.\n"
         );
         assert_eq!(
             read(&folder, "Books/Emma.md"),
-            "# Emma\n\n- Pages: 1.5\n- Status: Open\n"
+            "# Emma\n\n* Pages: 1.5\n* Status: Open\n"
         );
         let targets = link_targets(&folder.join("Books.md"), &table);
         assert_eq!(targets.len(), 2);
@@ -794,11 +794,11 @@ mod tests {
         );
         assert_eq!(
             read(&folder, "Books/Dune 2.md"),
-            "# Dune\n\n- Untitled: third\n"
+            "# Dune\n\n* Untitled: third\n"
         );
         assert_eq!(
             read(&folder, "Books/[a - b].md"),
-            "# \\[a \\| b\\]\n\n- Untitled: a\\\\b  \n  c\n"
+            "# \\[a \\| b\\]\n\n* Untitled: a\\\\b  \n  c\n"
         );
         for target in link_targets(&folder.join("Books.md"), &table) {
             assert!(target.is_file(), "{}", target.display());
@@ -877,7 +877,7 @@ mod tests {
         );
         assert_eq!(
             read(&folder, "Projects/Tasks/Write.md"),
-            "# Write\n\n- Done: yes\n"
+            "# Write\n\n* Done: yes\n"
         );
         assert_eq!(
             read(&folder, "Projects/Tasks/Write/Notes.md"),
@@ -911,7 +911,7 @@ mod tests {
         assert_eq!(files(&folder), ["Dune.md"]);
         assert_eq!(
             read(&folder, "Dune.md"),
-            "# Dune\n\n- Pages: 412\n\nSpice.\n"
+            "# Dune\n\n* Pages: 412\n\nSpice.\n"
         );
     }
 
@@ -990,7 +990,7 @@ mod tests {
         );
         assert_eq!(
             read(&folder, &format!("Books/Row {}.md", ROWS - 1)),
-            format!("# Row {0}\n\n- Notes: Value {0}\n\nContent {0}\n", ROWS - 1)
+            format!("# Row {0}\n\n* Notes: Value {0}\n\nContent {0}\n", ROWS - 1)
         );
     }
 }

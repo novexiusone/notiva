@@ -62,24 +62,24 @@ A database inside a page (a block `{ type: 'database', props: { databaseId } }`)
 
 A database becomes a file with its title and a table. The first column is the title of the row, with the header "Name" like in the app, and links to the row's file. Then comes one column per property, in the order of the properties. There is one line per row, in the rows' manual order. Every property is exported; views, their filters, sorting and hidden properties play no role. A database without properties has only the "Name" column, a database without rows only the header of the table.
 
-Each row becomes a file like a page: its title, then a list of its properties with their values in the order of the properties, then its content. Properties without a value are left out of the list; the table shows every property. A row without any value has no list. A row exported on its own, without its database, keeps its list.
+Each row becomes a file like a page: its title, then a list of its properties with their values in the order of the properties, then its content. The list's items start with `*`, while lists in the content start with `-`, so a list at the top of the content stays a list of its own. Properties without a value are left out of the list; the table shows every property. A row without any value has no list. A row exported on its own, without its database, keeps its list.
 
 Values are written as text:
 
-| Type     | Value                                                                                |
-| -------- | ------------------------------------------------------------------------------------ |
-| text     | the text                                                                             |
-| number   | the number as it is written when it is converted to text (`1.5`, `1000000`, `1e+21`) |
-| date     | `yyyy-MM-dd`                                                                         |
-| select   | the name of the option; empty when the option no longer exists                       |
-| relation | empty, until relations are built (#61)                                               |
+| Type     | Value                                                                        |
+| -------- | ---------------------------------------------------------------------------- |
+| text     | the text                                                                     |
+| number   | the number as a change of type to text writes it (`1.5`, `1000000`, `1e+21`) |
+| date     | `yyyy-MM-dd`                                                                 |
+| select   | the name of the option; empty when the option no longer exists               |
+| relation | empty, until relations are built (#61)                                       |
 
 A value that does not fit its property, such as an option that was deleted, is empty, and so is every value of a property type without a rule in this table. Such a value never stops the export.
 
 Text in the table and in the list is plain text, never formatting:
 
 - Characters that Markdown would read as formatting are escaped as in the rest of the page, `|` and `\` included. A link's target is URL-encoded, so it never contains `|`.
-- A line break becomes `<br>` in the table and a hard line break in the list.
+- A line break becomes `<br>` in the table and a hard line break in the list. Empty lines of a value are dropped in the list, and a further line that would start a list or underline a heading is escaped.
 - Leading and trailing spaces are dropped, as Markdown drops them anyway.
 - An empty title is written as "Untitled", an empty property name as "Untitled" as well.
 
@@ -99,8 +99,8 @@ Its row "Dune" becomes `Books/Dune.md`:
 ```text
 # Dune
 
-- Pages: 412
-- Status: Read
+* Pages: 412
+* Status: Read
 
 A classic.
 ```

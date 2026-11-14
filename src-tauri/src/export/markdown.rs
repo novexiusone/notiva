@@ -654,12 +654,23 @@ mod tests {
         let blocks = [simple("paragraph", "A classic.")];
 
         assert_eq!(
-            row("Dune", "- Pages: 412\n", &blocks, &context),
-            "# Dune\n\n- Pages: 412\n\nA classic.\n"
+            row("Dune", "* Pages: 412\n", &blocks, &context),
+            "# Dune\n\n* Pages: 412\n\nA classic.\n"
         );
         assert_eq!(
-            row("", "- Pages: 412\n", &[], &context),
-            "# Untitled\n\n- Pages: 412\n"
+            row("", "* Pages: 412\n", &[], &context),
+            "# Untitled\n\n* Pages: 412\n"
+        );
+        // A list at the top of the content is a list of its own, because
+        // the property list uses another marker.
+        assert_eq!(
+            row(
+                "Dune",
+                "* Pages: 412\n",
+                &[simple("bulletListItem", "First")],
+                &context
+            ),
+            "# Dune\n\n* Pages: 412\n\n- First\n"
         );
         assert_eq!(
             row("Dune", "", &blocks, &context),
