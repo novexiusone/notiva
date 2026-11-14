@@ -91,7 +91,7 @@ fn not_found(id: &str) -> StorageError {
 /// shortest digits that read back as the same number; this only places the
 /// decimal point and the exponent by the rules of ECMAScript's
 /// `Number::toString`.
-fn number_as_text(number: f64) -> String {
+pub(crate) fn number_as_text(number: f64) -> String {
     if number == 0.0 {
         // Negative zero too.
         return "0".into();

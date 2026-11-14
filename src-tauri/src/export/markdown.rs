@@ -21,20 +21,36 @@ pub enum PageLink {
 /// What the export knows about the world outside the page being written.
 pub struct Context<'a> {
     pub page_link: &'a dyn Fn(&str) -> PageLink,
+    /// What a database block points at. [`PageLink::Deleted`] when no
+    /// database has the id.
+    pub database_link: &'a dyn Fn(&str) -> PageLink,
     /// Maps the URL of an image block to what the Markdown should point at.
     pub image: &'a dyn Fn(&str) -> String,
 }
 
 /// The Markdown of a whole page, starting with its title.
 pub fn page(title: &str, blocks: &[Block], context: &Context) -> String {
-    let title = if title.trim().is_empty() {
+    row(title, "", blocks, context)
+}
+
+/// The Markdown of a page that is a row of a database: its title, the list
+/// of its properties and its content. Without properties it is a page.
+pub fn row(title: &str, properties: &str, blocks: &[Block], context: &Context) -> String {
+    let mut out = format!("# {}\n", escape(untitled(title)));
+    if !properties.is_empty() {
+        out.push('\n');
+        out.push_str(properties);
+    }
+    render(blocks, "", context, &mut out);
+    out
+}
+
+fn untitled(title: &str) -> &str {
+    if title.trim().is_empty() {
         "Untitled"
     } else {
         title.trim()
-    };
-    let mut out = format!("# {}\n", escape(title));
-    render(blocks, "", context, &mut out);
-    out
+    }
 }
 
 fn is_list_item(kind: &str) -> bool {
@@ -134,6 +150,21 @@ fn render(blocks: &[Block], indent: &str, context: &Context, out: &mut String) {
                     ));
                 }
             }
+            "database" => {
+                let id = block
+                    .props
+                    .get("databaseId")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let link = match (context.database_link)(id) {
+                    PageLink::File { title, path } => {
+                        format!("[{}]({path})", escape(untitled(&title)))
+                    }
+                    PageLink::Outside { title } => escape(untitled(&title)),
+                    PageLink::Deleted => "Deleted database".to_owned(),
+                };
+                out.push_str(&format!("{indent}{}\n", guard_line_start(&link)));
+            }
             _ => {
                 let text = text();
                 if !text.is_empty() {
@@ -196,13 +227,7 @@ fn inline(content: Option<&Value>, context: &Context) -> String {
                     .and_then(|props| props.get("pageId"))
                     .and_then(Value::as_str)
                     .unwrap_or("");
-                let name = |title: &str| {
-                    if title.trim().is_empty() {
-                        "Untitled".to_owned()
-                    } else {
-                        escape(title.trim())
-                    }
-                };
+                let name = |title: &str| escape(untitled(title));
                 match (context.page_link)(target) {
                     PageLink::File { title, path } => {
                         out.push_str(&format!("[{}]({path})", name(&title)))
@@ -257,7 +282,7 @@ fn styled(text: &str, styles: Option<&Value>) -> String {
 }
 
 /// Escapes the characters Markdown reads as formatting anywhere in a line.
-fn escape(text: &str) -> String {
+pub(super) fn escape(text: &str) -> String {
     let mut escaped = String::with_capacity(text.len());
     for character in text.chars() {
         if matches!(
@@ -272,7 +297,7 @@ fn escape(text: &str) -> String {
 }
 
 /// A paragraph must not start like a list, a quote or a heading.
-fn guard_line_start(line: &str) -> String {
+pub(super) fn guard_line_start(line: &str) -> String {
     let starts_list = line.starts_with("- ") || line.starts_with("+ ");
     let digits = line.chars().take_while(char::is_ascii_digit).count();
     let starts_numbered = digits > 0 && line[digits..].starts_with(['.', ')']);
@@ -326,6 +351,20 @@ mod tests {
                 },
                 _ => PageLink::Deleted,
             },
+            database_link: &|id| match id {
+                "books" => PageLink::File {
+                    title: "Books [all]".into(),
+                    path: "Books.md".into(),
+                },
+                "elsewhere" => PageLink::Outside {
+                    title: "1. Other".into(),
+                },
+                "untitled" => PageLink::File {
+                    title: "".into(),
+                    path: "Untitled.md".into(),
+                },
+                _ => PageLink::Deleted,
+            },
             image: &|url| url.replace("notiva-image://localhost/", "assets/"),
         };
         page("Title", blocks, &context)
@@ -336,6 +375,7 @@ mod tests {
         assert_eq!(markdown(&[]), "# Title\n");
         let context = Context {
             page_link: &|_| PageLink::Deleted,
+            database_link: &|_| PageLink::Deleted,
             image: &|url| url.to_owned(),
         };
         assert_eq!(page("  ", &[], &context), "# Untitled\n");
@@ -582,5 +622,48 @@ mod tests {
         )];
 
         assert_eq!(markdown(&blocks), "# Title\n\nParent\n\nChild\n");
+    }
+
+    #[test]
+    fn a_database_block_links_to_the_database() {
+        let database =
+            |id: &str| block("database", Value::Null, json!({ "databaseId": id }), vec![]);
+        let blocks = [
+            simple("paragraph", "Before"),
+            database("books"),
+            database("elsewhere"),
+            database("untitled"),
+            database("gone"),
+            block("database", Value::Null, json!({}), vec![]),
+            simple("paragraph", "After"),
+        ];
+
+        assert_eq!(
+            markdown(&blocks),
+            "# Title\n\nBefore\n\n[Books \\[all\\]](Books.md)\n\n1\\. Other\n\n[Untitled](Untitled.md)\n\nDeleted database\n\nDeleted database\n\nAfter\n"
+        );
+    }
+
+    #[test]
+    fn a_row_lists_its_properties_between_title_and_content() {
+        let context = Context {
+            page_link: &|_| PageLink::Deleted,
+            database_link: &|_| PageLink::Deleted,
+            image: &|url| url.to_owned(),
+        };
+        let blocks = [simple("paragraph", "A classic.")];
+
+        assert_eq!(
+            row("Dune", "- Pages: 412\n", &blocks, &context),
+            "# Dune\n\n- Pages: 412\n\nA classic.\n"
+        );
+        assert_eq!(
+            row("", "- Pages: 412\n", &[], &context),
+            "# Untitled\n\n- Pages: 412\n"
+        );
+        assert_eq!(
+            row("Dune", "", &blocks, &context),
+            page("Dune", &blocks, &context)
+        );
     }
 }

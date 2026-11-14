@@ -23,6 +23,18 @@ struct BlockRow {
     content: Option<Value>,
 }
 
+/// A stored block together with the page it belongs to.
+#[derive(SurrealValue)]
+struct RowBlockRow {
+    page_id: String,
+    id: String,
+    parent_id: Option<String>,
+    position: f64,
+    kind: String,
+    props: Value,
+    content: Option<Value>,
+}
+
 /// A row to write, together with the text derived from its content.
 #[derive(SurrealValue)]
 struct BlockWrite {
@@ -224,6 +236,48 @@ impl Storage {
             .check()?;
 
         Ok(summary)
+    }
+
+    /// The blocks of every row of a database, as trees by row id. One read
+    /// through the block index, whatever the number of rows; rows without
+    /// blocks are left out.
+    pub async fn load_row_blocks(
+        &self,
+        database_id: &str,
+    ) -> Result<HashMap<String, Vec<Block>>, StorageError> {
+        self.require_database(database_id).await?;
+
+        // Both values are bound with LET so that each read uses its index.
+        let rows: Vec<RowBlockRow> = self
+            .db
+            .query(
+                "LET $database = type::record('page', $id);
+                 LET $rows = (SELECT VALUE id FROM page WHERE database = $database);
+                 SELECT record::id(page) AS page_id, record::id(id) AS id,
+                        IF parent = NONE { NONE } ELSE { record::id(parent) } AS parent_id,
+                        position, type AS kind, props, content
+                 FROM block WHERE page IN $rows ORDER BY position;",
+            )
+            .bind(("id", database_id.to_owned()))
+            .await?
+            .check()?
+            .take(2)?;
+
+        let mut by_page: HashMap<String, Vec<BlockRow>> = HashMap::new();
+        for row in rows {
+            by_page.entry(row.page_id).or_default().push(BlockRow {
+                id: row.id,
+                parent_id: row.parent_id,
+                position: row.position,
+                kind: row.kind,
+                props: row.props,
+                content: row.content,
+            });
+        }
+        Ok(by_page
+            .into_iter()
+            .map(|(page, rows)| (page, nest(rows)))
+            .collect())
     }
 
     async fn block_rows(&self, page_id: &str) -> Result<Vec<BlockRow>, StorageError> {
@@ -537,5 +591,72 @@ mod tests {
         storage.delete_page(&page).await.unwrap();
 
         assert_eq!(stored_text(&storage, "a").await, None);
+    }
+
+    #[tokio::test]
+    async fn the_blocks_of_all_rows_of_a_database_are_loaded_at_once() {
+        let storage = Storage::open_in_memory().await.unwrap();
+        let database = storage.create_database(None).await.unwrap().page.id;
+        let first = storage.create_row(&database).await.unwrap().id;
+        let second = storage.create_row(&database).await.unwrap().id;
+        let empty = storage.create_row(&database).await.unwrap().id;
+        let other = storage.create_database(None).await.unwrap().page.id;
+        let elsewhere = storage.create_row(&other).await.unwrap().id;
+        let first_blocks = vec![
+            with_children(paragraph("a", "A"), vec![paragraph("a1", "A1")]),
+            paragraph("b", "B"),
+        ];
+        storage.save_blocks(&first, &first_blocks).await.unwrap();
+        storage
+            .save_blocks(&second, &[paragraph("c", "C")])
+            .await
+            .unwrap();
+        storage
+            .save_blocks(&elsewhere, &[paragraph("d", "D")])
+            .await
+            .unwrap();
+
+        let blocks = storage.load_row_blocks(&database).await.unwrap();
+
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[&first], first_blocks);
+        assert_eq!(blocks[&second], [paragraph("c", "C")]);
+        assert!(!blocks.contains_key(&empty));
+    }
+
+    #[tokio::test]
+    async fn row_blocks_need_a_database() {
+        let (storage, page) = storage_with_page().await;
+
+        for id in [page.as_str(), "missing"] {
+            let error = storage.load_row_blocks(id).await.unwrap_err();
+            assert!(matches!(error, StorageError::NotFound(_)), "{id}");
+        }
+    }
+
+    #[tokio::test]
+    async fn row_blocks_are_read_through_the_block_index() {
+        let storage = Storage::open_in_memory().await.unwrap();
+        let database = storage.create_database(None).await.unwrap().page.id;
+        for _ in 0..3 {
+            storage.create_row(&database).await.unwrap();
+        }
+
+        let plan: Value = storage
+            .db
+            .query(
+                "LET $database = type::record('page', $id);
+                 LET $rows = (SELECT VALUE id FROM page WHERE database = $database);
+                 SELECT record::id(id) AS id FROM block WHERE page IN $rows
+                     ORDER BY position EXPLAIN;",
+            )
+            .bind(("id", database))
+            .await
+            .unwrap()
+            .take::<Option<Value>>(2)
+            .unwrap()
+            .unwrap();
+
+        assert!(plan.to_string().contains("block_page"), "{plan}");
     }
 }
