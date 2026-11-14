@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useExport } from '@/features/export/useExport';
+import { Favourites } from '@/features/pages/Favourites';
 import { PageTree } from '@/features/pages/PageTree';
 import { commands } from '@/lib/commands';
 
@@ -29,6 +30,7 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
         <SidebarItem icon={Home} label={t('sidebar.home')} onClick={() => navigate({ to: '/' })} />
       </nav>
 
+      <Favourites />
       <PageTree />
 
       <footer className="flex items-center gap-2 border-t p-2">

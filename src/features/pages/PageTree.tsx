@@ -107,9 +107,9 @@ export function PageTree() {
   const pageToDelete = list.find((page) => page.id === pendingDelete);
 
   return (
-    <section className="mt-5 flex min-h-0 flex-1 flex-col">
+    <section className="mt-3 flex min-h-0 flex-1 flex-col">
       <header className="flex h-7 items-center pr-3 pl-4">
-        <h2 className="text-muted-foreground flex-1 text-xs font-medium">{t('sidebar.pages')}</h2>
+        <h2 className="text-muted-foreground flex-1 text-xs font-medium">{t('sidebar.private')}</h2>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" aria-label={t('sidebar.pagesMenu')} className={headerButton}>

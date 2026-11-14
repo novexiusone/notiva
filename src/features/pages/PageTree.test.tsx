@@ -131,3 +131,31 @@ describe('databases in the page tree', () => {
     );
   });
 });
+
+describe('favourites', () => {
+  it('lists a favourite above Private and opens it directly', async () => {
+    const { user } = renderApp({
+      pages: [page('a', 'Alpha'), { ...page('b', 'Beta', null, 1), isFavorite: true }],
+    });
+
+    const favourites = await screen.findByRole('navigation', { name: 'Favourites' });
+    expect(screen.getByRole('heading', { name: 'Private' })).toBeInTheDocument();
+    await user.click(await within(favourites).findByRole('button', { name: 'Beta' }));
+
+    expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveValue('Beta');
+    expect(within(tree()).getByText('Beta')).toBeInTheDocument();
+  });
+
+  it('adds and removes a favourite with the star without removing it from Private', async () => {
+    const { user } = renderApp({ pages: [page('a', 'Alpha')], path: '/page/a' });
+    const favourites = await screen.findByRole('navigation', { name: 'Favourites' });
+    expect(within(favourites).getByText('No favourites yet')).toBeInTheDocument();
+
+    await user.click(await screen.findByRole('button', { name: 'Add to favourites' }));
+    expect(within(favourites).getByRole('button', { name: 'Alpha' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Remove from favourites' }));
+    expect(within(favourites).queryByRole('button', { name: 'Alpha' })).toBeNull();
+    expect(within(tree()).getByText('Alpha')).toBeInTheDocument();
+  });
+});

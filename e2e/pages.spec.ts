@@ -65,3 +65,28 @@ test('deleting a page asks first and takes its subpages along', async ({ page })
 
   await expect(rows(page)).toHaveText(['Keep me']);
 });
+
+test('a favourite survives a reload, stays in Private and disappears when deleted', async ({
+  page,
+}) => {
+  await createPage(page, 'Important');
+  const favourites = page.getByRole('navigation', { name: 'Favourites' });
+  await expect(favourites.getByText('No favourites yet')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Add to favourites' }).click();
+  await expect(favourites.getByRole('button', { name: 'Important' })).toBeVisible();
+  await page.reload();
+  await expect(favourites.getByRole('button', { name: 'Important' })).toBeVisible();
+  await expect(row(page, 'Important')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Remove from favourites' }).click();
+  await expect(favourites.getByRole('button', { name: 'Important' })).toHaveCount(0);
+  await expect(row(page, 'Important')).toBeVisible();
+  await page.getByRole('button', { name: 'Add to favourites' }).click();
+
+  await row(page, 'Important').hover();
+  await row(page, 'Important').getByRole('button', { name: 'Page actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(favourites.getByRole('button', { name: 'Important' })).toHaveCount(0);
+});

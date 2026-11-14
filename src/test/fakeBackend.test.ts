@@ -65,11 +65,14 @@ describe('pages', () => {
   beforeEach(() => installFakeBackend());
 
   it('favourites and unfavourites a page, including after a reload', async () => {
+    installFakeBackend({ persist: true });
     const created = await commands.createPage(null);
     expect(created.isFavorite).toBe(false);
 
     const favourite = await commands.setFavorite(created.id, true);
     expect(favourite.isFavorite).toBe(true);
+
+    installFakeBackend({ persist: true });
     expect((await commands.listPages())[0]?.isFavorite).toBe(true);
 
     const unfavourited = await commands.setFavorite(created.id, false);

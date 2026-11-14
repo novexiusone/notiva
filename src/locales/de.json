@@ -3,6 +3,9 @@
     "search": "Suche",
     "home": "Start",
     "pages": "Seiten",
+    "private": "Privat",
+    "favourites": "Favoriten",
+    "noFavourites": "Noch keine Favoriten",
     "pagesMenu": "Weiteres erstellen",
     "noPages": "Noch keine Seiten",
     "settings": "Einstellungen"
@@ -15,6 +18,8 @@
     "untitled": "Ohne Titel",
     "new": "Neue Seite",
     "addSubpage": "Unterseite hinzufügen",
+    "addFavorite": "Zu Favoriten hinzufügen",
+    "removeFavorite": "Aus Favoriten entfernen",
     "actions": "Seitenaktionen",
     "rename": "Umbenennen",
     "delete": "Löschen",
