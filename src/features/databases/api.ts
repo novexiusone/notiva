@@ -23,6 +23,12 @@ export const databaseKeys = {
 const updatePropertyKey = ['update-property'] as const;
 const setCellKey = ['set-cell'] as const;
 
+/**
+ * Option and cell writes share one queue: a cell that names a new select
+ * option must not reach the backend before the option does.
+ */
+const propertyAndCellScope = { id: 'database-property-and-cell' };
+
 /** A row with one cell set, or left out when the value is empty. */
 function withCell(row: Row, propertyId: string, value: CellValue): Row {
   const cells = { ...row.cells };
@@ -157,7 +163,7 @@ export function useUpdateProperty(databaseId: string) {
 
   const mutation = useMutation({
     mutationKey: updatePropertyKey,
-    scope: { id: 'update-property' },
+    scope: propertyAndCellScope,
     mutationFn: ({
       id,
       name = null,
@@ -252,7 +258,7 @@ export function useSetCell(databaseId: string) {
 
   const mutation = useMutation({
     mutationKey: setCellKey,
-    scope: { id: 'set-cell' },
+    scope: propertyAndCellScope,
     mutationFn: ({
       rowId,
       propertyId,

@@ -17,6 +17,9 @@ const definitions: Partial<Record<PropertyType, PropertyTypeDefinition>> = {
   select: { icon: CircleChevronDown, Display: SelectDisplay, Editor: SelectEditor, ...selectRules },
 };
 
+/** The types this version can show, in the order they are offered. */
+export const propertyTypes = Object.keys(definitions) as PropertyType[];
+
 /**
  * Everything that differs between property types. `undefined` for a type this
  * version cannot show yet (relation), so callers skip the property.

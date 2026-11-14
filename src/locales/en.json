@@ -35,10 +35,6 @@
   "databases": {
     "new": "New database",
     "add": "Add database",
-    "rows": "Rows",
-    "noRows": "No rows yet",
-    "newRow": "New",
-    "loadFailed": "The rows could not be loaded.",
     "rowCount_one": "{{count}} row",
     "rowCount_other": "{{count}} rows",
     "properties": {
@@ -46,6 +42,36 @@
       "searchOptions": "Search or create an option",
       "createOption": "Create “{{name}}”",
       "noOptions": "No options yet"
+    },
+    "table": {
+      "rows": "Rows",
+      "titleColumn": "Name",
+      "noRows": "No rows yet",
+      "newRow": "New",
+      "loadFailed": "The rows could not be loaded.",
+      "open": "Open",
+      "rowActions": "Row actions",
+      "deleteRow": "Delete",
+      "rename": "Rename",
+      "changeType": "Change type",
+      "deleteProperty": "Delete property",
+      "addProperty": "Add a property",
+      "chooseType": "Type",
+      "propertyName": "Property name",
+      "add": "Add",
+      "cancel": "Cancel",
+      "deletePropertyTitle": "Delete “{{name}}”?",
+      "deletePropertyDescription": "Its value in every row is deleted too. This cannot be undone.",
+      "delete": "Delete",
+      "changeTypeTitle": "Change “{{name}}” to {{type}}?",
+      "changeTypeDescription": "Every value is converted. Values that cannot be converted are dropped.",
+      "types": {
+        "text": "Text",
+        "number": "Number",
+        "date": "Date",
+        "select": "Select",
+        "relation": "Relation"
+      }
     }
   },
   "editor": {
