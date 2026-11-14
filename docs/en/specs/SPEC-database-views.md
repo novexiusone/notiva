@@ -37,7 +37,10 @@ FullCalendar brings `temporal-polyfill` as a peer dependency. That is a new depe
 
 - A database has at least one view. A new database gets one table view named "Table".
 - Tabs above the table switch between views. `+` adds a view: choose the type. A tab's menu offers rename and delete. The last view cannot be deleted.
-- The active view is part of the address (`/page/<id>?view=<viewId>`) and the last one per database is remembered locally.
+- `+` offers the types that are built: the table, later kanban (#65) and calendar (#66). A stored view of a type that is not built yet shows a notice instead of the table.
+- A new view is named after its type: "Table", then "Table 2". Renaming to an empty name keeps the old name. Deleting a view asks first; deleting the active one shows its neighbour.
+- The active view is part of the address (`/page/<id>?view=<viewId>`) and the last one per database is remembered locally. Without a view in the address, the remembered one is shown, else the first. An address that names a view that is gone is corrected.
+- A change to a view shows at once and is saved half a second after the last change, and also when another view is shown, the database is left or the window goes away. A rename is saved at once.
 
 ### Filter, sort and group
 
@@ -51,9 +54,13 @@ FullCalendar brings `temporal-polyfill` as a peer dependency. That is a new depe
 | select   | is, is not, is empty, is not empty                     |
 | relation | contains, does not contain, is empty, is not empty     |
 
-- **Sort.** One or more properties, each ascending or descending, applied in order. Without a sort, rows are in their manual order.
-- **Group** (table view). By one property. Each group has a header with its value and count and can be collapsed. Rows without a value form their own group.
-- **Properties.** Each view chooses which properties it shows and in which order. The title is always shown.
+- A new condition starts on the title with "contains" and no value. A condition without a value lets every row pass. A condition whose operator its property no longer has, after a change of type, is skipped.
+- When rows exist but none passes, the table says so.
+- A row added with "New" stays visible in that view until the view is left, even when it does not pass the filter.
+- **Sort.** One or more properties, each ascending or descending, applied in order. Without a sort, rows are in their manual order. A property can be sorted once. Rows without a value come last in both directions.
+- **Group** (table view). By one property other than the title. Each group has a header with its value and count and can be collapsed. Rows without a value form their own group, which comes last. The other groups are in the order of the options for a select and in the order of their values otherwise; a sort on the grouping property decides instead.
+- **Properties.** Each view chooses which properties it shows and in which order. The title is always shown and comes first. Properties the view does not mention yet are shown after the others, in the database's order.
+- Each toolbar button shows when it is in use: the number of conditions or sorts, the grouping property, the number of hidden properties.
 
 ### Drag and drop in the table
 
@@ -113,8 +120,10 @@ type View = { id: string; databaseId: string; name: string; position: number; co
 ```
 
 - The configuration is plain JSON with `null` instead of missing keys. The backend parses it into a Rust enum tagged by `type` and refuses shapes it does not know.
-- A configuration may mention a property or option that has been deleted. Readers skip such entries; `delete_property` also removes them (#59).
+- A configuration may mention a property or option that has been deleted. Readers skip such entries; `delete_property` also removes them (#59). A change to one part of a configuration (the filters, say) rewrites that part without the skipped entries and leaves the other parts as they were stored.
 - The title column is addressed with the reserved property id `title`.
+- `groupBy.collapsed` holds the keys of the collapsed groups: the option id for a select, the number as text, the text or the date otherwise, and the empty text for the group without a value.
+- A stored width below 40 px is shown as 40 px.
 
 ## Commands
 
@@ -138,8 +147,9 @@ src-tauri/src/
   commands/views.rs
 src/features/databases/
   ViewTabs.tsx
+  viewTypes.ts             → which view types are built, and their renderers
   viewState.ts             → `ViewConfig` ↔ TanStack table state
-  toolbar/                 → FilterMenu, SortMenu, GroupMenu, PropertiesMenu
+  toolbar/                 → ViewToolbar, FilterMenu, SortMenu, GroupMenu, PropertiesMenu
   dnd/                     → the only place that imports `@dnd-kit`
   table/GroupRow.tsx
   kanban/                  → KanbanView, KanbanColumn, KanbanCard, moveCard.ts
@@ -149,13 +159,13 @@ e2e/support/drag.ts        → drags with real pointer movement
 
 Where state lives:
 
-| State                                                                 | Home                                    |
-| --------------------------------------------------------------------- | --------------------------------------- |
-| Database, properties, views, rows                                     | TanStack Query                          |
-| Filters, sorts, grouping, collapsed groups, property order and widths | the stored view, updated optimistically |
-| Active and edited cell                                                | Zustand                                 |
-| Open menus, a width while it is being dragged, the visible month      | component state                         |
-| Active view                                                           | the address                             |
+| State                                                                 | Home                                                     |
+| --------------------------------------------------------------------- | -------------------------------------------------------- |
+| Database, properties, views, rows                                     | TanStack Query                                           |
+| Filters, sorts, grouping, collapsed groups, property order and widths | the stored view, updated optimistically                  |
+| Active and edited cell                                                | Zustand                                                  |
+| Open menus, a width while it is being dragged, the visible month      | component state                                          |
+| Active view                                                           | the address; the last one per database in `localStorage` |
 
 ## Testing strategy
 
@@ -184,4 +194,8 @@ Where state lives:
 
 - Whether the calendar is FullCalendar or a grid of our own is decided by the trial in #66.
 - Keyboard handling of `@dnd-kit/react` and whether FullCalendar drags with pointer events were not verified.
+- Whether a change made in the last half second before the window closes reaches the backend in the Tauri window was not verified; in the test browser it does.
+- The pickers in the filter, sort and group menus are the system's own select elements. Whether they should become the app's own list is open.
+- With views, the tab panel is one more Tab stop between the toolbar and the table.
+- The backend stores a view's name as given, an empty one too; only the tabs keep an empty name out.
 - A side panel that shows a row beside the view, instead of navigating to its page, is left for later.
