@@ -138,6 +138,11 @@
       "empty": "No {{name}}",
       "collapse": "Collapse",
       "expand": "Expand"
+    },
+    "row": {
+      "properties": "Properties",
+      "empty": "Empty",
+      "loadFailed": "The properties could not be loaded."
     }
   },
   "editor": {

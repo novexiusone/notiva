@@ -2,6 +2,7 @@ import { Navigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DatabaseView } from '@/features/databases/DatabaseView';
+import { DatabaseLink, RowProperties } from '@/features/databases/RowProperties';
 import { Editor, type EditorHandle } from '@/features/editor/Editor';
 import { Backlinks } from '@/features/links/Backlinks';
 import { usePages, useRenamePage } from '@/features/pages/api';
@@ -55,9 +56,17 @@ export function PageView({ pageId }: { pageId: string }) {
     );
   }
 
+  // A row is a page that also shows its database and its properties.
+  const { databaseId } = page;
+
   return (
     <article className={cn(column, 'pt-16 pb-32')}>
+      {databaseId !== null ? <DatabaseLink databaseId={databaseId} /> : null}
       {title}
+      {databaseId !== null ? (
+        // Fresh per row, so an open editor does not carry over to the next one.
+        <RowProperties key={`properties-${page.id}`} rowId={page.id} databaseId={databaseId} />
+      ) : null}
       <Editor pageId={page.id} ref={editor} />
       <Backlinks pageId={page.id} />
     </article>

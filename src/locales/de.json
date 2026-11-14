@@ -138,6 +138,11 @@
       "empty": "Ohne {{name}}",
       "collapse": "Zuklappen",
       "expand": "Aufklappen"
+    },
+    "row": {
+      "properties": "Eigenschaften",
+      "empty": "Leer",
+      "loadFailed": "Die Eigenschaften konnten nicht geladen werden."
     }
   },
   "editor": {
