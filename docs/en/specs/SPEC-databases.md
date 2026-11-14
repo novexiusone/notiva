@@ -78,6 +78,10 @@ Column widths, column order by dragging and hiding columns belong to a view and 
 
 - "Open" navigates to the row's page at `/page/<rowId>`.
 - The row's page lists its properties between the title and the content, editable with the same editors, and shows a link back to its database above the title (#60).
+- The list shows every property in the database's order, whatever a view hides or reorders. A value is opened with a click, Enter, Space or F2 and follows the table's rules: an unchanged value is not saved, Escape discards. A property without a value reads "Empty". Names and values stay on one line each; a long text is read in full in its editor.
+- The row's page reads and writes the rows the table has loaded, so both always show the same values. Opening a row's page therefore loads all rows of its database once.
+- The link back carries no view; the database shows the view that was active there last.
+- While the values load, the names are listed without values. If loading fails, a notice takes the list's place and the title and the content still work. A property type without an editor is left out, as in the table.
 - A row can be linked with `[[`, has backlinks, and is found by search through its title and content.
 
 ### Relations
@@ -341,3 +345,5 @@ type PropertyTypeDefinition = {
 - A long table scrolls inside itself, and the page around it scrolls a little further by the height of the title. One scroll area for both would need a change to the page view; whether that is worth it is open.
 - Search does not look into property values yet (#69), and the export does not know databases yet (#68).
 - A checkbox and a multi-select type would be cheap additions; they are left out because the project brief names five types.
+- A row's page loads all rows of its database to show one of them. A command that loads one row would make that cheaper for large databases; whether it is needed is open.
+- Whether a long text value should wrap on the row's page instead of being cut to one line is open.
