@@ -549,7 +549,7 @@ export function installFakeBackend({
               typeof option.id === 'string' &&
               option.id !== '' &&
               typeof option.name === 'string' &&
-              typeof option.color === 'string',
+              SELECT_COLORS.some((color) => color === option.color),
           );
           if (!wellFormed) fail('invalid', 'an option needs an id, a name and a colour');
           if (new Set(options.map((option) => option.id)).size !== options.length) {

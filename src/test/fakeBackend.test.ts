@@ -252,6 +252,15 @@ describe('properties', () => {
     expect(updated.options[0]).toEqual({ id: 'done', name: 'Finished', color: 'blue' });
   });
 
+  it('refuses an option colour the spec does not know', async () => {
+    const { id } = await databaseWithRows();
+    const status = await commands.createProperty(id, 'Status', 'select', null);
+
+    await expect(
+      commands.updateProperty(status.id, null, [{ id: 'open', name: 'Open', color: 'pink' }]),
+    ).rejects.toMatchObject(invalid);
+  });
+
   it('refuses options on anything but a select, and options that share an id', async () => {
     const { id } = await databaseWithRows();
     const notes = await commands.createProperty(id, 'Notes', 'text', null);
