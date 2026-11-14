@@ -566,8 +566,16 @@ describe('the views of a database', () => {
     ]);
     expect(screen.getByRole('button', { name: /^Group/ })).toHaveTextContent('Status');
     expect(await grid()).toHaveAttribute('aria-rowcount', '8');
+    // The table keeps one Tab stop, on the first row below the first group's header.
+    const tabStops = async () =>
+      within(await grid())
+        .getAllByRole('gridcell')
+        .filter((cell) => cell.getAttribute('tabindex') === '0')
+        .map((cell) => cell.textContent);
+    expect(await tabStops()).toEqual([expect.stringMatching(/^Build it/)]);
 
     await user.click(screen.getByRole('button', { name: 'Todo, 2 rows' }));
+    expect(await tabStops()).toEqual([expect.stringMatching(/^Write spec/)]);
 
     expect(screen.getByRole('button', { name: 'Todo, 2 rows' })).toHaveAttribute(
       'aria-expanded',

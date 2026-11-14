@@ -30,7 +30,14 @@ import { cn } from '@/lib/utils';
 import { isSameValue } from './layout';
 import { useTableActions } from './tableActions';
 
-type Position = { rowId: string; rowIndex: number; columnIndex: number; width: number };
+type Position = {
+  rowId: string;
+  rowIndex: number;
+  /** Whether no row comes before this one; groups put their header first. */
+  firstRow: boolean;
+  columnIndex: number;
+  width: number;
+};
 
 const arrows: Record<string, [rows: number, columns: number]> = {
   ArrowUp: [-1, 0],
@@ -47,6 +54,7 @@ const arrows: Record<string, [rows: number, columns: number]> = {
 function GridCell({
   rowId,
   rowIndex,
+  firstRow,
   columnIndex,
   width,
   columnId,
@@ -60,7 +68,7 @@ function GridCell({
   const { tableId, move } = useTableActions();
   const address: CellAddress = { tableId, rowId, columnId };
   const mode = useCellMode(address);
-  const isTabStop = useIsFallbackTabStop(tableId, rowIndex === 0 && columnIndex === 0);
+  const isTabStop = useIsFallbackTabStop(tableId, firstRow && columnIndex === 0);
   const ref = useRef<HTMLDivElement>(null);
 
   // The active cell takes the focus back from a closed editor, and keeps it

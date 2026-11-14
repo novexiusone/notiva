@@ -46,12 +46,10 @@ export function DatabaseView({ databaseId }: { databaseId: string }) {
  * none.
  */
 function activeViewOf(views: View[], databaseId: string, requested: string | undefined) {
-  return (
-    views.find((view) => view.id === requested) ??
-    views.find((view) => view.id === lastActiveView(databaseId)) ??
-    views[0] ??
-    null
-  );
+  const requestedView = views.find((view) => view.id === requested);
+  if (requestedView) return requestedView;
+  const remembered = lastActiveView(databaseId);
+  return views.find((view) => view.id === remembered) ?? views[0] ?? null;
 }
 
 /** A name for a new view of a type that no other view of the database has. */

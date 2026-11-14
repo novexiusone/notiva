@@ -71,6 +71,9 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
     scrollPaddingStart: HEADER_HEIGHT,
   });
 
+  // The first row holds the table's Tab stop; with groups, a header comes before it.
+  const firstRowIndex = useMemo(() => items.findIndex((item) => item.kind === 'row'), [items]);
+
   // Rows and cells get functions that never change, so that they stay memoised.
   const latest = useRef({ setCell, renamePage, items, columns, table });
   useLayoutEffect(() => {
@@ -214,6 +217,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                     row={item.row}
                     columns={columns}
                     rowIndex={virtual.index}
+                    first={virtual.index === firstRowIndex}
                     top={virtual.start - HEADER_HEIGHT}
                     width={width}
                   />
