@@ -56,9 +56,14 @@ function positionAfter(items: readonly { position: number }[]): number {
   return items.reduce((last, item) => Math.max(last, item.position + 1), 0);
 }
 
-/** Pages stored before databases existed have neither field. */
-function withDatabaseFields(page: Page): Page {
-  return { ...page, kind: page.kind ?? 'page', databaseId: page.databaseId ?? null };
+/** Pages stored before newer fields existed get their safe defaults. */
+function withPageFields(page: Page): Page {
+  return {
+    ...page,
+    kind: page.kind ?? 'page',
+    databaseId: page.databaseId ?? null,
+    isFavorite: page.isFavorite ?? false,
+  };
 }
 
 /** Whether a value is a day of the calendar written as `yyyy-MM-dd`. */
@@ -407,7 +412,7 @@ export function installFakeBackend({
     const storedDatabases = window.localStorage.getItem(DATABASES_KEY);
     if (storedDatabases !== null) databases = JSON.parse(storedDatabases) as DatabaseState;
   }
-  pages = pages.map(withDatabaseFields);
+  pages = pages.map(withPageFields);
 
   const save = (next: Page[]) => {
     pages = next;
@@ -580,6 +585,7 @@ export function installFakeBackend({
           position: childIds(pages, parentId).length,
           kind: 'page',
           databaseId: null,
+          isFavorite: false,
         };
         save([...pages, page]);
         return page;
@@ -587,6 +593,12 @@ export function installFakeBackend({
 
       case 'rename_page': {
         const page = { ...require(args.id as string), title: args.title as string };
+        save(pages.map((candidate) => (candidate.id === page.id ? page : candidate)));
+        return page;
+      }
+
+      case 'set_favorite': {
+        const page = { ...require(args.id as string), isFavorite: args.favorite as boolean };
         save(pages.map((candidate) => (candidate.id === page.id ? page : candidate)));
         return page;
       }
@@ -641,6 +653,7 @@ export function installFakeBackend({
           position: childIds(pages, parentId).length,
           kind: 'database',
           databaseId: null,
+          isFavorite: false,
         };
         const view: View = {
           id: crypto.randomUUID(),
@@ -840,6 +853,7 @@ export function installFakeBackend({
           position: positionAfter(rowsOf(database.id)),
           kind: 'page',
           databaseId: database.id,
+          isFavorite: false,
         };
         save([...pages, page]);
         return { id: page.id, title: page.title, position: page.position, cells: {} } satisfies Row;

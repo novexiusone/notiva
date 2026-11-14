@@ -22,6 +22,7 @@ pub struct Page {
     pub kind: PageKind,
     /// Set on the rows of a database, otherwise `None`.
     pub database_id: Option<String>,
+    pub is_favorite: bool,
 }
 
 /// A reference to a page: enough to show it in a list and open it.
@@ -46,6 +47,7 @@ mod tests {
             position: 1.5,
             kind: PageKind::Page,
             database_id: Some("db".into()),
+            is_favorite: true,
         };
         let database = Page {
             id: "db".into(),
@@ -54,20 +56,21 @@ mod tests {
             position: 0.0,
             kind: PageKind::Database,
             database_id: None,
+            is_favorite: false,
         };
 
         assert_eq!(
             serde_json::to_value(&row).unwrap(),
             json!({
                 "id": "row", "title": "Row", "parentId": "db", "position": 1.5,
-                "kind": "page", "databaseId": "db"
+                "kind": "page", "databaseId": "db", "isFavorite": true
             })
         );
         assert_eq!(
             serde_json::to_value(&database).unwrap(),
             json!({
                 "id": "db", "title": "", "parentId": null, "position": 0.0,
-                "kind": "database", "databaseId": null
+                "kind": "database", "databaseId": null, "isFavorite": false
             })
         );
     }

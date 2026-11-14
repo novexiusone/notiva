@@ -27,6 +27,15 @@ pub async fn rename_page(
 }
 
 #[tauri::command]
+pub async fn set_favorite(
+    storage: State<'_, Storage>,
+    id: String,
+    favorite: bool,
+) -> Result<Page, CommandError> {
+    Ok(storage.set_favorite(&id, favorite).await?)
+}
+
+#[tauri::command]
 pub async fn move_page(
     storage: State<'_, Storage>,
     id: String,
