@@ -1,7 +1,9 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import {
+  databaseKeys,
   useCreateView,
   useDatabase,
   useDeleteView,
@@ -66,6 +68,7 @@ function DatabaseViews({ database, rows }: { database: Database; rows: Row[] }) 
   const databaseId = database.page.id;
   const search: { view?: string } = useSearch({ strict: false });
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const createView = useCreateView(databaseId);
   const { change: changeView, flush: flushViews } = useUpdateView(databaseId);
   const deleteView = useDeleteView(databaseId);
@@ -80,14 +83,17 @@ function DatabaseViews({ database, rows }: { database: Database; rows: Row[] }) 
     if (activeId === null) return;
     rememberActiveView(databaseId, activeId);
     // An address that names a view that is gone is corrected, so a reload agrees.
-    if (search.view !== undefined && search.view !== activeId) {
+    // A view that was just created is in the cache before this component has seen it.
+    const cached = queryClient.getQueryData<Database>(databaseKeys.database(databaseId));
+    const known = cached?.views.some((view) => view.id === search.view) ?? false;
+    if (search.view !== undefined && search.view !== activeId && !known) {
       void navigate({
         to: '.',
         search: (previous) => ({ ...previous, view: activeId }),
         replace: true,
       });
     }
-  }, [activeId, databaseId, search.view, navigate]);
+  }, [activeId, databaseId, search.view, navigate, queryClient]);
 
   // A change that waits for its pause is sent when another view is shown,
   // when the database is left, and when the page goes away.
