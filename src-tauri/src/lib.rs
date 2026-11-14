@@ -59,9 +59,6 @@ pub fn run() {
             commands::pages::delete_page,
             commands::databases::create_database,
             commands::databases::load_database,
-            commands::views::create_view,
-            commands::views::update_view,
-            commands::views::delete_view,
             commands::blocks::load_blocks,
             commands::blocks::save_blocks,
             commands::images::save_image,
@@ -69,6 +66,9 @@ pub fn run() {
             commands::search::search,
             commands::export::export_page,
             commands::export::export_all,
+            commands::views::create_view,
+            commands::views::update_view,
+            commands::views::delete_view,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
