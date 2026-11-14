@@ -78,6 +78,88 @@ impl ViewConfig {
     pub fn to_json(&self) -> Value {
         serde_json::to_value(self).expect("a view configuration is always valid JSON")
     }
+
+    /// The configuration without any mention of a property that is gone: its
+    /// filters, sorts and entry in `properties` are dropped, and grouping by
+    /// it or showing it on the calendar ends. A kanban that was grouped by it
+    /// forgets its hidden groups too, since they were options of that
+    /// property.
+    pub fn without_property(self, property_id: &str) -> Self {
+        let keep = |id: &str| id != property_id;
+        let filters = |filters: Vec<ViewFilter>| -> Vec<ViewFilter> {
+            filters
+                .into_iter()
+                .filter(|filter| keep(&filter.property_id))
+                .collect()
+        };
+        let sorts = |sorts: Vec<ViewSort>| -> Vec<ViewSort> {
+            sorts
+                .into_iter()
+                .filter(|sort| keep(&sort.property_id))
+                .collect()
+        };
+        let properties = |properties: Vec<ViewProperty>| -> Vec<ViewProperty> {
+            properties
+                .into_iter()
+                .filter(|property| keep(&property.property_id))
+                .collect()
+        };
+
+        match self {
+            Self::Table {
+                version,
+                filters: kept_filters,
+                sorts: kept_sorts,
+                properties: kept_properties,
+                group_by,
+            } => Self::Table {
+                version,
+                filters: filters(kept_filters),
+                sorts: sorts(kept_sorts),
+                properties: properties(kept_properties),
+                group_by: group_by.filter(|group_by| keep(&group_by.property_id)),
+            },
+            Self::Kanban {
+                version,
+                filters: kept_filters,
+                sorts: kept_sorts,
+                properties: kept_properties,
+                group_property_id,
+                hidden_groups,
+            } => {
+                let grouped_by_it = group_property_id.as_deref() == Some(property_id);
+                Self::Kanban {
+                    version,
+                    filters: filters(kept_filters),
+                    sorts: sorts(kept_sorts),
+                    properties: properties(kept_properties),
+                    group_property_id: if grouped_by_it {
+                        None
+                    } else {
+                        group_property_id
+                    },
+                    hidden_groups: if grouped_by_it {
+                        Vec::new()
+                    } else {
+                        hidden_groups
+                    },
+                }
+            }
+            Self::Calendar {
+                version,
+                filters: kept_filters,
+                sorts: kept_sorts,
+                properties: kept_properties,
+                date_property_id,
+            } => Self::Calendar {
+                version,
+                filters: filters(kept_filters),
+                sorts: sorts(kept_sorts),
+                properties: properties(kept_properties),
+                date_property_id: date_property_id.filter(|id| keep(id)),
+            },
+        }
+    }
 }
 
 /// The version of the configuration format. Only version 1 exists; it is
@@ -402,6 +484,116 @@ mod tests {
         }));
         assert_refused(json!(null));
         assert_refused(json!("table"));
+    }
+
+    /// Every part of a view of each type that can mention a property, with
+    /// mentions of `gone` and of `kept`.
+    fn mentioning(kind: &str, gone: &str, kept: &str) -> Value {
+        let mut config = json!({
+            "version": 1,
+            "type": kind,
+            "filters": [
+                { "propertyId": gone, "operator": "equals", "value": "a" },
+                { "propertyId": kept, "operator": "isEmpty", "value": null },
+                { "propertyId": gone, "operator": "isNotEmpty", "value": null },
+            ],
+            "sorts": [
+                { "propertyId": kept, "direction": "asc" },
+                { "propertyId": gone, "direction": "desc" },
+            ],
+            "properties": [
+                { "propertyId": "title", "visible": true, "width": 240 },
+                { "propertyId": gone, "visible": false, "width": null },
+                { "propertyId": kept, "visible": true, "width": 80 },
+            ],
+        });
+        let extra = match kind {
+            "table" => json!({ "groupBy": { "propertyId": gone, "collapsed": ["a"] } }),
+            "kanban" => json!({ "groupPropertyId": gone, "hiddenGroups": ["a", ""] }),
+            _ => json!({ "datePropertyId": gone }),
+        };
+        config
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        config
+    }
+
+    #[test]
+    fn removing_a_property_drops_every_mention_of_it_in_every_view_type() {
+        for (kind, extra) in [
+            ("table", json!({ "groupBy": null })),
+            (
+                "kanban",
+                json!({ "groupPropertyId": null, "hiddenGroups": [] }),
+            ),
+            ("calendar", json!({ "datePropertyId": null })),
+        ] {
+            let config = ViewConfig::from_json(mentioning(kind, "gone", "kept")).unwrap();
+
+            let mut expected = json!({
+                "version": 1,
+                "type": kind,
+                "filters": [{ "propertyId": "kept", "operator": "isEmpty", "value": null }],
+                "sorts": [{ "propertyId": "kept", "direction": "asc" }],
+                "properties": [
+                    { "propertyId": "title", "visible": true, "width": 240 },
+                    { "propertyId": "kept", "visible": true, "width": 80 },
+                ],
+            });
+            expected
+                .as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            assert_eq!(
+                config.without_property("gone").to_json(),
+                expected,
+                "{kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn removing_another_property_changes_nothing() {
+        for kind in ["table", "kanban", "calendar"] {
+            let config = ViewConfig::from_json(mentioning(kind, "gone", "kept")).unwrap();
+
+            assert_eq!(
+                config.clone().without_property("elsewhere"),
+                config,
+                "{kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn grouping_by_another_property_is_kept() {
+        let table = ViewConfig::from_json(changed(mentioning("table", "gone", "kept"), |config| {
+            config["groupBy"]["propertyId"] = json!("kept");
+        }))
+        .unwrap();
+        let kanban =
+            ViewConfig::from_json(changed(mentioning("kanban", "gone", "kept"), |config| {
+                config["groupPropertyId"] = json!("kept");
+            }))
+            .unwrap();
+        let calendar =
+            ViewConfig::from_json(changed(mentioning("calendar", "gone", "kept"), |config| {
+                config["datePropertyId"] = json!("kept");
+            }))
+            .unwrap();
+
+        let table = table.without_property("gone").to_json();
+        let kanban = kanban.without_property("gone").to_json();
+        let calendar = calendar.without_property("gone").to_json();
+
+        assert_eq!(
+            table["groupBy"],
+            json!({ "propertyId": "kept", "collapsed": ["a"] })
+        );
+        assert_eq!(kanban["groupPropertyId"], json!("kept"));
+        assert_eq!(kanban["hiddenGroups"], json!(["a", ""]));
+        assert_eq!(calendar["datePropertyId"], json!("kept"));
     }
 
     #[test]

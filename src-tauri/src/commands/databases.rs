@@ -82,3 +82,30 @@ pub async fn set_cell(
         .set_cell_from_json(&row_id, &property_id, &value.unwrap_or(Value::Null))
         .await?)
 }
+
+#[tauri::command]
+pub async fn delete_property(storage: State<'_, Storage>, id: String) -> Result<(), CommandError> {
+    Ok(storage.delete_property(&id).await?)
+}
+
+#[tauri::command]
+pub async fn delete_select_option(
+    storage: State<'_, Storage>,
+    property_id: String,
+    option_id: String,
+) -> Result<(), CommandError> {
+    Ok(storage
+        .delete_select_option(&property_id, &option_id)
+        .await?)
+}
+
+#[tauri::command]
+pub async fn change_property_type(
+    storage: State<'_, Storage>,
+    id: String,
+    r#type: String,
+) -> Result<Property, CommandError> {
+    let kind = PropertyType::from_name(&r#type)
+        .ok_or_else(|| StorageError::Invalid(format!("{} is not a property type", r#type)))?;
+    Ok(storage.change_property_type(&id, kind).await?)
+}
