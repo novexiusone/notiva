@@ -40,7 +40,13 @@
     "newRow": "New",
     "loadFailed": "The rows could not be loaded.",
     "rowCount_one": "{{count}} row",
-    "rowCount_other": "{{count}} rows"
+    "rowCount_other": "{{count}} rows",
+    "properties": {
+      "clear": "Clear",
+      "searchOptions": "Search or create an option",
+      "createOption": "Create “{{name}}”",
+      "noOptions": "No options yet"
+    }
   },
   "editor": {
     "saveFailed": "The last change could not be saved. It will be tried again with the next change.",
