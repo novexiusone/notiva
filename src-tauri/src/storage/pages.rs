@@ -193,9 +193,12 @@ impl Storage {
         Ok(())
     }
 
-    /// Deletes a page together with its subpages, blocks and links.
+    /// Deletes a page together with its subpages, blocks and links. The rows
+    /// of databases at or below the page are deleted first, in chunks.
     pub async fn delete_page(&self, id: &str) -> Result<(), StorageError> {
         self.require_page(id).await?;
+        self.delete_database_rows(id, super::databases::ROW_CHUNK)
+            .await?;
 
         self.db
             .query("DELETE type::record('page', $id)")

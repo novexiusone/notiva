@@ -167,7 +167,10 @@ Details the fake backend settled first (#55); the real backend follows them:
 - **`create_property`** refuses a relation without a target and a target on any other type.
 - **`update_property`** refuses options on a property that is not a select, and option ids that are empty or appear twice. An option left out of the new list is gone; cells that held it read as empty.
 - **Select colours** are `gray`, `brown`, `orange`, `yellow`, `green`, `blue`, `purple`, `red`. Options created by a conversion take them in this order, starting again after the eighth.
-- **`change_property_type`** to the type the property already has changes nothing. Text becomes a number when Rust's `f64` parses the trimmed text to a finite number, and a date when the trimmed text is a real calendar date. Text to select skips empty text and creates the options in row order. Leaving select clears the options.
+- **`delete_select_option`** on an unknown property or option is `not_found`, on a property that is not a select `invalid`. Views that mention the option are left as they are.
+- **`change_property_type`** to the type the property already has changes nothing, also for a relation; this is checked before a relation is refused. Text becomes a number when Rust's `f64` parses the trimmed text to a finite number, and a date when the trimmed text is a real calendar date. Text to select skips empty text, compares the texts exactly without trimming, and creates the options in row order. A number becomes the text JavaScript's `String(number)` writes. A select whose option is gone or has an empty name becomes empty. Leaving select clears the options. Stored views are left as they are.
+- **`delete_property` and `change_property_type`** read the cells first and then write everything in one transaction. They do not change `updated_at` of the rows. A cell written between the read and the write can keep a value of the old type; readers treat such a value as empty.
+- **`delete_page`** on a database, or on a page with databases anywhere below it, is not one transaction: the rows go first, in chunks. If it stops half-way, the database is still there with fewer rows.
 - **`list_incoming_relations`** orders its groups by the property's position and leaves out groups without rows.
 - **`create_row`** gives the row the highest position plus one.
 
@@ -234,7 +237,7 @@ Three behaviours of SurrealDB 4.0.1 that the research run found:
 
 - `UPDATE … UNSET props[$key]` does nothing and reports no error. `SET props[$key] = NONE` removes the key.
 - An index on a key inside `props` is only used when the path is written out in the schema and in the query. A key passed as a parameter never uses it.
-- Deleting a database with 10,000 rows in one transaction took 13.8 s, because the delete events fire for every row and every block. The repository therefore deletes the rows in chunks before the database page (#59).
+- Deleting a database with 10,000 rows in one transaction took 13.8 s, because the delete events fire for every row and every block. The repository therefore deletes the rows in chunks of 500 before the database page (#59). That keeps each transaction under about a second, but the whole delete stays slow: the event for a deleted block costs about 0.5 ms per block however the rows are chunked. A faster delete needs different events, which is a migration (#83).
 
 ## Performance targets
 
