@@ -10,6 +10,8 @@ mod error;
 mod links;
 mod migrations;
 mod pages;
+mod properties;
+mod rows;
 mod search;
 
 #[cfg(test)]

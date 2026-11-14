@@ -17,7 +17,7 @@ struct OptionRow {
 }
 
 #[derive(SurrealValue)]
-struct PropertyRow {
+pub(super) struct PropertyRow {
     id: String,
     database_id: String,
     name: String,
