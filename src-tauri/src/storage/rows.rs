@@ -18,6 +18,13 @@ use crate::domain::{CellValue, Property, PropertyType, Row};
 /// property; it is changed with `rename_page`.
 const TITLE: &str = "title";
 
+/// How often `set_cell` reads and writes again when the row changed between
+/// its read and its write.
+const WRITE_ATTEMPTS: usize = 5;
+
+/// The cells of a row as they are stored in `props`.
+pub(super) type Props = serde_json::Map<String, Value>;
+
 /// A row as it is stored.
 #[derive(SurrealValue)]
 struct RowRecord {
@@ -96,11 +103,47 @@ fn check(property: &Property, value: CellValue) -> Result<CellValue, StorageErro
     }
 }
 
-/// One stored cell of a column: the row and the value as it is in `props`.
+/// The stored cells of a row.
 #[derive(SurrealValue)]
-struct StoredCell {
+struct StoredProps {
     id: String,
-    value: Option<Value>,
+    props: Option<Value>,
+}
+
+/// The text search finds a row by, `page.props_text`: one line per property,
+/// in the order of `properties`, for a text value that is not blank or for
+/// the name of the select option a cell holds, written as `Name: value`, or
+/// only the value when the property has no name. Line breaks become spaces,
+/// so that a line is a property. Numbers, dates and relations add nothing,
+/// and neither does a value a reader would read as empty. Migration 7 fills
+/// the field for older rows with the same rules written in SurrealQL; a test
+/// keeps the two the same.
+pub(super) fn props_text(properties: &[Property], props: &Props) -> String {
+    properties
+        .iter()
+        .filter_map(|property| {
+            let text = match read_cell(property, props.get(&property.id)?) {
+                CellValue::Text(text) => text,
+                CellValue::Select(id) => property
+                    .options
+                    .iter()
+                    .find(|option| option.id == id)?
+                    .name
+                    .clone(),
+                _ => return None,
+            };
+            if text.trim().is_empty() {
+                return None;
+            }
+            let line = if property.name.trim().is_empty() {
+                text
+            } else {
+                format!("{}: {text}", property.name)
+            };
+            Some(line.replace(['\r', '\n'], " "))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// The value a stored cell has for a reader. Anything that no longer fits the
@@ -177,33 +220,49 @@ impl Storage {
             .collect())
     }
 
-    /// The stored values of one property in every row of its database that
-    /// has one, in the manual order of the rows. One read through the
-    /// database index, whatever the number of rows.
-    pub(super) async fn read_column(
+    /// The properties of a database in their order, and the stored cells of
+    /// every row that has a value of `property_id`, in the manual order of
+    /// the rows. A bulk change needs all cells of these rows to write their
+    /// search text. One request through the database index, whatever the
+    /// number of rows.
+    pub(super) async fn read_rows_with(
         &self,
         database_id: &str,
         property_id: &str,
-    ) -> Result<Vec<(String, Value)>, StorageError> {
+    ) -> Result<(Vec<Property>, Vec<(String, Props)>), StorageError> {
         // A key chosen at run time cannot use an index, so the cells are
-        // read for every row and the empty ones are dropped here.
-        let cells: Vec<StoredCell> = self
+        // read for every row and the rows without a value are dropped here.
+        let mut response = self
             .db
-            .query(
+            .query(format!(
                 "LET $database = type::record('page', $id);
-                 SELECT record::id(id) AS id, props[$key] AS value
-                     FROM page WHERE database = $database ORDER BY position;",
-            )
+                 SELECT {PROPERTY_FIELDS} FROM property WHERE database = $database
+                     ORDER BY position;
+                 SELECT record::id(id) AS id, props
+                     FROM page WHERE database = $database ORDER BY position;"
+            ))
             .bind(("id", database_id.to_owned()))
-            .bind(("key", property_id.to_owned()))
             .await?
-            .check()?
-            .take(1)?;
-
-        Ok(cells
+            .check()?;
+        let properties: Vec<PropertyRow> = response.take(1)?;
+        let properties = properties
             .into_iter()
-            .filter_map(|cell| Some((cell.id, cell.value?)))
-            .collect())
+            .map(Property::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        let rows: Vec<StoredProps> = response.take(2)?;
+
+        let rows = rows
+            .into_iter()
+            .filter_map(|row| match row.props {
+                Some(Value::Object(props))
+                    if props.get(property_id).is_some_and(|value| !value.is_null()) =>
+                {
+                    Some((row.id, props))
+                }
+                _ => None,
+            })
+            .collect();
+        Ok((properties, rows))
     }
 
     /// Adds an untitled row after the last row of the database, without
@@ -248,23 +307,66 @@ impl Storage {
 
         // `UNSET props[$key]` does nothing in SurrealDB 4.0.1; setting the key
         // to NONE removes it.
-        let statement = match value {
-            Some(_) => {
-                "UPDATE type::record('page', $id) SET props[$key] = $value, updated_at = time::now()"
-            }
-            None => {
-                "UPDATE type::record('page', $id) SET props[$key] = NONE, updated_at = time::now()"
-            }
+        let cell = match value {
+            Some(_) => "props[$key] = $value",
+            None => "props[$key] = NONE",
         };
-        self.db
-            .query(statement)
-            .bind(("id", row_id.to_owned()))
-            .bind(("key", property.id))
-            .bind(("value", value))
-            .await?
-            .check()?;
+        // The search text is computed here from the other cells of the row
+        // and written with the cell. The write only happens when the cells
+        // are still the ones it was computed from; otherwise it starts again.
+        for _ in 0..WRITE_ATTEMPTS {
+            let mut response = self
+                .db
+                .query(format!(
+                    "LET $database = type::record('page', $database_id);
+                     SELECT {PROPERTY_FIELDS} FROM property WHERE database = $database
+                         ORDER BY position;
+                     SELECT VALUE props FROM ONLY type::record('page', $id);"
+                ))
+                .bind(("database_id", property.database_id.clone()))
+                .bind(("id", row_id.to_owned()))
+                .await?
+                .check()?;
+            let properties: Vec<PropertyRow> = response.take(1)?;
+            let properties = properties
+                .into_iter()
+                .map(Property::try_from)
+                .collect::<Result<Vec<_>, _>>()?;
+            let before: Option<Value> = response.take(2)?;
 
-        Ok(())
+            let mut props = match &before {
+                Some(Value::Object(props)) => props.clone(),
+                _ => Props::new(),
+            };
+            match &value {
+                Some(value) => props.insert(property.id.clone(), value.clone()),
+                None => props.remove(&property.id),
+            };
+            let text = props_text(&properties, &props);
+
+            let written: Option<String> = self
+                .db
+                .query(format!(
+                    "UPDATE ONLY type::record('page', $id)
+                         SET {cell}, props_text = $text, updated_at = time::now()
+                         WHERE props = $before RETURN VALUE record::id(id);"
+                ))
+                .bind(("id", row_id.to_owned()))
+                .bind(("key", property.id.clone()))
+                .bind(("value", value.clone()))
+                .bind(("text", text))
+                .bind(("before", before))
+                .await?
+                .check()?
+                .take(0)?;
+            if written.is_some() {
+                return Ok(());
+            }
+        }
+
+        Err(StorageError::Database(format!(
+            "the cells of row {row_id} kept changing while one was written"
+        )))
     }
 
     /// Writes one cell of a row from the JSON the frontend sends: a string, a
