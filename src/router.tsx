@@ -17,9 +17,18 @@ const homeRoute = createRoute({
   component: HomeView,
 });
 
+/** What the address of a page can carry: the active view of a database. */
+export type PageSearch = { view?: string };
+
+/** Keeps a view id that is a non-empty string and drops anything else. */
+export function validatePageSearch(search: Record<string, unknown>): PageSearch {
+  return typeof search.view === 'string' && search.view !== '' ? { view: search.view } : {};
+}
+
 const pageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/page/$pageId',
+  validateSearch: validatePageSearch,
   component: function PageRoute() {
     const { pageId } = pageRoute.useParams();
     return <PageView pageId={pageId} />;

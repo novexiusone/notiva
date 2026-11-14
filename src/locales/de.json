@@ -71,7 +71,73 @@
         "date": "Datum",
         "select": "Auswahl",
         "relation": "Relation"
+      },
+      "noMatches": "Keine Zeile erfüllt die Filter"
+    },
+    "views": {
+      "label": "Ansichten",
+      "add": "Ansicht hinzufügen",
+      "chooseType": "Typ",
+      "types": {
+        "table": "Tabelle",
+        "kanban": "Board",
+        "calendar": "Kalender"
+      },
+      "actions": "Aktionen für „{{name}}“",
+      "rename": "Umbenennen",
+      "name": "Name der Ansicht",
+      "delete": "Ansicht löschen",
+      "lastView": "Eine Datenbank behält mindestens eine Ansicht.",
+      "deleteTitle": "Die Ansicht „{{name}}“ löschen?",
+      "deleteDescription": "Ihre Filter, Sortierungen und Gruppierung werden mitgelöscht. Die Zeilen bleiben.",
+      "unavailable": "Diese Art von Ansicht kann diese Version noch nicht zeigen."
+    },
+    "toolbar": {
+      "label": "Einstellungen der Ansicht",
+      "filter": "Filter",
+      "filters": "Filter",
+      "addFilter": "Filter hinzufügen",
+      "noFilters": "Keine Filter. Eine Zeile wird gezeigt, wenn sie jeden Filter erfüllt.",
+      "removeFilter": "Filter entfernen",
+      "property": "Eigenschaft",
+      "operator": "Bedingung",
+      "value": "Wert",
+      "chooseOption": "Option wählen",
+      "sort": "Sortieren",
+      "sorts": "Sortierungen",
+      "addSort": "Sortierung hinzufügen",
+      "noSorts": "Keine Sortierung. Die Zeilen stehen in ihrer eigenen Reihenfolge.",
+      "removeSort": "Sortierung entfernen",
+      "direction": "Richtung",
+      "ascending": "Aufsteigend",
+      "descending": "Absteigend",
+      "group": "Gruppieren",
+      "groupBy": "Gruppieren nach",
+      "noGrouping": "Keine",
+      "properties": "Eigenschaften",
+      "shownProperties": "Gezeigte Eigenschaften",
+      "hiddenCount": "{{count}} ausgeblendet",
+      "operators": {
+        "equals": "ist",
+        "notEquals": "ist nicht",
+        "contains": "enthält",
+        "notContains": "enthält nicht",
+        "greaterThan": ">",
+        "lessThan": "<",
+        "before": "ist vor",
+        "after": "ist nach",
+        "isEmpty": "ist leer",
+        "isNotEmpty": "ist nicht leer"
+      },
+      "numberOperators": {
+        "equals": "=",
+        "notEquals": "≠"
       }
+    },
+    "group": {
+      "empty": "Ohne {{name}}",
+      "collapse": "Zuklappen",
+      "expand": "Aufklappen"
     }
   },
   "editor": {
