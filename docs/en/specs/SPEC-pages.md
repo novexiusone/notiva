@@ -41,7 +41,7 @@ There is no trash yet (#25), so deleting is final. The confirmation says so.
 type Page = { id: string; title: string; parentId: string | null; position: number };
 ```
 
-- `list_pages` returns every page as a flat list ordered by position. The frontend builds the tree. At 10,000 pages this takes about 9 ms in the database (#11).
+- `list_pages` returns every page as a flat list ordered by position. The frontend builds the tree. At 10,000 pages `list_pages` took a median of 87 to 154 ms and a p95 of 143 to 195 ms, under the 200 ms target (#62: three runs on 2026-11-14, SurrealDB 4.0.1, one machine under heavy load). A research run on 2026-11-12 measured 45 to 53 ms. The 9 ms quoted here before came from a simpler query, `SELECT id, title, parent, position FROM page`, which skips what `list_pages` adds: the ids as strings, `kind`, `database`, the ordering by position, and reading the rows into `Page`. That query took 14 to 24 ms in the same runs. With the 10,000 rows of a database also present, `list_pages` took a median of 255 to 314 ms, which is over the target (see `SPEC-databases.md`, "Performance targets").
 - `create_page` appends the page after its last sibling.
 - `move_page` places the page at `index` among the children of `parentId` and renumbers those siblings. It fails when the target is the page itself or one of its descendants.
 - Errors reach the frontend as `{ kind: 'not_found' | 'invalid' | 'internal', message: string }`.
