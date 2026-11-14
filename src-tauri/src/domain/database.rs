@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use super::Page;
+use super::{Page, View};
 
 /// A database: its page, its properties in column order and its views.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -10,11 +10,6 @@ pub struct Database {
     pub properties: Vec<Property>,
     pub views: Vec<View>,
 }
-
-/// A stored view of a database. Views are delivered with the stored views of
-/// `database-views` (#58), which replaces this placeholder with the real type;
-/// until then the list is always empty.
-pub type View = serde_json::Value;
 
 /// The type of the values in a column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

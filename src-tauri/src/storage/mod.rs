@@ -11,6 +11,7 @@ mod links;
 mod migrations;
 mod pages;
 mod search;
+mod views;
 
 #[cfg(test)]
 mod benchmark;
