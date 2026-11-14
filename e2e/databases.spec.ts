@@ -4,7 +4,13 @@ const treeRows = (page: Page) => page.getByRole('treeitem');
 const treeRow = (page: Page, name: string) => treeRows(page).filter({ hasText: name });
 const title = (page: Page) => page.getByRole('main').getByRole('textbox', { name: 'Page title' });
 const rowList = (page: Page) => page.getByRole('region', { name: 'Rows' });
-const rowLinks = (page: Page) => rowList(page).getByRole('link');
+const bodyRows = (page: Page) =>
+  rowList(page)
+    .getByRole('row')
+    .filter({ has: page.getByRole('gridcell') });
+const rowTitles = (page: Page) =>
+  bodyRows(page).locator('[role="gridcell"][aria-colindex="1"] > span:first-child');
+const titleEditor = (page: Page) => rowList(page).getByRole('textbox', { name: 'Name' });
 const tableIcon = (page: Page, name: string) => treeRow(page, name).locator('svg.lucide-table');
 const editor = (page: Page) => page.locator('.bn-editor');
 
@@ -25,16 +31,22 @@ async function createDatabase(page: Page, name: string) {
   await expect(treeRow(page, name)).toBeVisible();
 }
 
-/** Adds a row to the open database and gives it a title on its own page. */
-async function addRow(page: Page, databaseName: string, name: string) {
-  const before = await rowLinks(page).count();
+/** Adds a row to the open database and types its title into the table. */
+async function addRow(page: Page, name: string) {
+  const before = await bodyRows(page).count();
   await rowList(page).getByRole('button', { name: 'New', exact: true }).click();
-  await expect(rowLinks(page)).toHaveCount(before + 1);
-  await rowLinks(page).last().click();
-  await expect(title(page)).toBeFocused();
-  await title(page).fill(name);
-  await treeRow(page, databaseName).click();
-  await expect(rowLinks(page).last()).toHaveText(name);
+  await expect(bodyRows(page)).toHaveCount(before + 1);
+  await expect(titleEditor(page)).toBeFocused();
+  await titleEditor(page).fill(name);
+  await titleEditor(page).press('Enter');
+  await expect(rowTitles(page).last()).toHaveText(name);
+}
+
+/** Opens a row of the open database as a page. */
+async function openRow(page: Page, index: number) {
+  const line = bodyRows(page).nth(index);
+  await line.hover();
+  await line.getByRole('link', { name: 'Open' }).click();
 }
 
 async function openMenu(page: Page, name: string) {
@@ -103,11 +115,13 @@ test('rows are listed in the database and stay out of the sidebar', async ({ pag
   await createPage(page, 'Notes');
   await treeRow(page, 'Tasks').click();
 
-  await addRow(page, 'Tasks', 'Write spec');
-  await addRow(page, 'Tasks', 'Build it');
+  await addRow(page, 'Write spec');
+  await addRow(page, 'Build it');
   await rowList(page).getByRole('button', { name: 'New', exact: true }).click();
+  await expect(titleEditor(page)).toBeFocused();
+  await page.keyboard.press('Escape');
 
-  await expect(rowLinks(page)).toHaveText(['Write spec', 'Build it', 'Untitled']);
+  await expect(rowTitles(page)).toHaveText(['Write spec', 'Build it', 'Untitled']);
   await expect(treeRows(page)).toHaveText(['Tasks', 'Notes']);
   await expect(treeRow(page, 'Tasks').getByRole('button', { name: /Expand|Collapse/ })).toHaveCount(
     0,
@@ -116,11 +130,11 @@ test('rows are listed in the database and stay out of the sidebar', async ({ pag
   await page.goto('/');
 
   await expect(title(page)).toHaveValue('Tasks');
-  await expect(rowLinks(page)).toHaveText(['Write spec', 'Build it', 'Untitled']);
+  await expect(rowTitles(page)).toHaveText(['Write spec', 'Build it', 'Untitled']);
   await expect(treeRows(page)).toHaveText(['Tasks', 'Notes']);
 
   // A row is a page: it opens with its own title and text.
-  await rowLinks(page).first().click();
+  await openRow(page, 0);
   await expect(title(page)).toHaveValue('Write spec');
   await expect(editor(page)).toBeVisible();
   await expect(treeRows(page)).toHaveText(['Tasks', 'Notes']);
@@ -152,12 +166,12 @@ test('a database is renamed from its title and from the sidebar', async ({ page 
 
 test('deleting a database asks first, names its rows and takes them along', async ({ page }) => {
   await createDatabase(page, 'Tasks');
-  await addRow(page, 'Tasks', 'Write spec');
-  await addRow(page, 'Tasks', 'Build it');
+  await addRow(page, 'Write spec');
+  await addRow(page, 'Build it');
   await createPage(page, 'Keep me');
   await treeRow(page, 'Tasks').click();
   // The open page is one of the rows that are about to go.
-  await rowLinks(page).first().click();
+  await openRow(page, 0);
   await expect(title(page)).toHaveValue('Write spec');
 
   await openMenu(page, 'Tasks');
@@ -192,7 +206,7 @@ test('deleting a page names the database below it as a subpage and its rows as r
   await page.getByRole('menuitem', { name: 'Add database' }).click();
   await expect(title(page)).toBeFocused();
   await title(page).fill('Tasks');
-  await addRow(page, 'Tasks', 'Write spec');
+  await addRow(page, 'Write spec');
 
   await openMenu(page, 'Projects');
   await page.getByRole('menuitem', { name: 'Delete' }).click();
@@ -206,7 +220,7 @@ test('deleting a page names the database below it as a subpage and its rows as r
 
 test('a link to a row shows the title of the row and opens it', async ({ page }) => {
   await createDatabase(page, 'Tasks');
-  await addRow(page, 'Tasks', 'Write spec');
+  await addRow(page, 'Write spec');
   await createPage(page, 'Source');
   await title(page).press('Enter');
   await expect(editor(page)).toBeFocused();
@@ -225,7 +239,7 @@ test('a link to a row shows the title of the row and opens it', async ({ page })
 
   // The link follows the title of the row, and still does after a restart.
   await treeRow(page, 'Tasks').click();
-  await rowLinks(page).first().click();
+  await openRow(page, 0);
   await title(page).fill('Write the spec');
   await treeRow(page, 'Source').click();
   await expect(link).toHaveText('Write the spec');
