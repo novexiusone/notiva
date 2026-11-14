@@ -6,6 +6,6 @@ pub mod page;
 pub mod search;
 
 pub use block::Block;
-pub use database::{Database, Property, PropertyType, SelectOption};
+pub use database::{CellValue, Database, Property, PropertyType, Row, SELECT_COLORS, SelectOption};
 pub use page::{Page, PageKind, PageRef};
 pub use search::SearchHit;
