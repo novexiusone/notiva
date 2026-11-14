@@ -7,13 +7,17 @@ import {
   useCreateDatabase,
   useCreateProperty,
   useCreateRow,
+  useCreateView,
   useDatabase,
   useDeleteProperty,
   useDeleteSelectOption,
+  useDeleteView,
   useIncomingRelations,
   useRows,
   useSetCell,
   useUpdateProperty,
+  useUpdateView,
+  VIEW_SAVE_DELAY,
 } from '@/features/databases/api';
 import { useDeletePage, usePages, useRenamePage } from '@/features/pages/api';
 import { pagesKey } from '@/features/pages/queryKeys';
@@ -24,6 +28,7 @@ import {
   type Property,
   type PropertyType,
   type Row,
+  type ViewConfig,
 } from '@/lib/commands';
 import { installFakeBackend } from '@/test/fakeBackend';
 import { database, row } from '@/test/renderApp';
@@ -336,5 +341,135 @@ describe('databases and rows as pages', () => {
     act(() => current().setCell('r1', 'project', null));
 
     await waitFor(() => expect(current().incoming.data).toEqual([]));
+  });
+});
+
+describe('the view hooks', () => {
+  const tableConfig: ViewConfig = {
+    version: 1,
+    type: 'table',
+    filters: [],
+    sorts: [],
+    properties: [],
+    groupBy: null,
+  };
+  const sorted = (direction: 'asc' | 'desc'): ViewConfig => ({
+    ...tableConfig,
+    sorts: [{ propertyId: 'notes', direction }],
+  });
+
+  beforeEach(() =>
+    installFakeBackend({
+      pages: [database('db', 'Tasks')],
+      views: [
+        { id: 'v1', databaseId: 'db', name: 'Table', position: 0, config: tableConfig },
+        { id: 'v2', databaseId: 'db', name: 'Second', position: 1, config: tableConfig },
+      ],
+    }),
+  );
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const views = (loaded: () => Database) => loaded().views;
+  const stored = async () => (await commands.loadDatabase('db')).views;
+
+  it('adds a created view after the others', async () => {
+    const { current, loaded } = await renderDatabase(() => ({ create: useCreateView('db') }));
+
+    await act(() => current().create.mutateAsync({ name: 'Third', config: sorted('asc') }));
+
+    expect(views(loaded).map((view) => view.name)).toEqual(['Table', 'Second', 'Third']);
+    expect((await stored()).map((view) => view.name)).toEqual(['Table', 'Second', 'Third']);
+  });
+
+  it('changes a view at once and saves it after the pause, the last change only', async () => {
+    const updateView = vi.spyOn(commands, 'updateView');
+    const { current, loaded } = await renderDatabase(() => ({ update: useUpdateView('db') }));
+    vi.useFakeTimers();
+
+    act(() => current().update.change('v1', { config: sorted('asc') }));
+    act(() => current().update.change('v1', { config: sorted('desc') }));
+
+    expect(views(loaded)[0]!.config).toEqual(sorted('desc'));
+    act(() => vi.advanceTimersByTime(VIEW_SAVE_DELAY - 1));
+    expect(updateView).not.toHaveBeenCalled();
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    vi.useRealTimers();
+
+    await waitFor(() => expect(updateView).toHaveBeenCalledTimes(1));
+    expect(updateView).toHaveBeenCalledWith('v1', null, sorted('desc'));
+    await waitFor(async () => expect((await stored())[0]!.config).toEqual(sorted('desc')));
+  });
+
+  it('sends a pending change at once on flush, and saves the views of a database in order', async () => {
+    const calls: string[] = [];
+    const updateView = commands.updateView;
+    vi.spyOn(commands, 'updateView').mockImplementation(async (id, name, config) => {
+      calls.push(`start ${id} ${config?.sorts[0]?.direction ?? name}`);
+      // A slow first save must not be overtaken by the second.
+      await new Promise((resolve) => setTimeout(resolve, calls.length === 1 ? 50 : 0));
+      const view = await updateView(id, name, config);
+      calls.push(`done ${id}`);
+      return view;
+    });
+    const { current } = await renderDatabase(() => ({ update: useUpdateView('db') }));
+
+    act(() => {
+      current().update.change('v1', { config: sorted('asc') });
+      current().update.flush('v1');
+      current().update.change('v1', { config: sorted('desc') });
+      current().update.change('v2', { name: 'Renamed' }, { immediately: true });
+      current().update.flush();
+    });
+
+    await waitFor(() => expect(calls).toHaveLength(6));
+    expect(calls).toEqual([
+      'start v1 asc',
+      'done v1',
+      'start v2 Renamed',
+      'done v2',
+      'start v1 desc',
+      'done v1',
+    ]);
+    expect((await stored()).map((view) => [view.name, view.config])).toEqual([
+      ['Table', sorted('desc')],
+      ['Renamed', tableConfig],
+    ]);
+  });
+
+  it('keeps a change that is still being saved when the database is fetched again', async () => {
+    const { current, loaded, queryClient } = await renderDatabase(() => ({
+      update: useUpdateView('db'),
+    }));
+
+    act(() => current().update.change('v2', { config: sorted('asc') }));
+    await act(() => queryClient.refetchQueries({ queryKey: databaseKeys.database('db') }));
+
+    expect(views(loaded)[1]!.config).toEqual(sorted('asc'));
+    act(() => current().update.flush());
+    await waitFor(async () => expect((await stored())[1]!.config).toEqual(sorted('asc')));
+  });
+
+  it('takes back a change the backend refuses', async () => {
+    const { current, loaded } = await renderDatabase(() => ({ update: useUpdateView('db') }));
+    const broken = { ...tableConfig, version: 2 } as unknown as ViewConfig;
+
+    act(() => current().update.change('v1', { config: broken }, { immediately: true }));
+
+    expect(views(loaded)[0]!.config).toEqual(broken);
+    await waitFor(() => expect(views(loaded)[0]!.config).toEqual(tableConfig));
+  });
+
+  it('deletes a view at once, and brings the last one back when the backend refuses', async () => {
+    const { current, loaded } = await renderDatabase(() => ({ remove: useDeleteView('db') }));
+
+    await act(() => current().remove.mutateAsync('v1'));
+    expect(views(loaded).map((view) => view.id)).toEqual(['v2']);
+
+    act(() => current().remove.mutate('v2'));
+    expect(views(loaded)).toEqual([]);
+    await waitFor(() => expect(views(loaded).map((view) => view.id)).toEqual(['v2']));
   });
 });

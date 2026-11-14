@@ -138,7 +138,7 @@ describe('the round trip through the table state', () => {
     expect({ ...resized, properties: table.properties }).toEqual(table);
 
     const expanded = toConfig({ ...state, expanded: { 'status:': false } }, table, properties);
-    expect(expanded.groupBy).toEqual({ propertyId: 'status', collapsed: [''] });
+    expect(expanded).toMatchObject({ groupBy: { propertyId: 'status', collapsed: [''] } });
 
     const ungrouped = toConfig({ ...state, grouping: [] }, table, properties);
     expect(ungrouped).toEqual({ ...table, groupBy: null });
@@ -146,9 +146,8 @@ describe('the round trip through the table state', () => {
 
   it('starts a new grouping with every group open', () => {
     const state = fromConfig(table, properties);
-    expect(toConfig({ ...state, grouping: ['due'] }, table, properties).groupBy).toEqual({
-      propertyId: 'due',
-      collapsed: [],
+    expect(toConfig({ ...state, grouping: ['due'] }, table, properties)).toMatchObject({
+      groupBy: { propertyId: 'due', collapsed: [] },
     });
   });
 
@@ -227,7 +226,9 @@ describe('a configuration that mentions what is gone', () => {
         columnFilters: [
           {
             id: 'pages',
-            value: [{ index: 0, filter: { propertyId: 'pages', operator: 'isEmpty', value: null } }],
+            value: [
+              { index: 0, filter: { propertyId: 'pages', operator: 'isEmpty', value: null } },
+            ],
           },
         ],
         columnVisibility: { ...state.columnVisibility, due: false },
@@ -327,15 +328,14 @@ describe('the helpers the toolbar uses', () => {
     const filter = { propertyId: 'pages', operator: 'lessThan', value: 3 } as const;
 
     expect(withFilters(config, properties, [filter]).filters).toEqual([filter]);
-    expect(
-      withSorts(config, properties, [{ propertyId: 'due', direction: 'desc' }]).sorts,
-    ).toEqual([{ propertyId: 'due', direction: 'desc' }]);
-    expect(withGroupBy(config, properties, 'status').groupBy).toEqual({
-      propertyId: 'status',
-      collapsed: [],
+    expect(withSorts(config, properties, [{ propertyId: 'due', direction: 'desc' }]).sorts).toEqual(
+      [{ propertyId: 'due', direction: 'desc' }],
+    );
+    expect(withGroupBy(config, properties, 'status')).toMatchObject({
+      groupBy: { propertyId: 'status', collapsed: [] },
     });
     expect(withGroupBy(table, properties, 'status')).toEqual(table);
-    expect(withGroupBy(table, properties, null).groupBy).toBeNull();
+    expect(withGroupBy(table, properties, null)).toMatchObject({ groupBy: null });
   });
 
   it('give every group a key, the rows without a value the empty one', () => {

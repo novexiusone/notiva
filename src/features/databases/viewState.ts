@@ -253,9 +253,10 @@ export function toConfig(
     next = {
       ...next,
       sorts: [
-        ...sorting.map(
-          (sort): ViewSort => ({ propertyId: sort.id, direction: sort.desc ? 'desc' : 'asc' }),
-        ),
+        ...sorting.map((sort): ViewSort => ({
+          propertyId: sort.id,
+          direction: sort.desc ? 'desc' : 'asc',
+        })),
         ...base.sorts.filter((sort) => isColumnless(sort.propertyId, properties)),
       ],
     };
