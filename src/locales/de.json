@@ -40,7 +40,13 @@
     "newRow": "Neu",
     "loadFailed": "Die Zeilen konnten nicht geladen werden.",
     "rowCount_one": "{{count}} Zeile",
-    "rowCount_other": "{{count}} Zeilen"
+    "rowCount_other": "{{count}} Zeilen",
+    "properties": {
+      "clear": "Leeren",
+      "searchOptions": "Option suchen oder anlegen",
+      "createOption": "„{{name}}“ anlegen",
+      "noOptions": "Noch keine Optionen"
+    }
   },
   "editor": {
     "saveFailed": "Die letzte Änderung konnte nicht gespeichert werden. Mit der nächsten Änderung wird es erneut versucht.",
