@@ -7,7 +7,10 @@
 use surrealdb::types::SurrealValue;
 
 use super::{Storage, StorageError};
-use crate::domain::{Database, PageKind, Property, PropertyType, SelectOption};
+use crate::domain::{Database, PageKind, Property, PropertyType, SelectOption, ViewConfig};
+
+/// The name of the view a new database starts with.
+const FIRST_VIEW_NAME: &str = "Table";
 
 #[derive(SurrealValue)]
 struct OptionRow {
@@ -65,18 +68,30 @@ fn not_found(id: &str) -> StorageError {
 impl Storage {
     /// Creates an untitled database after the last child of `parent_id`. It
     /// starts without properties: the title column is the title of its rows.
+    /// It has one table view, because a database always has at least one.
     pub async fn create_database(&self, parent_id: Option<&str>) -> Result<Database, StorageError> {
         let page = self.insert_page(parent_id, PageKind::Database).await?;
+        let view = match self
+            .insert_view(&page.id, FIRST_VIEW_NAME, &ViewConfig::empty_table())
+            .await
+        {
+            Ok(view) => view,
+            Err(error) => {
+                // A database without a view must not stay behind.
+                let _ = self.delete_page(&page.id).await;
+                return Err(error);
+            }
+        };
 
         Ok(Database {
             page,
             properties: Vec::new(),
-            views: Vec::new(),
+            views: vec![view],
         })
     }
 
-    /// A database with its properties in column order. An id that belongs to
-    /// an ordinary page is not found.
+    /// A database with its properties in column order and its views in
+    /// order. An id that belongs to an ordinary page is not found.
     pub async fn load_database(&self, id: &str) -> Result<Database, StorageError> {
         let page = self
             .find_page(id)
@@ -105,8 +120,7 @@ impl Storage {
         Ok(Database {
             page,
             properties,
-            // Stored views are delivered with `database-views` (#58).
-            views: Vec::new(),
+            views: self.list_views(id).await?,
         })
     }
 }
@@ -121,7 +135,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_new_database_is_an_untitled_page_without_properties_and_views() {
+    async fn a_new_database_is_an_untitled_page_without_properties() {
         let storage = storage().await;
 
         let database = storage.create_database(None).await.unwrap();
@@ -131,7 +145,6 @@ mod tests {
         assert_eq!(database.page.parent_id, None);
         assert_eq!(database.page.database_id, None);
         assert!(database.properties.is_empty());
-        assert!(database.views.is_empty());
         assert_eq!(storage.list_pages().await.unwrap(), [database.page]);
     }
 
@@ -240,7 +253,7 @@ mod tests {
                 },
             ]
         );
-        assert!(loaded.views.is_empty());
+        assert_eq!(loaded.views.len(), 1);
         assert_eq!(
             storage
                 .load_database(&authors.id)

@@ -368,8 +368,6 @@ async fn deleting_a_database_removes_its_rows_properties_and_views() {
          CREATE property:sequel SET database = $books, name = 'Sequel', type = 'relation',
              target = $books;
 
-         CREATE view:authors_table SET database = $authors, name = 'Table',
-             config = { type: 'table' };
          CREATE view:books_table SET database = $books, name = 'Table',
              config = { type: 'table' };
          CREATE view:books_board SET database = $books, name = 'Board', position = 1.0,

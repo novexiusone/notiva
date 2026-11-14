@@ -13,6 +13,7 @@ mod pages;
 mod properties;
 mod rows;
 mod search;
+mod views;
 
 #[cfg(test)]
 mod benchmark;

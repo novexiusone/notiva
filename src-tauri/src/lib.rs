@@ -71,6 +71,9 @@ pub fn run() {
             commands::search::search,
             commands::export::export_page,
             commands::export::export_all,
+            commands::views::create_view,
+            commands::views::update_view,
+            commands::views::delete_view,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
