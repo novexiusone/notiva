@@ -172,6 +172,15 @@ export const commands = {
   changePropertyType: (id: string, type: PropertyType) =>
     invoke<Property>('change_property_type', { id, type }),
 
+  /** Adds a view after the last view of a database. */
+  createView: (databaseId: string, name: string, config: ViewConfig) =>
+    invoke<View>('create_view', { databaseId, name, config }),
+  /** `null` leaves the name or the configuration as it is. */
+  updateView: (id: string, name: string | null, config: ViewConfig | null) =>
+    invoke<View>('update_view', { id, name, config }),
+  /** Refuses to delete the last view of a database. */
+  deleteView: (id: string) => invoke<void>('delete_view', { id }),
+
   /** The rows of a database in their manual order. */
   listRows: (databaseId: string) => invoke<Row[]>('list_rows', { databaseId }),
   createRow: (databaseId: string) => invoke<Row>('create_row', { databaseId }),

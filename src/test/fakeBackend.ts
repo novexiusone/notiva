@@ -5,6 +5,7 @@ import {
   type Block,
   type CellValue,
   type CommandError,
+  type FilterOperator,
   type Database,
   type IncomingRelation,
   type Page,
@@ -15,6 +16,7 @@ import {
   type SelectOption,
   type View,
   type ViewConfig,
+  type ViewSort,
 } from '@/lib/commands';
 
 const STORAGE_KEY = 'notiva.fake.pages';
@@ -110,6 +112,151 @@ function withoutProperty(config: ViewConfig, propertyId: string): ViewConfig {
         ...config,
         ...kept,
         datePropertyId: config.datePropertyId === propertyId ? null : config.datePropertyId,
+      };
+  }
+}
+
+const FILTER_OPERATORS: readonly FilterOperator[] = [
+  'equals',
+  'notEquals',
+  'contains',
+  'notContains',
+  'greaterThan',
+  'lessThan',
+  'before',
+  'after',
+  'isEmpty',
+  'isNotEmpty',
+];
+
+/** The keys a configuration of each type has, besides `version`, `type` and the shared lists. */
+const VIEW_TYPE_KEYS: Record<ViewConfig['type'], readonly string[]> = {
+  table: ['groupBy'],
+  kanban: ['groupPropertyId', 'hiddenGroups'],
+  calendar: ['datePropertyId'],
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Refuses an object that lacks one of `keys` or has any other key. */
+function requireKeys(value: unknown, keys: readonly string[], what: string) {
+  if (!isRecord(value)) fail('invalid', `${what} is not an object`);
+  const present = Object.keys(value);
+  const missing = keys.find((key) => !present.includes(key));
+  if (missing !== undefined) fail('invalid', `${what} has no ${missing}`);
+  const unknown = present.find((key) => !keys.includes(key));
+  if (unknown !== undefined) fail('invalid', `${what} has an unknown key ${unknown}`);
+  return value;
+}
+
+function requireList<T>(value: unknown, what: string, read: (item: unknown) => T): T[] {
+  if (!Array.isArray(value)) fail('invalid', `${what} is not a list`);
+  return value.map(read);
+}
+
+function requireString(value: unknown, what: string): string {
+  return typeof value === 'string' ? value : fail('invalid', `${what} is not a string`);
+}
+
+function requireStringOrNull(value: unknown, what: string): string | null {
+  return value === null ? null : requireString(value, what);
+}
+
+/**
+ * Reads a view configuration as strictly as the real backend's serde types:
+ * every key present, no other key, every value of its type. The value goes
+ * through JSON first, because that is what the real backend receives.
+ */
+function parseViewConfig(value: unknown): ViewConfig {
+  const json: unknown = value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+  if (!isRecord(json)) fail('invalid', 'the view configuration is not an object');
+  const type = json.type;
+  if (type !== 'table' && type !== 'kanban' && type !== 'calendar') {
+    fail('invalid', `${String(type)} is not a view type`);
+  }
+  const config = requireKeys(
+    json,
+    ['version', 'type', 'filters', 'sorts', 'properties', ...VIEW_TYPE_KEYS[type]],
+    'the view configuration',
+  );
+  if (config.version !== 1) fail('invalid', `unknown view configuration version`);
+
+  const base = {
+    version: 1 as const,
+    filters: requireList(config.filters, 'filters', (item) => {
+      const filter = requireKeys(item, ['propertyId', 'operator', 'value'], 'a filter');
+      if (!FILTER_OPERATORS.includes(filter.operator as FilterOperator)) {
+        fail('invalid', `${String(filter.operator)} is not a filter operator`);
+      }
+      const filterValue = filter.value;
+      if (
+        filterValue !== null &&
+        typeof filterValue !== 'string' &&
+        typeof filterValue !== 'number'
+      ) {
+        fail('invalid', 'a filter value is a string, a number or null');
+      }
+      return {
+        propertyId: requireString(filter.propertyId, 'propertyId'),
+        operator: filter.operator as FilterOperator,
+        value: filterValue,
+      };
+    }),
+    sorts: requireList(config.sorts, 'sorts', (item) => {
+      const sort = requireKeys(item, ['propertyId', 'direction'], 'a sort');
+      if (sort.direction !== 'asc' && sort.direction !== 'desc') {
+        fail('invalid', `${String(sort.direction)} is not a direction`);
+      }
+      return {
+        propertyId: requireString(sort.propertyId, 'propertyId'),
+        direction: sort.direction as ViewSort['direction'],
+      };
+    }),
+    properties: requireList(config.properties, 'properties', (item) => {
+      const property = requireKeys(item, ['propertyId', 'visible', 'width'], 'a property');
+      if (typeof property.visible !== 'boolean') fail('invalid', 'visible is not a boolean');
+      if (property.width !== null && typeof property.width !== 'number') {
+        fail('invalid', 'width is not a number');
+      }
+      return {
+        propertyId: requireString(property.propertyId, 'propertyId'),
+        visible: property.visible,
+        width: property.width,
+      };
+    }),
+  };
+
+  switch (type) {
+    case 'table': {
+      if (config.groupBy === null) return { ...base, type, groupBy: null };
+      const groupBy = requireKeys(config.groupBy, ['propertyId', 'collapsed'], 'groupBy');
+      return {
+        ...base,
+        type,
+        groupBy: {
+          propertyId: requireString(groupBy.propertyId, 'propertyId'),
+          collapsed: requireList(groupBy.collapsed, 'collapsed', (id) =>
+            requireString(id, 'a collapsed group'),
+          ),
+        },
+      };
+    }
+    case 'kanban':
+      return {
+        ...base,
+        type,
+        groupPropertyId: requireStringOrNull(config.groupPropertyId, 'groupPropertyId'),
+        hiddenGroups: requireList(config.hiddenGroups, 'hiddenGroups', (id) =>
+          requireString(id, 'a hidden group'),
+        ),
+      };
+    case 'calendar':
+      return {
+        ...base,
+        type,
+        datePropertyId: requireStringOrNull(config.datePropertyId, 'datePropertyId'),
       };
   }
 }
@@ -309,6 +456,14 @@ export function installFakeBackend({
 
   const propertiesOf = (databaseId: string) =>
     databases.properties.filter((property) => property.databaseId === databaseId).sort(byPosition);
+
+  const viewsOf = (databaseId: string) =>
+    databases.views.filter((view) => view.databaseId === databaseId).sort(byPosition);
+
+  const requireView = (id: string) => {
+    const view = databases.views.find((candidate) => candidate.id === id);
+    return view ?? fail('not_found', `view ${id} was not found`);
+  };
 
   const rowsOf = (databaseId: string) =>
     pages.filter((page) => page.databaseId === databaseId).sort(byPosition);
@@ -511,7 +666,7 @@ export function installFakeBackend({
         return {
           page,
           properties: propertiesOf(page.id),
-          views: databases.views.filter((view) => view.databaseId === page.id).sort(byPosition),
+          views: viewsOf(page.id),
         } satisfies Database;
       }
 
@@ -621,6 +776,55 @@ export function installFakeBackend({
         const changed: Property = { ...property, type, options };
         saveProperty(changed, cells);
         return changed;
+      }
+
+      case 'create_view': {
+        // Like the real command, the configuration is read before the database is looked up.
+        const config = parseViewConfig(args.config);
+        const database = requireDatabase(args.databaseId as string);
+        const siblings = viewsOf(database.id);
+        const view: View = {
+          id: crypto.randomUUID(),
+          databaseId: database.id,
+          name: requireString(args.name, 'the name'),
+          // After the last view, wherever that is; the first view is at 0.
+          position:
+            siblings.length === 0 ? 0 : Math.max(...siblings.map((view) => view.position)) + 1,
+          config,
+        };
+        saveDatabases({ ...databases, views: [...databases.views, view] });
+        return view;
+      }
+
+      case 'update_view': {
+        const name = args.name === undefined || args.name === null ? null : args.name;
+        const config =
+          args.config === undefined || args.config === null ? null : parseViewConfig(args.config);
+        const view = requireView(args.id as string);
+        const updated: View = {
+          ...view,
+          name: name === null ? view.name : requireString(name, 'the name'),
+          config: config ?? view.config,
+        };
+        saveDatabases({
+          ...databases,
+          views: databases.views.map((candidate) =>
+            candidate.id === view.id ? updated : candidate,
+          ),
+        });
+        return updated;
+      }
+
+      case 'delete_view': {
+        const view = requireView(args.id as string);
+        if (viewsOf(view.databaseId).length <= 1) {
+          fail('invalid', 'the last view of a database cannot be deleted');
+        }
+        saveDatabases({
+          ...databases,
+          views: databases.views.filter((candidate) => candidate.id !== view.id),
+        });
+        return null;
       }
 
       case 'list_rows':
