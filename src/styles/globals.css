@@ -30,6 +30,86 @@
   --muted-foreground: color-mix(in oklab, var(--foreground), var(--background) 40%);
 
   --radius: 0.375rem;
+
+  /*
+   * The eight tints of select options. Each hue is mixed into the background
+   * for the badge and into the foreground for its text, so the tints stay
+   * muted and readable in both colour schemes.
+   */
+  --select-hue-brown: oklch(0.55 0.07 55);
+  --select-hue-orange: oklch(0.68 0.14 55);
+  --select-hue-yellow: oklch(0.72 0.13 85);
+  --select-hue-green: oklch(0.65 0.12 150);
+  --select-hue-blue: oklch(0.62 0.12 250);
+  --select-hue-purple: oklch(0.6 0.13 305);
+  --select-hue-red: var(--destructive);
+  --select-tint: 22%;
+  --select-ink: 45%;
+
+  --select-gray: color-mix(in oklab, var(--background), var(--foreground) 9%);
+  --select-gray-foreground: var(--foreground);
+  --select-brown: color-mix(
+    in oklab,
+    var(--background),
+    var(--select-hue-brown) var(--select-tint)
+  );
+  --select-brown-foreground: color-mix(
+    in oklab,
+    var(--foreground),
+    var(--select-hue-brown) var(--select-ink)
+  );
+  --select-orange: color-mix(
+    in oklab,
+    var(--background),
+    var(--select-hue-orange) var(--select-tint)
+  );
+  --select-orange-foreground: color-mix(
+    in oklab,
+    var(--foreground),
+    var(--select-hue-orange) var(--select-ink)
+  );
+  --select-yellow: color-mix(
+    in oklab,
+    var(--background),
+    var(--select-hue-yellow) var(--select-tint)
+  );
+  --select-yellow-foreground: color-mix(
+    in oklab,
+    var(--foreground),
+    var(--select-hue-yellow) var(--select-ink)
+  );
+  --select-green: color-mix(
+    in oklab,
+    var(--background),
+    var(--select-hue-green) var(--select-tint)
+  );
+  --select-green-foreground: color-mix(
+    in oklab,
+    var(--foreground),
+    var(--select-hue-green) var(--select-ink)
+  );
+  --select-blue: color-mix(in oklab, var(--background), var(--select-hue-blue) var(--select-tint));
+  --select-blue-foreground: color-mix(
+    in oklab,
+    var(--foreground),
+    var(--select-hue-blue) var(--select-ink)
+  );
+  --select-purple: color-mix(
+    in oklab,
+    var(--background),
+    var(--select-hue-purple) var(--select-tint)
+  );
+  --select-purple-foreground: color-mix(
+    in oklab,
+    var(--foreground),
+    var(--select-hue-purple) var(--select-ink)
+  );
+  --select-red: color-mix(in oklab, var(--background), var(--select-hue-red) var(--select-tint));
+  --select-red-foreground: color-mix(
+    in oklab,
+    var(--foreground),
+    var(--select-hue-red) var(--select-ink)
+  );
 }
 
 @media (prefers-color-scheme: dark) {
@@ -46,6 +126,10 @@
     --accent: color-mix(in oklab, var(--background), var(--foreground) 12%);
     --border: color-mix(in oklab, var(--background), var(--foreground) 14%);
     --input: color-mix(in oklab, var(--background), var(--foreground) 18%);
+
+    --select-tint: 30%;
+    --select-ink: 35%;
+    --select-gray: color-mix(in oklab, var(--background), var(--foreground) 16%);
   }
 }
 
@@ -70,6 +154,23 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-select-gray: var(--select-gray);
+  --color-select-gray-foreground: var(--select-gray-foreground);
+  --color-select-brown: var(--select-brown);
+  --color-select-brown-foreground: var(--select-brown-foreground);
+  --color-select-orange: var(--select-orange);
+  --color-select-orange-foreground: var(--select-orange-foreground);
+  --color-select-yellow: var(--select-yellow);
+  --color-select-yellow-foreground: var(--select-yellow-foreground);
+  --color-select-green: var(--select-green);
+  --color-select-green-foreground: var(--select-green-foreground);
+  --color-select-blue: var(--select-blue);
+  --color-select-blue-foreground: var(--select-blue-foreground);
+  --color-select-purple: var(--select-purple);
+  --color-select-purple-foreground: var(--select-purple-foreground);
+  --color-select-red: var(--select-red);
+  --color-select-red-foreground: var(--select-red-foreground);
 
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
