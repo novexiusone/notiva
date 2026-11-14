@@ -18,7 +18,7 @@ Tracking issue: #20.
 | Filter conditions are combined with "and" only                             | Enough for a first version. The configuration carries a version number so groups with "or" can be added later                                                                                                                                          |
 | A view's settings are saved as they change                                 | Same rule as everywhere in the app: no save button                                                                                                                                                                                                     |
 
-react-arborist in the sidebar drags with HTML5 drag events and BlockNote with native drag. `@dnd-kit/react` listens for pointer events on its own elements only. The three do not interfere as long as the drag provider is mounted inside the database view and never at the app root. #64 keeps a regression test for that.
+react-arborist in the sidebar drags with HTML5 drag events and BlockNote with native drag. `@dnd-kit/react` starts a drag from a pointer press on its own elements and listens on the document only while that drag is pending or active. The three do not interfere as long as the drag provider is mounted inside the database view and never at the app root. The spike (#52) saw exactly that with the provider mounted inside a block; #64 keeps a regression test for it.
 
 ## Tech stack
 
