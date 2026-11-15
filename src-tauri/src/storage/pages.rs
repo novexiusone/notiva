@@ -11,7 +11,7 @@ use crate::domain::{Page, PageKind};
 const PAGE_FIELDS: &str = "record::id(id) AS id, title, \
      IF parent = NONE { NONE } ELSE { record::id(parent) } AS parent_id, position, kind, \
      IF database = NONE { NONE } ELSE { record::id(database) } AS database_id, is_favorite, \
-     icon, banner, <string> updated_at AS updated_at";
+     icon, banner, banner_position, <string> updated_at AS updated_at";
 
 /// Turns an optional page id into an optional record link.
 const PARENT: &str = "IF $parent_id = NONE { NONE } ELSE { type::record('page', $parent_id) }";
@@ -30,6 +30,7 @@ struct PageRow {
     is_favorite: Option<bool>,
     icon: Option<String>,
     banner: Option<String>,
+    banner_position: Option<i64>,
     updated_at: String,
 }
 
@@ -49,6 +50,10 @@ impl From<PageRow> for Page {
             is_favorite: row.is_favorite.unwrap_or(false),
             icon: row.icon,
             banner: row.banner,
+            // Pages written before schema version 8 have no position.
+            banner_position: row
+                .banner_position
+                .map_or(50, |position| position.clamp(0, 100) as u8),
             updated_at: row.updated_at,
         }
     }
@@ -165,12 +170,42 @@ impl Storage {
             .db
             .query(format!(
                 "UPDATE type::record('page', $id)
-                     SET icon = $icon, banner = $banner, updated_at = time::now()
+                     SET banner_position = IF banner = $banner {{ banner_position }} ELSE {{ 50 }},
+                         icon = $icon, banner = $banner, updated_at = time::now()
                      WHERE id != NONE RETURN {PAGE_FIELDS}"
             ))
             .bind(("id", id.to_owned()))
             .bind(("icon", icon.map(str::to_owned)))
             .bind(("banner", banner.map(str::to_owned)))
+            .await?
+            .check()?
+            .take(0)?;
+
+        row.map(Page::from).ok_or_else(|| not_found(id))
+    }
+
+    /// Moves the cover image inside the cover. `position` runs from 0 (the top
+    /// of the image is shown) to 100 (the bottom); the page needs a cover.
+    pub async fn set_banner_position(&self, id: &str, position: u8) -> Result<Page, StorageError> {
+        if position > 100 {
+            return Err(StorageError::Invalid(
+                "a cover position is between 0 and 100".into(),
+            ));
+        }
+        let page = self.find_page(id).await?.ok_or_else(|| not_found(id))?;
+        if page.banner.is_none() {
+            return Err(StorageError::Invalid("the page has no cover".into()));
+        }
+
+        let row: Option<PageRow> = self
+            .db
+            .query(format!(
+                "UPDATE type::record('page', $id)
+                     SET banner_position = $position, updated_at = time::now()
+                     WHERE id != NONE RETURN {PAGE_FIELDS}"
+            ))
+            .bind(("id", id.to_owned()))
+            .bind(("position", i64::from(position)))
             .await?
             .check()?
             .take(0)?;
@@ -482,6 +517,63 @@ mod tests {
             .unwrap();
         assert_eq!(cleared.icon, None);
         assert_eq!(cleared.banner, None);
+    }
+
+    #[tokio::test]
+    async fn the_cover_position_defaults_to_the_middle_and_is_stored() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap();
+        assert_eq!(page.banner_position, 50);
+        storage
+            .update_appearance(&page.id, None, Some("notiva-image://localhost/a.png"))
+            .await
+            .unwrap();
+
+        let moved = storage.set_banner_position(&page.id, 20).await.unwrap();
+
+        assert_eq!(moved.banner_position, 20);
+        assert_eq!(storage.list_pages().await.unwrap()[0].banner_position, 20);
+    }
+
+    #[tokio::test]
+    async fn a_new_cover_resets_the_position_but_the_same_cover_keeps_it() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap();
+        let cover = Some("notiva-image://localhost/a.png");
+        storage
+            .update_appearance(&page.id, None, cover)
+            .await
+            .unwrap();
+        storage.set_banner_position(&page.id, 20).await.unwrap();
+
+        let same = storage
+            .update_appearance(&page.id, Some("book"), cover)
+            .await
+            .unwrap();
+        let other = storage
+            .update_appearance(&page.id, Some("book"), Some("gallery:coral"))
+            .await
+            .unwrap();
+
+        assert_eq!(same.banner_position, 20);
+        assert_eq!(other.banner_position, 50);
+    }
+
+    #[tokio::test]
+    async fn the_cover_position_needs_a_cover_and_a_value_up_to_100() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap();
+        let without_cover = storage.set_banner_position(&page.id, 10).await;
+        storage
+            .update_appearance(&page.id, None, Some("notiva-image://localhost/a.png"))
+            .await
+            .unwrap();
+        let too_far = storage.set_banner_position(&page.id, 101).await;
+        let unknown = storage.set_banner_position("missing", 10).await;
+
+        assert!(matches!(without_cover, Err(StorageError::Invalid(_))));
+        assert!(matches!(too_far, Err(StorageError::Invalid(_))));
+        assert!(matches!(unknown, Err(StorageError::NotFound(_))));
     }
 
     #[tokio::test]

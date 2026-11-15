@@ -120,14 +120,42 @@ export function useUpdateAppearance() {
     const icon = changes.icon === undefined ? current.icon : changes.icon;
     const banner = changes.banner === undefined ? current.banner : changes.banner;
     const updatedAt = new Date().toISOString();
+    // A new cover starts in the middle, as in the backend.
+    const bannerPosition = banner === current.banner ? current.bannerPosition : 50;
     setPages((pages) =>
-      pages.map((page) => (page.id === id ? { ...page, icon, banner, updatedAt } : page)),
+      pages.map((page) =>
+        page.id === id ? { ...page, icon, banner, bannerPosition, updatedAt } : page,
+      ),
     );
     mutation.mutate({ id, icon, banner });
   };
 
+  const positionMutation = useMutation({
+    mutationKey: ['banner-position'],
+    scope: { id: 'banner-position' },
+    mutationFn: ({ id, position }: { id: string; position: number }) =>
+      commands.setBannerPosition(id, position),
+    onSettled: () => {
+      if (queryClient.isMutating({ mutationKey: ['banner-position'] }) <= 1) {
+        return queryClient.invalidateQueries({ queryKey: pagesKey });
+      }
+    },
+  });
+
+  /** Moves the cover image inside the cover; `position` is 0 to 100. */
+  const setBannerPosition = (id: string, position: number) => {
+    const updatedAt = new Date().toISOString();
+    setPages((pages) =>
+      pages.map((page) =>
+        page.id === id ? { ...page, bannerPosition: position, updatedAt } : page,
+      ),
+    );
+    positionMutation.mutate({ id, position });
+  };
+
   return {
     change,
+    setBannerPosition,
     saveBanner: async (id: string, file: Blob) =>
       change(id, { banner: await commands.saveImage(file) }),
   };

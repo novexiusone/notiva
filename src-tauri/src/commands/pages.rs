@@ -48,6 +48,15 @@ pub async fn update_appearance(
 }
 
 #[tauri::command]
+pub async fn set_banner_position(
+    storage: State<'_, Storage>,
+    id: String,
+    position: u8,
+) -> Result<Page, CommandError> {
+    Ok(storage.set_banner_position(&id, position).await?)
+}
+
+#[tauri::command]
 pub async fn move_page(
     storage: State<'_, Storage>,
     id: String,

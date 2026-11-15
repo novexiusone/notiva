@@ -65,6 +65,7 @@ function withPageFields(page: Page): Page {
     isFavorite: page.isFavorite ?? false,
     icon: page.icon ?? null,
     banner: page.banner ?? null,
+    bannerPosition: page.bannerPosition ?? 50,
     updatedAt: page.updatedAt ?? '2026-01-01T00:00:00Z',
   };
 }
@@ -591,6 +592,7 @@ export function installFakeBackend({
           isFavorite: false,
           icon: null,
           banner: null,
+          bannerPosition: 50,
           updatedAt: new Date().toISOString(),
         };
         save([...pages, page]);
@@ -617,10 +619,30 @@ export function installFakeBackend({
         if (args.icon === '' || args.banner === '') {
           fail('invalid', 'an icon or banner must be a non-empty string or null');
         }
+        const current = require(args.id as string);
+        const banner = args.banner as string | null;
         const page = {
-          ...require(args.id as string),
+          ...current,
           icon: args.icon as string | null,
-          banner: args.banner as string | null,
+          banner,
+          // A new cover starts in the middle.
+          bannerPosition: banner === current.banner ? current.bannerPosition : 50,
+          updatedAt: new Date().toISOString(),
+        };
+        save(pages.map((candidate) => (candidate.id === page.id ? page : candidate)));
+        return page;
+      }
+
+      case 'set_banner_position': {
+        const position = args.position as number;
+        const current = require(args.id as string);
+        if (!Number.isInteger(position) || position < 0 || position > 100) {
+          fail('invalid', 'a cover position is between 0 and 100');
+        }
+        if (current.banner === null) fail('invalid', 'the page has no cover');
+        const page = {
+          ...current,
+          bannerPosition: position,
           updatedAt: new Date().toISOString(),
         };
         save(pages.map((candidate) => (candidate.id === page.id ? page : candidate)));
@@ -680,6 +702,7 @@ export function installFakeBackend({
           isFavorite: false,
           icon: null,
           banner: null,
+          bannerPosition: 50,
           updatedAt: new Date().toISOString(),
         };
         const view: View = {
@@ -883,6 +906,7 @@ export function installFakeBackend({
           isFavorite: false,
           icon: null,
           banner: null,
+          bannerPosition: 50,
           updatedAt: new Date().toISOString(),
         };
         save([...pages, page]);
@@ -965,6 +989,15 @@ export function installFakeBackend({
         return window.localStorage.getItem('notiva.fake.dialog') === 'cancel'
           ? null
           : '/Users/demo/Documents';
+
+      // The system dialog for choosing where to save a file.
+      case 'plugin:dialog|save':
+        return window.localStorage.getItem('notiva.fake.dialog') === 'cancel'
+          ? null
+          : '/Users/demo/Downloads/cover.png';
+
+      case 'download_image':
+        return undefined;
 
       case 'export_page':
       case 'export_all': {

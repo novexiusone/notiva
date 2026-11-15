@@ -1,6 +1,7 @@
 import { ImagePlus, ImageOff, Smile, SmilePlus, X, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { CoverPicker } from '@/features/pages/CoverPicker';
 import { IconPicker } from '@/features/pages/IconPicker';
 import { PageIcon } from '@/features/pages/PageIcon';
 import { useUpdateAppearance } from '@/features/pages/api';
@@ -74,12 +75,16 @@ export function AppearanceRow({
   page,
   pickerOpen,
   onPickerOpenChange,
-  onChooseBanner,
+  coverPickerOpen,
+  onCoverPickerOpenChange,
+  onUpload,
 }: {
   page: Page;
   pickerOpen: boolean;
   onPickerOpenChange: (open: boolean) => void;
-  onChooseBanner: () => void;
+  coverPickerOpen: boolean;
+  onCoverPickerOpenChange: (open: boolean) => void;
+  onUpload: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -105,7 +110,21 @@ export function AppearanceRow({
             />
           ) : null}
           {page.banner === null ? (
-            <AddButton icon={ImagePlus} label={t('pages.addCover')} onClick={onChooseBanner} />
+            <CoverPicker
+              page={page}
+              open={coverPickerOpen}
+              onOpenChange={onCoverPickerOpenChange}
+              onUpload={onUpload}
+              align="start"
+            >
+              <span>
+                <AddButton
+                  icon={ImagePlus}
+                  label={t('pages.addCover')}
+                  onClick={() => onCoverPickerOpenChange(true)}
+                />
+              </span>
+            </CoverPicker>
           ) : null}
         </div>
       </div>

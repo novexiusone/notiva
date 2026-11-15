@@ -168,6 +168,7 @@ mod tests {
             is_favorite: false,
             icon: None,
             banner: None,
+            banner_position: 50,
             updated_at: "2026-11-15T00:00:00Z".into(),
         }
     }

@@ -7,6 +7,7 @@ import { Editor, type EditorHandle } from '@/features/editor/Editor';
 import { Backlinks } from '@/features/links/Backlinks';
 import { PageHeader } from '@/features/pages/PageHeader';
 import { AppearanceRow } from '@/features/pages/PageAppearance';
+import { PageCover } from '@/features/pages/PageCover';
 import { usePages, useRenamePage } from '@/features/pages/api';
 import { useBannerChooser } from '@/features/pages/useBannerChooser';
 import { rememberLastPage } from '@/lib/localState';
@@ -22,6 +23,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const titleInput = useRef<HTMLInputElement>(null);
   const page = pages.data?.find((candidate) => candidate.id === pageId);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const banner = useBannerChooser(pageId);
 
   useEffect(() => {
@@ -61,11 +63,17 @@ export function PageView({ pageId }: { pageId: string }) {
         page={page}
         pages={pages.data ?? []}
         onChooseIcon={() => setPickerOpen(true)}
-        onChooseBanner={banner.choose}
+        onChooseBanner={() => setCoverPickerOpen(true)}
       />
       {banner.input}
       {page.banner !== null ? (
-        <img src={page.banner} alt={t('pages.banner')} className="h-40 w-full object-cover" />
+        <PageCover
+          page={page}
+          banner={page.banner}
+          pickerOpen={coverPickerOpen}
+          onPickerOpenChange={setCoverPickerOpen}
+          onUpload={banner.choose}
+        />
       ) : null}
       <div className={cn(column, 'group/appearance', page.banner === null ? 'pt-12' : 'pt-6')}>
         {databaseId !== null ? <DatabaseLink databaseId={databaseId} /> : null}
@@ -73,7 +81,9 @@ export function PageView({ pageId }: { pageId: string }) {
           page={page}
           pickerOpen={pickerOpen}
           onPickerOpenChange={setPickerOpen}
-          onChooseBanner={banner.choose}
+          coverPickerOpen={coverPickerOpen}
+          onCoverPickerOpenChange={setCoverPickerOpen}
+          onUpload={banner.choose}
         />
         {title}
       </div>

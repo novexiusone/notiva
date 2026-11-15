@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PAGE_ICONS, type PageIconName } from '@/features/pages/pageIcons';
+import { ICON_NAMES, iconLabel, lucideIcon } from '@/features/pages/pageIcons';
 import { useUpdateAppearance } from '@/features/pages/api';
 import type { Page } from '@/lib/commands';
 import { cn } from '@/lib/utils';
@@ -100,7 +100,11 @@ function PickerContent({ page, onClose }: { page: Page; onClose: () => void }) {
     [emoji, query],
   );
 
-  const icons = (Object.keys(PAGE_ICONS) as PageIconName[]).filter((name) => name.includes(query));
+  const iconQuery = query.replace(/[\s-]/g, '');
+  const icons = useMemo(
+    () => ICON_NAMES.filter((name) => name.toLowerCase().includes(iconQuery)),
+    [iconQuery],
+  );
 
   return (
     <Tabs value={tab} onValueChange={setTab} className="gap-0">
@@ -209,13 +213,14 @@ function PickerContent({ page, onClose }: { page: Page; onClose: () => void }) {
         <div className="h-72 overflow-y-auto px-2 pb-2">
           <div className="grid grid-cols-10">
             {icons.map((name) => {
-              const Icon = PAGE_ICONS[name];
+              const Icon = lucideIcon(name);
+              if (!Icon) return null;
               return (
                 <button
                   key={name}
                   type="button"
-                  title={name}
-                  aria-label={name}
+                  title={iconLabel(name)}
+                  aria-label={iconLabel(name)}
                   className={cn(cell, page.icon === name && 'bg-accent')}
                   onClick={() => choose(name)}
                 >

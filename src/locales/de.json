@@ -67,6 +67,38 @@
         "symbols": "Symbole",
         "flags": "Flaggen"
       }
+    },
+    "cover": {
+      "picker": "Cover auswählen",
+      "galleryTab": "Galerie",
+      "uploadTab": "Hochladen",
+      "remove": "Entfernen",
+      "colourAndGradient": "Farbe & Verlauf",
+      "chooseFile": "Bild auswählen",
+      "uploadHint": "PNG, JPEG, GIF oder WebP, bis 20 MiB.",
+      "change": "Ändern",
+      "reposition": "Verschieben",
+      "download": "Herunterladen",
+      "savePosition": "Position speichern",
+      "cancel": "Abbrechen",
+      "repositionHint": "Zum Verschieben das Bild ziehen",
+      "position": "Position des Covers",
+      "downloaded": "Cover gespeichert unter {{path}}",
+      "downloadFailed": "Das Cover konnte nicht gespeichert werden.",
+      "controls": "Cover",
+      "gallery": {
+        "coral": "Koralle",
+        "amber": "Bernstein",
+        "azure": "Azur",
+        "cream": "Creme",
+        "lagoon": "Lagune",
+        "flamingo": "Flamingo",
+        "ember": "Glut",
+        "haze": "Dunst",
+        "dusk": "Dämmerung",
+        "orchid": "Orchidee",
+        "harbor": "Hafen"
+      }
     }
   },
   "databases": {

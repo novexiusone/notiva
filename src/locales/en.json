@@ -67,6 +67,38 @@
         "symbols": "Symbols",
         "flags": "Flags"
       }
+    },
+    "cover": {
+      "picker": "Choose a cover",
+      "galleryTab": "Gallery",
+      "uploadTab": "Upload",
+      "remove": "Remove",
+      "colourAndGradient": "Color & Gradient",
+      "chooseFile": "Choose an image",
+      "uploadHint": "PNG, JPEG, GIF or WebP, up to 20 MiB.",
+      "change": "Change",
+      "reposition": "Reposition",
+      "download": "Download",
+      "savePosition": "Save position",
+      "cancel": "Cancel",
+      "repositionHint": "Drag the image to reposition it",
+      "position": "Cover position",
+      "downloaded": "Saved the cover to {{path}}",
+      "downloadFailed": "The cover could not be saved.",
+      "controls": "Cover",
+      "gallery": {
+        "coral": "Coral",
+        "amber": "Amber",
+        "azure": "Azure",
+        "cream": "Cream",
+        "lagoon": "Lagoon",
+        "flamingo": "Flamingo",
+        "ember": "Ember",
+        "haze": "Haze",
+        "dusk": "Dusk",
+        "orchid": "Orchid",
+        "harbor": "Harbor"
+      }
     }
   },
   "databases": {
