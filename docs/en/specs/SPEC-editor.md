@@ -45,6 +45,7 @@ It is delivered in three steps, one pull request each:
 - Typing `/` opens the menu; typing further filters it. The current filter text is shown in a search row at the top.
 - Groups: "Suggested" and "Basic blocks".
 - Each entry shows a Lucide icon, its name and, on the right, its Markdown shortcut (`#`, `##`, `-`, `1.`, `[]`, `>`, ` ``` `).
+- "Page" creates a subpage of the open page, puts a link to it where the slash was typed and opens it with its title focused (see `SPEC-pages.md`). "Database" is described in `SPEC-database-embed.md`.
 - Arrow keys move the selection, Enter inserts, Escape closes. The footer reads "Close menu" with `esc`.
 
 ### Images (#15)

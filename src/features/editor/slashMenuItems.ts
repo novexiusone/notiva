@@ -9,6 +9,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  FilePlus,
   Image,
   List,
   ListChecks,
@@ -47,8 +48,12 @@ export type SlashMenuItem = {
 export type SlashMenuActions = {
   /** Creates a database below the page and resolves with its id. */
   createDatabase: () => Promise<string>;
+  /** Creates a subpage of the page and resolves with its id. */
+  createPage: () => Promise<string>;
+  /** Opens a page, here the one that was just created. */
+  openPage: (id: string) => void;
   /** Tells that a block could not be inserted. */
-  onFailure: (error: unknown) => void;
+  onFailure: (error: unknown, what: 'database' | 'page') => void;
 };
 
 type Definition = {
@@ -63,6 +68,7 @@ type Definition = {
     | 'quote'
     | 'codeBlock'
     | 'image'
+    | 'page'
     | 'database';
   icon: LucideIcon;
   shortcut?: string;
@@ -70,6 +76,8 @@ type Definition = {
   aliases: string[];
   /** What is inserted; `null` for an entry that builds its block itself. */
   block: NewBlock | null;
+  /** For an entry without a block: what it creates first. */
+  creates?: 'database' | 'page';
 };
 
 const definitions: Definition[] = [
@@ -142,10 +150,18 @@ const definitions: Definition[] = [
     block: { type: 'image' },
   },
   {
+    key: 'page',
+    icon: FilePlus,
+    aliases: ['page', 'subpage', 'seite', 'unterseite'],
+    block: null,
+    creates: 'page',
+  },
+  {
     key: 'database',
     icon: Table,
     aliases: ['database', 'table', 'db', 'datenbank', 'tabelle'],
     block: null,
+    creates: 'database',
   },
 ];
 
@@ -161,7 +177,7 @@ async function insertDatabase(editor: Editor, actions: SlashMenuActions) {
   try {
     databaseId = await actions.createDatabase();
   } catch (error) {
-    actions.onFailure(error);
+    actions.onFailure(error, 'database');
     return;
   }
   const block = { type: 'database', props: { databaseId } } as const;
@@ -172,6 +188,30 @@ async function insertDatabase(editor: Editor, actions: SlashMenuActions) {
     // The cursor moved onto a block without text, such as an image, which the helper refuses.
     editor.insertBlocks([block], editor.getTextCursorPosition().block, 'after');
   }
+}
+
+/**
+ * Creates a subpage, puts a link to it where the slash was typed and opens
+ * it. When creating fails, nothing is inserted.
+ */
+async function insertPage(editor: Editor, actions: SlashMenuActions) {
+  let pageId: string;
+  try {
+    pageId = await actions.createPage();
+  } catch (error) {
+    actions.onFailure(error, 'page');
+    return;
+  }
+  const block: NewBlock = {
+    type: 'paragraph',
+    content: [{ type: 'pageLink', props: { pageId } }, ' '],
+  };
+  try {
+    insertOrUpdateBlockForSlashMenu(editor, block);
+  } catch {
+    editor.insertBlocks([block], editor.getTextCursorPosition().block, 'after');
+  }
+  actions.openPage(pageId);
 }
 
 /**
@@ -194,7 +234,9 @@ export function getSlashMenuItems(
     shortcut: definition.shortcut,
     onItemClick: () => {
       if (definition.block === null) {
-        void insertDatabase(editor, actions);
+        void (definition.creates === 'page'
+          ? insertPage(editor, actions)
+          : insertDatabase(editor, actions));
         return;
       }
       const inserted = insertOrUpdateBlockForSlashMenu(editor, definition.block);
