@@ -19,6 +19,9 @@ pub enum ImageError {
     #[error("only PNG, JPEG, GIF and WebP images are supported")]
     Unsupported,
 
+    #[error("this is not an image of the app")]
+    Unknown,
+
     #[error("could not store the image: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -104,6 +107,16 @@ impl ImageStore {
         let bytes = std::fs::read(self.directory.join(name)).ok()?;
         Some((bytes, format.mime))
     }
+
+    /// Writes a stored image, given by its URL, to `destination`.
+    pub fn copy_to(&self, url: &str, destination: &Path) -> Result<(), ImageError> {
+        let name = url
+            .strip_prefix(&format!("{SCHEME}://localhost/"))
+            .ok_or(ImageError::Unknown)?;
+        let (bytes, _) = self.read(name).ok_or(ImageError::Unknown)?;
+        std::fs::write(destination, bytes)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -183,6 +196,35 @@ mod tests {
             store.save(&bytes).unwrap_err(),
             ImageError::TooLarge
         ));
+    }
+
+    #[test]
+    fn a_stored_image_can_be_copied_to_a_chosen_file() {
+        let (directory, store) = store();
+        let url = store.save(PNG).unwrap();
+        let destination = directory.path().join("copy.png");
+
+        store.copy_to(&url, &destination).unwrap();
+
+        assert_eq!(std::fs::read(destination).unwrap(), PNG);
+    }
+
+    #[test]
+    fn only_images_of_the_app_can_be_copied() {
+        let (directory, store) = store();
+        let destination = directory.path().join("copy.png");
+
+        for url in [
+            "https://example.com/a.png",
+            "notiva-image://localhost/../secret.png",
+            "notiva-image://localhost/nothing.png",
+        ] {
+            assert!(matches!(
+                store.copy_to(url, &destination),
+                Err(ImageError::Unknown)
+            ));
+        }
+        assert!(!destination.exists());
     }
 
     #[test]

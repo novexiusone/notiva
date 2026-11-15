@@ -20,3 +20,13 @@ pub fn save_image(
 
     Ok(images.save(bytes)?)
 }
+
+/// Copies a stored image to a file the user chose in the system's save dialog.
+#[tauri::command]
+pub fn download_image(
+    images: State<'_, ImageStore>,
+    url: String,
+    destination: String,
+) -> Result<(), CommandError> {
+    Ok(images.copy_to(&url, std::path::Path::new(&destination))?)
+}

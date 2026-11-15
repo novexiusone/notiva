@@ -130,6 +130,7 @@ export function useCreateRow(databaseId: string) {
           isFavorite: false,
           icon: null,
           banner: null,
+          bannerPosition: 50,
           updatedAt: new Date().toISOString(),
         },
       ]);

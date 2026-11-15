@@ -101,13 +101,18 @@ test('icon, banner and page actions work from the page menu and survive a reload
 
   await main.getByRole('button', { name: 'Add icon' }).click();
   await page.getByRole('tab', { name: 'Icons' }).click();
-  await page.getByRole('button', { name: 'book', exact: true }).click();
+  await page.getByRole('button', { name: 'Book Open', exact: true }).click();
   await expect(main.locator('article .lucide-book-open')).toBeVisible();
   await expect(row(page, 'Decorated').locator('.lucide-book-open')).toBeVisible();
 
   await actions.click();
   await page.getByRole('menuitem', { name: 'Add cover' }).click();
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.getByRole('tab', { name: 'Upload' }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Choose an image' }).click();
+  await (
+    await chooser
+  ).setFiles({
     name: 'pixel.png',
     mimeType: 'image/png',
     buffer: Buffer.from(
@@ -120,6 +125,22 @@ test('icon, banner and page actions work from the page menu and survive a reload
   await page.reload();
   await expect(main.locator('article .lucide-book-open')).toBeVisible();
   await expect(banner).toBeVisible();
+
+  // The cover is repositioned and downloaded from its controls.
+  await banner.hover();
+  await main.getByRole('button', { name: 'Reposition' }).click();
+  await page.keyboard.press('ArrowDown');
+  await main.getByRole('button', { name: 'Save position' }).click();
+  await page.reload();
+  await banner.hover();
+  await main.getByRole('button', { name: 'Reposition' }).click();
+  await expect(main.getByRole('slider', { name: 'Cover position' })).toHaveAttribute(
+    'aria-valuenow',
+    '45',
+  );
+  await main.getByRole('button', { name: 'Cancel' }).click();
+  await main.getByRole('button', { name: 'Download' }).click();
+  await expect(page.getByText('Saved the cover to /Users/demo/Downloads/cover.png')).toBeVisible();
 
   await actions.click();
   await page.getByRole('menuitem', { name: 'Remove icon' }).click();
@@ -179,4 +200,23 @@ test.describe('the page header in light mode and German', () => {
     await expect(page.getByRole('menuitem', { name: 'Icon hinzufügen' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Cover hinzufügen' })).toBeVisible();
   });
+});
+
+test('a cover is chosen from the gallery and changed again', async ({ page }) => {
+  await createPage(page, 'Gallery');
+  const main = page.getByRole('main');
+  const cover = main.getByRole('img', { name: 'Page cover' });
+
+  await main.getByRole('button', { name: 'Add cover' }).click();
+  await page.getByRole('button', { name: 'Coral' }).click();
+  await expect(cover).toBeVisible();
+
+  await page.reload();
+  await expect(cover).toBeVisible();
+
+  await cover.hover();
+  await main.getByRole('button', { name: 'Change' }).click();
+  await page.getByRole('button', { name: 'Harbor' }).click();
+  await expect(cover).toHaveCSS('background-image', /linear-gradient/);
+  await expect(main.getByRole('button', { name: 'Reposition' })).toHaveCount(0);
 });

@@ -96,7 +96,7 @@ export function PageHeader({
               <AppearanceMenuItems
                 page={page}
                 onChooseIcon={later(onChooseIcon)}
-                onChooseBanner={onChooseBanner}
+                onChooseBanner={later(onChooseBanner)}
               />
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={later(() => setExporting(true))}>

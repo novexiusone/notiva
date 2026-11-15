@@ -1,133 +1,38 @@
-import {
-  Bell,
-  BookOpen,
-  Bookmark,
-  Brain,
-  Briefcase,
-  Bug,
-  Calendar,
-  Camera,
-  Clock,
-  Cloud,
-  Code,
-  Coffee,
-  Compass,
-  Cpu,
-  Database,
-  Dumbbell,
-  FileText,
-  Film,
-  Flag,
-  Flame,
-  Folder,
-  Gamepad2,
-  Gift,
-  Globe,
-  GraduationCap,
-  Heart,
-  House,
-  Image,
-  Key,
-  Layers,
-  Leaf,
-  Lightbulb,
-  ListChecks,
-  Mail,
-  MapPin,
-  MessageCircle,
-  Moon,
-  Music,
-  Newspaper,
-  Package,
-  Palette,
-  Pencil,
-  Plane,
-  Puzzle,
-  Rocket,
-  Settings,
-  Shield,
-  ShoppingCart,
-  Smile,
-  Star,
-  Sun,
-  Tag,
-  Target,
-  Terminal,
-  Trophy,
-  User,
-  Users,
-  Utensils,
-  Wallet,
-  Wrench,
-  Zap,
-} from 'lucide-react';
+import { icons, type LucideIcon } from 'lucide-react';
 
-/** The curated icons a page can have. The key is what is stored. */
-export const PAGE_ICONS = {
-  book: BookOpen,
-  checklist: ListChecks,
-  document: FileText,
-  folder: Folder,
-  heart: Heart,
-  idea: Lightbulb,
-  star: Star,
-  target: Target,
-  bell: Bell,
-  bookmark: Bookmark,
-  brain: Brain,
-  briefcase: Briefcase,
-  bug: Bug,
-  calendar: Calendar,
-  camera: Camera,
-  clock: Clock,
-  cloud: Cloud,
-  code: Code,
-  coffee: Coffee,
-  compass: Compass,
-  cpu: Cpu,
-  database: Database,
-  dumbbell: Dumbbell,
-  film: Film,
-  flag: Flag,
-  flame: Flame,
-  gamepad: Gamepad2,
-  gift: Gift,
-  globe: Globe,
-  graduation: GraduationCap,
-  home: House,
-  image: Image,
-  key: Key,
-  layers: Layers,
-  leaf: Leaf,
-  mail: Mail,
-  map: MapPin,
-  message: MessageCircle,
-  moon: Moon,
-  music: Music,
-  news: Newspaper,
-  package: Package,
-  palette: Palette,
-  pencil: Pencil,
-  plane: Plane,
-  puzzle: Puzzle,
-  rocket: Rocket,
-  settings: Settings,
-  shield: Shield,
-  shopping: ShoppingCart,
-  smile: Smile,
-  sun: Sun,
-  tag: Tag,
-  terminal: Terminal,
-  trophy: Trophy,
-  user: User,
-  users: Users,
-  utensils: Utensils,
-  wallet: Wallet,
-  tools: Wrench,
-  zap: Zap,
+/** Icons stored before the whole set was offered, by their old names. */
+const LEGACY: Record<string, string> = {
+  book: 'BookOpen',
+  checklist: 'ListChecks',
+  document: 'FileText',
+  idea: 'Lightbulb',
+  heart: 'Heart',
+  folder: 'Folder',
+  star: 'Star',
+  target: 'Target',
 };
 
-export type PageIconName = keyof typeof PAGE_ICONS;
+export const ICONS_BY_NAME = icons as Record<string, LucideIcon | undefined>;
+const byName = ICONS_BY_NAME;
 
-/** A stored icon is the name of a Lucide icon above, or an emoji character. */
-export const isPageIconName = (icon: string): icon is PageIconName => icon in PAGE_ICONS;
+/** The Lucide name of a stored icon. */
+export const iconName = (stored: string): string => LEGACY[stored] ?? stored;
+
+/** The Lucide icon a stored icon names, if it names one. Emoji do not. */
+export const lucideIcon = (stored: string): LucideIcon | undefined => byName[iconName(stored)];
+
+/** Every Lucide icon once, by name; Lucide lists some icons under several names. */
+export const ICON_NAMES: string[] = (() => {
+  const seen = new Set<LucideIcon>();
+  return Object.keys(icons)
+    .sort()
+    .filter((name) => {
+      const icon = byName[name];
+      if (!icon || seen.has(icon)) return false;
+      seen.add(icon);
+      return true;
+    });
+})();
+
+/** `BookOpen` → `Book Open`. */
+export const iconLabel = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, '$1 $2');

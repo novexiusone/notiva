@@ -51,6 +51,11 @@ pub(super) const MIGRATIONS: &[Migration] = &[
         name: "page_appearance",
         sql: include_str!("migrations/0007_page_appearance.surql"),
     },
+    Migration {
+        version: 8,
+        name: "banner_position",
+        sql: include_str!("migrations/0008_banner_position.surql"),
+    },
 ];
 
 const BOOTSTRAP: &str = "

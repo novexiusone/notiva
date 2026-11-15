@@ -15,6 +15,7 @@ export type Page = {
   isFavorite: boolean;
   icon: string | null;
   banner: string | null;
+  bannerPosition: number;
   updatedAt: string;
 };
 
@@ -155,6 +156,8 @@ export const commands = {
   setFavorite: (id: string, favorite: boolean) => invoke<Page>('set_favorite', { id, favorite }),
   updateAppearance: (id: string, icon: string | null, banner: string | null) =>
     invoke<Page>('update_appearance', { id, icon, banner }),
+  setBannerPosition: (id: string, position: number) =>
+    invoke<Page>('set_banner_position', { id, position }),
   movePage: (id: string, parentId: string | null, index: number) =>
     invoke<void>('move_page', { id, parentId, index }),
   deletePage: (id: string) => invoke<void>('delete_page', { id }),
@@ -210,6 +213,8 @@ export const commands = {
   exportAll: (directory: string) => invoke<ExportSummary>('export_all', { directory }),
 
   /** Stores an image and resolves to the URL to put into the image block. */
+  downloadImage: (url: string, destination: string) =>
+    invoke<void>('download_image', { url, destination }),
   saveImage: async (file: Blob) =>
     invoke<string>('save_image', new Uint8Array(await file.arrayBuffer())),
 };

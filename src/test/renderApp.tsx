@@ -47,6 +47,7 @@ export function page(
     isFavorite: false,
     icon: null,
     banner: null,
+    bannerPosition: 50,
     updatedAt: '2026-01-01T00:00:00Z',
   };
 }
@@ -67,6 +68,7 @@ export function database(
     isFavorite: false,
     icon: null,
     banner: null,
+    bannerPosition: 50,
     updatedAt: '2026-01-01T00:00:00Z',
   };
 }
@@ -83,6 +85,7 @@ export function row(id: string, title: string, databaseId: string, position = 0)
     isFavorite: false,
     icon: null,
     banner: null,
+    bannerPosition: 50,
     updatedAt: '2026-01-01T00:00:00Z',
   };
 }

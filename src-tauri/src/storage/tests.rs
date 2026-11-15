@@ -6,7 +6,7 @@ use super::migrations::{self, MIGRATIONS, Migration};
 use super::{DATABASE, NAMESPACE, Storage, StorageError};
 use crate::domain::PageKind;
 
-const LATEST: u32 = 7;
+const LATEST: u32 = 8;
 
 async fn storage() -> Storage {
     Storage::open_in_memory()

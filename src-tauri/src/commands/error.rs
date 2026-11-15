@@ -30,6 +30,7 @@ impl From<ImageError> for CommandError {
     fn from(error: ImageError) -> Self {
         let kind = match error {
             ImageError::TooLarge | ImageError::Unsupported => "invalid",
+            ImageError::Unknown => "not_found",
             ImageError::Io(_) => "internal",
         };
 

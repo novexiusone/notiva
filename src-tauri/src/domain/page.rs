@@ -25,6 +25,8 @@ pub struct Page {
     pub is_favorite: bool,
     pub icon: Option<String>,
     pub banner: Option<String>,
+    /// Where the cover image sits in the cover, from 0 (top) to 100 (bottom).
+    pub banner_position: u8,
     pub updated_at: String,
 }
 
@@ -53,6 +55,7 @@ mod tests {
             is_favorite: true,
             icon: Some("book".into()),
             banner: Some("notiva-image://localhost/cover.png".into()),
+            banner_position: 30,
             updated_at: "2026-11-15T00:00:00Z".into(),
         };
         let database = Page {
@@ -65,6 +68,7 @@ mod tests {
             is_favorite: false,
             icon: None,
             banner: None,
+            banner_position: 50,
             updated_at: "2026-11-15T00:00:00Z".into(),
         };
 
@@ -74,6 +78,7 @@ mod tests {
                 "id": "row", "title": "Row", "parentId": "db", "position": 1.5,
                 "kind": "page", "databaseId": "db", "isFavorite": true,
                 "icon": "book", "banner": "notiva-image://localhost/cover.png",
+                "bannerPosition": 30,
                 "updatedAt": "2026-11-15T00:00:00Z"
             })
         );
@@ -82,7 +87,7 @@ mod tests {
             json!({
                 "id": "db", "title": "", "parentId": null, "position": 0.0,
                 "kind": "database", "databaseId": null, "isFavorite": false,
-                "icon": null, "banner": null, "updatedAt": "2026-11-15T00:00:00Z"
+                "icon": null, "banner": null, "bannerPosition": 50, "updatedAt": "2026-11-15T00:00:00Z"
             })
         );
     }

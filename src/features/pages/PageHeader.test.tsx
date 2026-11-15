@@ -83,7 +83,7 @@ describe('page appearance', () => {
 
     await user.click(await within(main).findByRole('button', { name: 'Add icon' }));
     await user.click(await screen.findByRole('tab', { name: 'Icons' }));
-    await user.click(await screen.findByRole('button', { name: 'book' }));
+    await user.click(await screen.findByRole('button', { name: 'Book Open' }));
 
     expect(main.querySelector('.lucide-book-open')).toBeInTheDocument();
     expect(document.querySelector('[role="treeitem"] .lucide-book-open')).toBeInTheDocument();
@@ -110,5 +110,78 @@ describe('page appearance', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'Add icon' }));
 
     expect(await screen.findByRole('textbox', { name: 'Filter…' })).toBeInTheDocument();
+  });
+});
+
+describe('the cover', () => {
+  const IMAGE = 'data:image/png;base64,iVBORw0KGgo=';
+  const withCover = (banner: string) => [{ ...page('a', 'Alpha'), banner }];
+
+  it('is chosen from the gallery after "Add cover"', async () => {
+    const { user } = renderApp({ pages: [page('a', 'Alpha')], path: '/page/a' });
+    const main = await screen.findByRole('main');
+
+    await user.click(await within(main).findByRole('button', { name: 'Add cover' }));
+    expect(await screen.findByText('Color & Gradient')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Coral' }));
+
+    expect(await within(main).findByRole('img', { name: 'Page cover' })).toBeInTheDocument();
+    expect(within(main).queryByRole('button', { name: 'Add cover' })).toBeNull();
+  });
+
+  it('has Change, Reposition and Download over an image', async () => {
+    renderApp({ pages: withCover(IMAGE), path: '/page/a' });
+    const toolbar = await screen.findByRole('toolbar', { name: 'Cover' });
+
+    for (const name of ['Change', 'Reposition', 'Download']) {
+      expect(within(toolbar).getByRole('button', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('can only be changed when it is from the gallery', async () => {
+    renderApp({ pages: withCover('gallery:azure'), path: '/page/a' });
+    const toolbar = await screen.findByRole('toolbar', { name: 'Cover' });
+
+    expect(within(toolbar).getByRole('button', { name: 'Change' })).toBeInTheDocument();
+    expect(within(toolbar).queryByRole('button', { name: 'Reposition' })).toBeNull();
+    expect(within(toolbar).queryByRole('button', { name: 'Download' })).toBeNull();
+  });
+
+  it('is repositioned with the arrow keys and the position is kept', async () => {
+    const { user } = renderApp({ pages: withCover(IMAGE), path: '/page/a' });
+
+    await user.click(await screen.findByRole('button', { name: 'Reposition' }));
+    const slider = await screen.findByRole('slider', { name: 'Cover position' });
+    expect(slider).toHaveAttribute('aria-valuenow', '50');
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(slider).toHaveAttribute('aria-valuenow', '40');
+    await user.click(screen.getByRole('button', { name: 'Save position' }));
+
+    expect(screen.queryByRole('slider')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Reposition' }));
+    expect(await screen.findByRole('slider')).toHaveAttribute('aria-valuenow', '40');
+  });
+
+  it('keeps its position when repositioning is cancelled', async () => {
+    const { user } = renderApp({ pages: withCover(IMAGE), path: '/page/a' });
+
+    await user.click(await screen.findByRole('button', { name: 'Reposition' }));
+    await screen.findByRole('slider');
+    await user.keyboard('{ArrowUp}');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Reposition' }));
+
+    expect(await screen.findByRole('slider')).toHaveAttribute('aria-valuenow', '50');
+  });
+
+  it('is removed from the picker', async () => {
+    const { user } = renderApp({ pages: withCover(IMAGE), path: '/page/a' });
+    const main = await screen.findByRole('main');
+
+    await user.click(await screen.findByRole('button', { name: 'Change' }));
+    await user.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    expect(within(main).queryByRole('img', { name: 'Page cover' })).toBeNull();
+    expect(await within(main).findByRole('button', { name: 'Add cover' })).toBeInTheDocument();
   });
 });
