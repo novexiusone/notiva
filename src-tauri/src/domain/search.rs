@@ -6,7 +6,8 @@ use serde::Serialize;
 pub struct SearchHit {
     pub page_id: String,
     pub title: String,
-    /// Text from the page that matches. Absent when only the title matched.
+    /// Content or property text that matches. Absent when only the title
+    /// matched.
     pub excerpt: Option<Vec<Segment>>,
 }
 
@@ -21,6 +22,11 @@ pub struct Segment {
 /// index. Private-use characters, so they cannot occur in what people write.
 pub const MATCH_START: char = '\u{E000}';
 pub const MATCH_END: char = '\u{E001}';
+
+/// Separates the properties in the text a row is searched by, one per line.
+const PROPERTY_LINE: char = '\n';
+/// Joins the matching properties in an excerpt.
+const PROPERTY_JOIN: &str = " · ";
 
 const BEFORE: usize = 60;
 const AFTER: usize = 120;
@@ -102,6 +108,23 @@ pub fn excerpt(marked: &str) -> Vec<Segment> {
     }
 
     segments
+}
+
+/// The excerpt of a row found by its properties, from its marked search
+/// text: the properties with a match, joined with ` · `, cut like any other
+/// excerpt. Without a marked property every property is shown.
+pub fn property_excerpt(marked: &str) -> Vec<Segment> {
+    let lines: Vec<&str> = marked.split(PROPERTY_LINE).collect();
+    let matching: Vec<&str> = lines
+        .iter()
+        .copied()
+        .filter(|line| line.contains(MATCH_START))
+        .collect();
+    if matching.is_empty() {
+        excerpt(&lines.join(PROPERTY_JOIN))
+    } else {
+        excerpt(&matching.join(PROPERTY_JOIN))
+    }
 }
 
 #[cfg(test)]
@@ -208,6 +231,42 @@ mod tests {
         ))));
 
         assert!(shown.contains("[Übung]"), "{shown}");
+    }
+
+    #[test]
+    fn a_property_excerpt_keeps_only_the_matching_properties() {
+        assert_eq!(
+            show(&property_excerpt(&mark(
+                "Notes: a [long] fermentation\nStatus: Open\nOwner: [Lo]renz"
+            ))),
+            "Notes: a [long] fermentation · Owner: [Lo]renz"
+        );
+        assert_eq!(
+            show(&property_excerpt(&mark("Notes: bread\nStatus: [Done]"))),
+            "Status: [Done]"
+        );
+    }
+
+    #[test]
+    fn a_property_excerpt_without_a_marked_property_shows_them_all() {
+        assert_eq!(
+            show(&property_excerpt("Notes: bread\nStatus: Done")),
+            "Notes: bread · Status: Done"
+        );
+    }
+
+    #[test]
+    fn a_long_property_excerpt_is_cut_like_any_other() {
+        let notes = format!(
+            "Notes: {}[needle]{}",
+            "word ".repeat(40),
+            " tail".repeat(60)
+        );
+        let shown = show(&property_excerpt(&mark(&notes)));
+
+        assert!(shown.starts_with("…word "), "{shown}");
+        assert!(shown.contains("word [needle] tail"), "{shown}");
+        assert!(shown.ends_with("tail…"), "{shown}");
     }
 
     #[test]

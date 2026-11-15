@@ -6,7 +6,7 @@ use super::migrations::{self, MIGRATIONS, Migration};
 use super::{DATABASE, NAMESPACE, Storage, StorageError};
 use crate::domain::PageKind;
 
-const LATEST: u32 = 8;
+const LATEST: u32 = 10;
 
 async fn storage() -> Storage {
     Storage::open_in_memory()
@@ -604,6 +604,160 @@ async fn full_text_search_finds_block_text_and_page_titles() {
 
     assert_eq!(blocks, ["Sourdough needs a long <b>fermentation</b>"]);
     assert_eq!(pages, ["Travel plans"]);
+}
+
+/// The search text of every page that has one, by id.
+async fn props_texts(storage: &Storage) -> Vec<(String, String)> {
+    #[derive(SurrealValue)]
+    struct Text {
+        id: String,
+        text: String,
+    }
+    let texts: Vec<Text> = storage
+        .db
+        .query(
+            "SELECT record::id(id) AS id, props_text AS text FROM page
+                 WHERE props_text != NONE ORDER BY id",
+        )
+        .await
+        .unwrap()
+        .take(0)
+        .unwrap();
+    texts.into_iter().map(|text| (text.id, text.text)).collect()
+}
+
+#[tokio::test]
+async fn a_database_at_version_5_migrates_and_its_rows_are_found_by_their_properties() {
+    const ROWS: usize = 2_000;
+
+    // A database as schema version 5 left it, with rows that have values of
+    // every kind, values that no longer fit, no values at all, and many rows.
+    let db = Surreal::new::<surrealdb::engine::local::Mem>(())
+        .await
+        .unwrap();
+    db.use_ns(NAMESPACE).use_db(DATABASE).await.unwrap();
+    migrations::run(&db, &MIGRATIONS[..5]).await.unwrap();
+    db.query(
+        "CREATE page:ordinary SET title = 'Ordinary status notes', position = 0.0;
+         CREATE page:tasks SET title = 'Tasks', kind = 'database', position = 1.0;
+         CREATE page:empty_database SET title = 'Empty', kind = 'database', position = 2.0;
+         CREATE property:status SET database = page:tasks, name = 'Status', type = 'select',
+             position = 1.0, options = [
+                 { id: 'open', name: 'Open', color: 'green' },
+                 { id: 'unnamed', name: '', color: 'gray' }
+             ];
+         CREATE property:notes SET database = page:tasks, name = 'Notes', type = 'text',
+             position = 0.0;
+         CREATE property:amount SET database = page:tasks, name = 'Amount', type = 'number',
+             position = 2.0;
+         CREATE property:due SET database = page:tasks, name = 'Due', type = 'date',
+             position = 3.0;
+         CREATE page:filled SET title = 'Filled', parent = page:tasks, database = page:tasks,
+             position = 0.0, props = {
+                 notes: 'Sourdough\nstarter', status: 'open', amount: 3.0, due: '2026-11-14',
+                 gone: 'a property that was deleted'
+             };
+         CREATE page:stale SET title = 'Stale', parent = page:tasks, database = page:tasks,
+             position = 1.0, props = { notes: 5.0, status: 'missing', amount: 'text' };
+         CREATE page:unnamed SET title = 'Unnamed', parent = page:tasks, database = page:tasks,
+             position = 2.0, props = { status: 'unnamed', notes: '  ' };
+         CREATE page:bare SET title = 'Bare', parent = page:tasks, database = page:tasks,
+             position = 3.0;
+         FOR $index IN 0..$rows {
+             CREATE type::record('page', 'many' + <string> $index) SET title = 'Many',
+                 parent = page:tasks, database = page:tasks, position = 10.0 + $index,
+                 props = { notes: 'bulk ' + <string> $index };
+         };",
+    )
+    .bind(("rows", ROWS as i64))
+    .await
+    .unwrap()
+    .check()
+    .unwrap();
+
+    migrations::run(&db, MIGRATIONS).await.unwrap();
+    let storage = Storage { db };
+
+    assert_eq!(
+        migrations::current_version(&storage.db).await.unwrap(),
+        LATEST
+    );
+    let texts = props_texts(&storage).await;
+    assert_eq!(texts.len(), 4 + ROWS);
+    let text = |id: &str| {
+        texts
+            .iter()
+            .find(|(page, _)| page == id)
+            .map(|(_, text)| text.as_str())
+    };
+    assert_eq!(
+        text("filled"),
+        Some("Notes: Sourdough starter\nStatus: Open")
+    );
+    assert_eq!(text("stale"), Some(""));
+    assert_eq!(text("unnamed"), Some(""));
+    assert_eq!(text("bare"), Some(""));
+    assert_eq!(text("many1999"), Some("Notes: bulk 1999"));
+    assert_eq!(text("ordinary"), None);
+    assert_eq!(text("tasks"), None);
+
+    let hits = storage.search("sourd").await.unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].page_id, "filled");
+    assert_eq!(storage.search("1999").await.unwrap()[0].page_id, "many1999");
+
+    // What the migration wrote is what the repository computes, row by row.
+    let properties = storage.load_database("tasks").await.unwrap().properties;
+    let rows: Vec<(String, Option<serde_json::Value>)> = {
+        #[derive(SurrealValue)]
+        struct Stored {
+            id: String,
+            props: Option<serde_json::Value>,
+        }
+        let stored: Vec<Stored> = storage
+            .db
+            .query("SELECT record::id(id) AS id, props FROM page WHERE database = page:tasks")
+            .await
+            .unwrap()
+            .take(0)
+            .unwrap();
+        stored.into_iter().map(|row| (row.id, row.props)).collect()
+    };
+    assert_eq!(rows.len(), 4 + ROWS);
+    for (id, props) in &rows {
+        let props = props
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        assert_eq!(
+            text(id),
+            Some(super::rows::props_text(&properties, &props).as_str()),
+            "{id}"
+        );
+    }
+    // The functions the migration used are gone again.
+    let functions: serde_json::Value = storage
+        .db
+        .query("INFO FOR DB")
+        .await
+        .unwrap()
+        .take::<Option<serde_json::Value>>(0)
+        .unwrap()
+        .unwrap()["functions"]
+        .clone();
+    assert_eq!(functions, serde_json::json!({}), "{functions}");
+
+    // And a cell written now gives the same text.
+    storage
+        .set_cell(
+            "filled",
+            "notes",
+            crate::domain::CellValue::Text("Sourdough\nstarter".into()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(props_texts(&storage).await, texts);
 }
 
 /// The repository layer is the only place that may know SurrealDB.
