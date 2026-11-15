@@ -22,6 +22,10 @@ pub struct Page {
     pub kind: PageKind,
     /// Set on the rows of a database, otherwise `None`.
     pub database_id: Option<String>,
+    pub is_favorite: bool,
+    pub icon: Option<String>,
+    pub banner: Option<String>,
+    pub updated_at: String,
 }
 
 /// A reference to a page: enough to show it in a list and open it.
@@ -46,6 +50,10 @@ mod tests {
             position: 1.5,
             kind: PageKind::Page,
             database_id: Some("db".into()),
+            is_favorite: true,
+            icon: Some("book".into()),
+            banner: Some("notiva-image://localhost/cover.png".into()),
+            updated_at: "2026-11-15T00:00:00Z".into(),
         };
         let database = Page {
             id: "db".into(),
@@ -54,20 +62,27 @@ mod tests {
             position: 0.0,
             kind: PageKind::Database,
             database_id: None,
+            is_favorite: false,
+            icon: None,
+            banner: None,
+            updated_at: "2026-11-15T00:00:00Z".into(),
         };
 
         assert_eq!(
             serde_json::to_value(&row).unwrap(),
             json!({
                 "id": "row", "title": "Row", "parentId": "db", "position": 1.5,
-                "kind": "page", "databaseId": "db"
+                "kind": "page", "databaseId": "db", "isFavorite": true,
+                "icon": "book", "banner": "notiva-image://localhost/cover.png",
+                "updatedAt": "2026-11-15T00:00:00Z"
             })
         );
         assert_eq!(
             serde_json::to_value(&database).unwrap(),
             json!({
                 "id": "db", "title": "", "parentId": null, "position": 0.0,
-                "kind": "database", "databaseId": null
+                "kind": "database", "databaseId": null, "isFavorite": false,
+                "icon": null, "banner": null, "updatedAt": "2026-11-15T00:00:00Z"
             })
         );
     }

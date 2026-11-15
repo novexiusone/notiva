@@ -2,47 +2,64 @@
 
 ## Objective
 
-The user can build a hierarchy of pages: create a page, nest it under another one, rename it, move it and delete it. The sidebar shows the hierarchy as a tree, and clicking a page opens it in the main area.
+The user can build a hierarchy of pages: create a page, nest it under another one, rename it, move it and delete it. The sidebar shows the hierarchy as a tree, and clicking a page opens it in the main area. Favourite pages also have a flat list of shortcuts, and a page can have an icon and an image banner.
 
-A page has a title only. Its content is the `editor` module's job; until then the page shows its title and an empty body.
+A page's content is the `editor` module's job; a database's table belongs to `databases`. This module owns the shared page shell, its appearance and its actions.
 
 ## Tech stack
 
-| Area              | Choice                                                         |
-| ----------------- | -------------------------------------------------------------- |
-| Tree              | react-arborist (virtualised, drag and drop, inline rename)     |
-| Routing           | TanStack Router, code-based routes, hash history               |
-| Menus and dialogs | shadcn/ui `dropdown-menu` and `alert-dialog`                   |
-| Data fetching     | TanStack Query on top of the page commands                     |
-| End-to-end tests  | Playwright against the frontend with an in-memory fake backend |
+| Area              | Choice                                                                       |
+| ----------------- | ---------------------------------------------------------------------------- |
+| Tree              | react-arborist (virtualised, drag and drop, inline rename)                   |
+| Routing           | TanStack Router, code-based routes, hash history                             |
+| Menus and dialogs | shadcn/ui `dropdown-menu` and `alert-dialog`                                 |
+| Icons and banners | Curated Lucide icons; local images through the existing `save_image` command |
+| Data fetching     | TanStack Query on top of the page commands                                   |
+| End-to-end tests  | Playwright against the frontend with an in-memory fake backend               |
 
 ## Behaviour
 
-- **Create.** The `+` in the "Pages" header creates a top-level page. The `+` on a row creates a subpage and expands the row. A new page is titled "Untitled", is opened immediately and has its title focused.
-- **Open.** Clicking a row opens the page at `/page/<id>`. The open page is highlighted in the tree.
+- **Create.** The `+` in the "Private" header creates a top-level page. The `+` on a row creates a subpage and expands the row. A new page is titled "Untitled", is opened immediately and has its title focused.
+- **Open.** Clicking a row opens the page at `/page/<id>`. The open page is highlighted in the tree and in Favourites when present there.
 - **Rename.** The title in the main area is editable; the tree follows as you type. "Rename" in the row menu edits the name inline in the tree. An empty title is stored as an empty string and shown as "Untitled".
 - **Move.** Rows can be dragged to reorder them or to drop them into another page. A page cannot be dropped into itself or into one of its descendants.
-- **Delete.** "Delete" in the row menu asks for confirmation and names the number of subpages that go with it. Deleting removes the page and its subpages. If the open page is among them, the app goes back to home.
-- **Restart.** The tree comes from the database. The last opened page and the expanded rows are remembered locally and restored at startup; a remembered page that no longer exists is ignored.
+- **Delete.** "Delete" in the row or page menu asks for confirmation and names the number of subpages that go with it. Deleting removes the page and its subpages, including any favourite shortcuts. If the open page is among them, the app goes back to home.
+- **Favourites.** "Favourites" sits above "Private" and links directly to every favourited page in page-tree order. A favourite still appears in Private. The star in the open page's header toggles the state, which survives a restart. The section and its empty hint take little space when there are no favourites.
+- **Appearance.** A page can have one icon from the module's curated Lucide set and one local PNG, JPEG, GIF or WebP banner of at most 20 MiB. The icon appears above the title and in the sidebar. The banner spans the top of the page. Either can be removed independently; changing appearance does not change the document.
+- **Header.** At the top right of an open page, from left to right, are the localised relative last-edited time, the favourite star and a three-dot menu. The menu offers the page and appearance actions. The time comes from `updatedAt`, which title, content, cell and appearance changes advance; favouriting alone does not.
+- **Restart.** The tree, favourites and appearance come from the database. The last opened page and the expanded rows are remembered locally and restored at startup; a remembered page that no longer exists is ignored.
 
 There is no trash yet (#25), so deleting is final. The confirmation says so.
 
 ## Commands
 
-| Command       | Arguments                                                 | Returns  |
-| ------------- | --------------------------------------------------------- | -------- |
-| `list_pages`  | none                                                      | `Page[]` |
-| `create_page` | `parentId: string \| null`                                | `Page`   |
-| `rename_page` | `id: string`, `title: string`                             | `Page`   |
-| `move_page`   | `id: string`, `parentId: string \| null`, `index: number` | nothing  |
-| `delete_page` | `id: string`                                              | nothing  |
+| Command             | Arguments                                                      | Returns  |
+| ------------------- | -------------------------------------------------------------- | -------- |
+| `list_pages`        | none                                                           | `Page[]` |
+| `create_page`       | `parentId: string \| null`                                     | `Page`   |
+| `rename_page`       | `id: string`, `title: string`                                  | `Page`   |
+| `set_favorite`      | `id: string`, `favorite: boolean`                              | `Page`   |
+| `update_appearance` | `id: string`, `icon: string \| null`, `banner: string \| null` | `Page`   |
+| `move_page`         | `id: string`, `parentId: string \| null`, `index: number`      | nothing  |
+| `delete_page`       | `id: string`                                                   | nothing  |
 
 ```ts
-type Page = { id: string; title: string; parentId: string | null; position: number };
+type Page = {
+  id: string;
+  title: string;
+  parentId: string | null;
+  position: number;
+  isFavorite: boolean;
+  icon: string | null;
+  banner: string | null;
+  updatedAt: string;
+};
 ```
 
-- `list_pages` returns every page as a flat list ordered by position. The frontend builds the tree. At 10,000 pages this takes about 9 ms in the database (#11).
-- `create_page` appends the page after its last sibling.
+- `list_pages` returns every page as a flat list ordered by position. The frontend builds the tree and filters the flat favourites list from the same result. At 10,000 pages `list_pages` took a median of 87 to 154 ms and a p95 of 143 to 195 ms, under the 200 ms target (#62: three runs on 2026-11-14, SurrealDB 4.0.1, one machine under heavy load). A research run on 2026-11-12 measured 45 to 53 ms. The 9 ms quoted here before came from a simpler query, `SELECT id, title, parent, position FROM page`, which skips what `list_pages` adds: the ids as strings, `kind`, `database`, the ordering by position, and reading the rows into `Page`. That query took 14 to 24 ms in the same runs. With the 10,000 rows of a database also present, `list_pages` took a median of 255 to 314 ms, which is over the target (see `SPEC-databases.md`, "Performance targets").
+- `create_page` appends the page after its last sibling. New pages are unfavourited and have no icon or banner.
+- `set_favorite` changes only `isFavorite`, not `updatedAt`.
+- `update_appearance` replaces both appearance values and advances `updatedAt`; the caller keeps the current value of the field it is not changing. Empty icon or banner strings are invalid. Only image URLs returned by `save_image` are used as banners.
 - `move_page` places the page at `index` among the children of `parentId` and renumbers those siblings. It fails when the target is the page itself or one of its descendants.
 - Errors reach the frontend as `{ kind: 'not_found' | 'invalid' | 'internal', message: string }`.
 
@@ -64,9 +81,12 @@ src/
   features/pages/
     api.ts                → query and mutation hooks
     tree.ts               → flat list → tree, descendant count
-    PageTree.tsx          → the sidebar tree
+    PageTree.tsx          → Private: the complete sidebar tree
+    Favourites.tsx        → flat favourite shortcuts
     PageRow.tsx           → one row: title, `+`, menu
-    PageView.tsx          → the open page: editable title
+    PageView.tsx          → the open page and its shell
+    PageHeader.tsx        → last edited, star and page menu
+    PageAppearance.tsx    → icon picker, banner and image input
     DeletePageDialog.tsx
   test/fakeBackend.ts     → in-memory implementation of the commands
 e2e/pages.spec.ts
@@ -86,16 +106,16 @@ Components get their data from the hooks in `api.ts`, never from `commands` dire
 
 ## Testing strategy
 
-- **Repository tests** (in-memory database): creation order, rename, move within and across parents, rejected moves, cascading delete, unknown ids.
+- **Repository tests** (in-memory database): creation order, rename, move within and across parents, rejected moves, cascading delete, favourites, appearance, timestamps and unknown ids.
 - **Unit tests** for `tree.ts`.
-- **Component tests** for the tree and the page view against the fake backend.
-- **End-to-end** with Playwright: create, rename, nest, reload and delete, in a real browser against the fake backend. This cannot drive the Tauri window; the Rust side is covered by the repository tests.
-- The fake backend implements the same rules as the repository (ordering, renumbering, cascade). It only exists in development and test builds.
+- **Component tests** for the tree, favourites and page header against the fake backend, including keyboard operation.
+- **End-to-end** with Playwright: create, rename, nest, favourite, choose an icon and banner, reload and delete, in a real browser against the fake backend. This cannot drive the Tauri window; the Rust side is covered by the repository tests.
+- The fake backend implements the same rules as the repository (ordering, renumbering, cascade, favourites and appearance). It only exists in development and test builds.
 
 ## Boundaries
 
-- **Always:** Keep the fake backend in step with the commands. Validate moves in the backend, not only in the UI.
-- **Ask first:** Changing the meaning of `position` or the page id format.
+- **Always:** Keep the fake backend in step with the commands. Validate moves in the backend, not only in the UI. Add page fields through a new additive migration and keep the fake backend compatible with pages written before those fields existed.
+- **Ask first:** Changing the meaning of `position` or the page id format. Adding remote-image banners or another icon set.
 - **Never:** Ship the fake backend in a production build.
 
 ## Success criteria
@@ -105,6 +125,8 @@ Components get their data from the hooks in `api.ts`, never from `commands` dire
 - [ ] Renaming works from the title and from the tree (#12)
 - [ ] Deleting asks for confirmation and removes the page with its subpages (#12)
 - [ ] The tree and the last opened page survive a restart (#12)
+- [ ] Favourites appear above Private and survive a restart (#95)
+- [ ] Icons, banners and the last-edited/star/menu header work and survive a restart (#96)
 
 ## Open questions
 

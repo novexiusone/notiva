@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { MoreHorizontal, Plus } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { adjustMoveIndex, Tree, type CursorProps, type TreeApi } from 'react-arborist';
 import { useTranslation } from 'react-i18next';
 import {
@@ -69,6 +69,15 @@ export function PageTree() {
   const list = useMemo(() => pages.data ?? [], [pages.data]);
   const nodes = useMemo(() => buildTree(list), [list]);
 
+  useEffect(() => {
+    let parentId = list.find((page) => page.id === openPageId)?.parentId;
+    while (parentId) {
+      tree.current?.open(parentId);
+      rememberOpenPage(parentId, true);
+      parentId = list.find((page) => page.id === parentId)?.parentId ?? null;
+    }
+  }, [list, openPageId]);
+
   const open = (id: string) => navigate({ to: '/page/$pageId', params: { pageId: id } });
 
   const create = async (parentId: string | null, kind: Page['kind'] = 'page') => {
@@ -107,9 +116,9 @@ export function PageTree() {
   const pageToDelete = list.find((page) => page.id === pendingDelete);
 
   return (
-    <section className="mt-5 flex min-h-0 flex-1 flex-col">
+    <section className="mt-3 flex min-h-0 flex-1 flex-col">
       <header className="flex h-7 items-center pr-3 pl-4">
-        <h2 className="text-muted-foreground flex-1 text-xs font-medium">{t('sidebar.pages')}</h2>
+        <h2 className="text-muted-foreground flex-1 text-xs font-medium">{t('sidebar.private')}</h2>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" aria-label={t('sidebar.pagesMenu')} className={headerButton}>

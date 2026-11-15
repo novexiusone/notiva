@@ -319,6 +319,43 @@ impl Storage {
 }
 
 #[cfg(test)]
+impl Storage {
+    /// Adds `count` rows titled "Row 0", "Row 1", … to a database in one
+    /// query, each with the text "Value <n>" in the property `property_id`
+    /// and one paragraph "Content <n>". Only for tests that need many rows,
+    /// which `create_row` and `save_blocks` make slow.
+    pub(crate) async fn seed_rows(
+        &self,
+        database_id: &str,
+        property_id: &str,
+        count: usize,
+    ) -> Result<(), StorageError> {
+        self.db
+            .query(
+                "LET $database = type::record('page', $id);
+                 FOR $index IN $indexes {
+                     LET $row = (CREATE ONLY page SET
+                         title = string::concat('Row ', <string> $index),
+                         parent = $database, database = $database,
+                         position = <float> $index RETURN VALUE id);
+                     UPDATE $row SET props[$key] = string::concat('Value ', <string> $index)
+                         RETURN NONE;
+                     LET $text = string::concat('Content ', <string> $index);
+                     CREATE block SET page = $row, position = 0.0, type = 'paragraph',
+                         content = [{ type: 'text', text: $text, styles: {} }], text = $text
+                         RETURN NONE;
+                 };",
+            )
+            .bind(("id", database_id.to_owned()))
+            .bind(("key", property_id.to_owned()))
+            .bind(("indexes", (0..count as i64).collect::<Vec<_>>()))
+            .await?
+            .check()?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use serde_json::{Map, json};
 

@@ -10,7 +10,7 @@ Tracking issue: #19.
 
 ## Decisions and what they rest on
 
-The numbers were measured on 2026-11-12 with SurrealDB 4.0.1 on disk, in the benchmark profile, with 10,000 ordinary pages and one database of 10,000 rows with seven properties. They come from a research run, not from the project's benchmark; #62 adds them to the benchmark.
+The numbers were measured on 2026-11-12 with SurrealDB 4.0.1 on disk, in the benchmark profile, with 10,000 ordinary pages and one database of 10,000 rows with seven properties. They come from a research run, not from the project's benchmark. What `just benchmark` measured since is under "Performance targets".
 
 | Decision                                                                         | Why                                                                                                                                                                              |
 | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -245,17 +245,22 @@ Three behaviours of SurrealDB 4.0.1 that the research run found:
 
 ## Performance targets
 
-Database with 10,000 rows, benchmark profile. "Research" is the research run; "Benchmark" is filled in by #62.
+Database with 10,000 rows, benchmark profile. "Research" is the research run. "Benchmark" is `just benchmark` (#62). It was run three times on 2026-11-14 with SurrealDB 4.0.1 on disk, on one machine (Apple M2 Max, 12 cores, 32 GiB). The machine was busy with other work during all three runs (load average 15 to 40), so the numbers are higher and noisier than on an idle machine. For comparison, the raw page tree query that measured 9 to 10.5 ms before took 14 to 24 ms here. Each cell gives the range of the medians over the three runs, then the range of the p95 values. The benchmark seeds 10,000 ordinary pages and one database with seven properties (two text, two number, one date, two select), every cell filled and three blocks per row. It measures through the repository methods. Missed targets are marked **missed**.
 
-| Measurement                        | Target | Research                               | Benchmark |
-| ---------------------------------- | ------ | -------------------------------------- | --------- |
-| Load all rows                      | 100 ms | 45 ms                                  |           |
-| Rows plus 20,000 relation edges    | 200 ms | 45 ms + 53 ms                          |           |
-| Write one cell                     | 50 ms  | 7 ms                                   |           |
-| Create a row                       | 50 ms  | 31 to 35 ms with today's `create_page` |           |
-| `list_pages` with the rows present | 200 ms | 101 ms                                 |           |
-| Delete a property / change a type  | report | 513 ms / 536 ms                        |           |
-| Delete the database                | report | 13.8 s in one transaction              |           |
+| Measurement                                             | Target | Research                               | Benchmark                                                                                                 |
+| ------------------------------------------------------- | ------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Load all rows (`list_rows`)                             | 100 ms | 45 ms                                  | median 76 to 93 ms, p95 115 to 156 ms: **missed** at p95                                                  |
+| Rows plus 20,000 relation edges                         | 200 ms | 45 ms + 53 ms                          |                                                                                                           |
+| Write one cell (`set_cell`, text, number, date, select) | 50 ms  | 7 ms                                   | median 8 to 10 ms, p95 12 to 23 ms                                                                        |
+| Create a row (`create_row`)                             | 50 ms  | 31 to 35 ms with today's `create_page` | median 39 to 54 ms, p95 68 to 103 ms: **missed**                                                          |
+| `list_pages` with the rows present (20,002 pages)       | 200 ms | 101 ms                                 | median 255 to 314 ms, p95 356 to 436 ms: **missed**                                                       |
+| `load_database` (seven properties, one view)            | report |                                        | median 0.3 to 1.0 ms                                                                                      |
+| Delete a select option (2,500 cells emptied)            | report |                                        | 260 to 407 ms                                                                                             |
+| Delete a property / change a type text to number        | report | 513 ms / 536 ms                        | 789 to 1,132 ms / 770 to 988 ms                                                                           |
+| Delete the database (`delete_page`)                     | report | 13.8 s in one transaction              | 26.6 to 31.0 s in chunks of 500, with 30,000 blocks                                                       |
+| Size on disk                                            | report |                                        | 481 to 497 MiB for the pages, 530 MiB with the database (+33 to 49 MiB); 546 to 562 MiB after deleting it |
+
+`list_pages` with the 10,000 ordinary pages alone took a median of 87 to 154 ms and a p95 of 143 to 195 ms in the same runs. The rows roughly double it. The "rows stay in `list_pages`" decision above names 200 ms as the point to revisit it, and the benchmark is past that point. The machine was loaded, so check this on an idle machine before acting on it. The size on disk does not shrink when the database is deleted, because the storage engine appends deletions. Deleting the database took longer here than the 17.5 s measured for #59, probably because of the load.
 
 Not measured: how long the WebView takes to parse the 2 MiB that 10,000 rows are as JSON, and databases with long text cells.
 

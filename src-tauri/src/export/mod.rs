@@ -1,16 +1,17 @@
 //! Export to Markdown: reads pages, blocks and images and writes them as
 //! plain files into a new folder.
 
+mod database;
 mod layout;
 mod markdown;
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::Serialize;
 
-use crate::domain::Page;
+use crate::domain::{Block, Page, PageKind};
 use crate::media::{self, ImageStore};
 use crate::storage::{Storage, StorageError};
 
@@ -122,11 +123,41 @@ async fn write(
     // The image files that the exported pages refer to.
     let used_images: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
 
+    let by_id: HashMap<&str, &Page> = pages.iter().map(|page| (page.id.as_str(), page)).collect();
+    // The rows of the databases read so far that are still to be written.
+    let mut rows: HashMap<String, RowFile> = HashMap::new();
+    let mut loaded: HashSet<String> = HashSet::new();
+
     for page_id in &layout.order {
         let Some(path) = layout.path(page_id) else {
             continue;
         };
-        let blocks = storage.load_blocks(page_id).await?;
+        let page = by_id.get(page_id.as_str()).copied();
+        let title = page.map_or("", |page| page.title.as_str());
+
+        // A database and its rows are read together, the first time either
+        // is reached: usually the database, a row when the export starts at it.
+        let database_id = match page {
+            Some(page) if page.kind == PageKind::Database => Some(page.id.as_str()),
+            Some(page) => page.database_id.as_deref(),
+            None => None,
+        };
+        let mut table = None;
+        if let Some(database_id) = database_id
+            && loaded.insert(database_id.to_owned())
+        {
+            let (text, files) = read_database(storage, &layout, database_id).await?;
+            rows.extend(files);
+            table = Some(text);
+        }
+        let source = if page.is_some_and(|page| page.kind == PageKind::Database) {
+            // Read just above, since a database comes before its rows.
+            Source::Table(table.unwrap_or_default())
+        } else if let Some(row) = rows.remove(page_id) {
+            Source::Row(row)
+        } else {
+            Source::Page(storage.load_blocks(page_id).await?)
+        };
 
         let context = markdown::Context {
             page_link: &|target| match (titles.get(target), layout.link(page_id, target)) {
@@ -139,6 +170,20 @@ async fn write(
                 },
                 (None, _) => markdown::PageLink::Deleted,
             },
+            database_link: &|target| match by_id.get(target) {
+                Some(database) if database.kind == PageKind::Database => {
+                    match layout.link(page_id, target) {
+                        Some(path) => markdown::PageLink::File {
+                            title: database.title.clone(),
+                            path,
+                        },
+                        None => markdown::PageLink::Outside {
+                            title: database.title.clone(),
+                        },
+                    }
+                }
+                _ => markdown::PageLink::Deleted,
+            },
             image: &|url| match url.strip_prefix(&image_prefix) {
                 Some(file) => {
                     used_images.lock().unwrap().insert(file.to_owned());
@@ -149,11 +194,11 @@ async fn write(
                 None => url.to_owned(),
             },
         };
-        let text = markdown::page(
-            titles.get(page_id.as_str()).copied().unwrap_or(""),
-            &blocks,
-            &context,
-        );
+        let text = match source {
+            Source::Table(text) => text,
+            Source::Row(row) => markdown::row(title, &row.properties, &row.blocks, &context),
+            Source::Page(blocks) => markdown::page(title, &blocks, &context),
+        };
 
         let file = path
             .iter()
@@ -178,12 +223,65 @@ async fn write(
     Ok((layout.order.len(), image_count))
 }
 
+/// What the file of a page is written from.
+enum Source {
+    /// The Markdown of a database's table, ready to be written.
+    Table(String),
+    Row(RowFile),
+    Page(Vec<Block>),
+}
+
+/// What the file of a row is made of, read together with its database.
+struct RowFile {
+    /// The list of its properties, as Markdown.
+    properties: String,
+    blocks: Vec<Block>,
+}
+
+/// Reads a database with a fixed number of queries, however many rows it
+/// has, and returns the Markdown of its table and the files of its rows by
+/// row id.
+async fn read_database(
+    storage: &Storage,
+    layout: &layout::Layout,
+    database_id: &str,
+) -> Result<(String, HashMap<String, RowFile>), ExportError> {
+    let loaded = storage.load_database(database_id).await?;
+    let properties = loaded.properties;
+    let listed = storage.list_rows(database_id).await?;
+    let mut blocks = storage.load_row_blocks(database_id).await?;
+
+    let mut table_rows = Vec::with_capacity(listed.len());
+    let mut files = HashMap::with_capacity(listed.len());
+    for row in listed {
+        let values: Vec<String> = properties
+            .iter()
+            .map(|property| database::value(property, row.cells.get(&property.id)))
+            .collect();
+        files.insert(
+            row.id.clone(),
+            RowFile {
+                properties: database::property_list(&properties, &values),
+                blocks: blocks.remove(&row.id).unwrap_or_default(),
+            },
+        );
+        table_rows.push(database::TableRow {
+            link: layout.link(database_id, &row.id),
+            title: row.title,
+            values,
+        });
+    }
+
+    let text = database::table(&loaded.page.title, &properties, &table_rows);
+    Ok((text, files))
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::{Map, Value, json};
 
     use super::*;
-    use crate::domain::Block;
+    use crate::domain::{CellValue, PropertyType, SelectOption};
 
     const PNG: &[u8] = b"\x89PNG\r\n\x1a\nrest of the file";
 
@@ -220,6 +318,87 @@ mod tests {
         async fn export(&self, scope: Scope<'_>) -> Result<ExportSummary, ExportError> {
             export(&self.storage, &self.images, scope, &self.out()).await
         }
+
+        async fn database(&self, title: &str, parent: Option<&str>) -> String {
+            let database = self.storage.create_database(parent).await.unwrap().page.id;
+            self.storage.rename_page(&database, title).await.unwrap();
+            database
+        }
+
+        async fn property(&self, database: &str, name: &str, kind: PropertyType) -> String {
+            self.storage
+                .create_property(database, name, kind, None)
+                .await
+                .unwrap()
+                .id
+        }
+
+        /// A select property with the options `open` ("Open") and `done` ("Done").
+        async fn select(&self, database: &str, name: &str) -> String {
+            let id = self.property(database, name, PropertyType::Select).await;
+            let option = |id: &str, name: &str| SelectOption {
+                id: id.into(),
+                name: name.into(),
+                color: "gray".into(),
+            };
+            self.storage
+                .update_property(
+                    &id,
+                    None,
+                    Some(&[option("open", "Open"), option("done", "Done")]),
+                )
+                .await
+                .unwrap();
+            id
+        }
+
+        async fn row(&self, database: &str, title: &str, blocks: &[Block]) -> String {
+            let row = self.storage.create_row(database).await.unwrap().id;
+            self.storage.rename_page(&row, title).await.unwrap();
+            self.storage.save_blocks(&row, blocks).await.unwrap();
+            row
+        }
+
+        async fn cell(&self, row: &str, property: &str, value: CellValue) {
+            self.storage.set_cell(row, property, value).await.unwrap();
+        }
+    }
+
+    fn read(folder: &Path, file: &str) -> String {
+        std::fs::read_to_string(folder.join(file)).unwrap()
+    }
+
+    /// The targets of the Markdown links in `text`, decoded and resolved
+    /// against the folder of the file the text is in.
+    fn link_targets(file: &Path, text: &str) -> Vec<PathBuf> {
+        fn decode(target: &str) -> String {
+            let bytes = target.as_bytes();
+            let mut decoded = Vec::new();
+            let mut index = 0;
+            while index < bytes.len() {
+                if bytes[index] == b'%' {
+                    let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).unwrap();
+                    decoded.push(u8::from_str_radix(hex, 16).unwrap());
+                    index += 3;
+                } else {
+                    decoded.push(bytes[index]);
+                    index += 1;
+                }
+            }
+            String::from_utf8(decoded).unwrap()
+        }
+
+        text.split("](")
+            .skip(1)
+            .map(|rest| {
+                let target = &rest[..rest.find(')').unwrap()];
+                file.parent().unwrap().join(decode(target))
+            })
+            .collect()
+    }
+
+    fn text(value: &str) -> Value {
+        json!([{ "type": "text", "text": value, "styles": {} }])
     }
 
     fn block(id: &str, kind: &str, content: Value, props: Value) -> Block {
@@ -455,5 +634,363 @@ mod tests {
 
         assert_eq!(summary.images, 0);
         assert_eq!(files(&workspace.out().join("Notiva export")), ["Page.md"]);
+    }
+
+    // Databases.
+
+    #[tokio::test]
+    async fn a_database_becomes_a_table_and_its_rows_files_with_their_properties() {
+        let workspace = Workspace::new().await;
+        let books = workspace.database("Books", None).await;
+        let notes = workspace
+            .property(&books, "Notes", PropertyType::Text)
+            .await;
+        let pages = workspace
+            .property(&books, "Pages", PropertyType::Number)
+            .await;
+        let read_on = workspace.property(&books, "Read", PropertyType::Date).await;
+        let status = workspace.select(&books, "Status").await;
+        let dune = workspace
+            .row(&books, "Dune", &[paragraph("d1", text("Spice."))])
+            .await;
+        let emma = workspace.row(&books, "Emma", &[]).await;
+        workspace
+            .cell(
+                &dune,
+                &notes,
+                CellValue::Text("A classic | must read".into()),
+            )
+            .await;
+        workspace
+            .cell(&dune, &pages, CellValue::Number(412.0))
+            .await;
+        workspace
+            .cell(&dune, &read_on, CellValue::Date("2026-11-13".into()))
+            .await;
+        workspace
+            .cell(&dune, &status, CellValue::Select("done".into()))
+            .await;
+        workspace.cell(&emma, &pages, CellValue::Number(1.5)).await;
+        workspace
+            .cell(&emma, &status, CellValue::Select("open".into()))
+            .await;
+
+        let summary = workspace.export(Scope::All).await.unwrap();
+
+        let folder = workspace.out().join("Notiva export");
+        assert_eq!(summary.pages, 3);
+        assert_eq!(
+            files(&folder),
+            ["Books.md", "Books/Dune.md", "Books/Emma.md"]
+        );
+        let table = read(&folder, "Books.md");
+        assert_eq!(
+            table,
+            "# Books\n\n\
+             | Name | Notes | Pages | Read | Status |\n\
+             | --- | --- | --- | --- | --- |\n\
+             | [Dune](Books/Dune.md) | A classic \\| must read | 412 | 2026-11-13 | Done |\n\
+             | [Emma](Books/Emma.md) |  | 1.5 |  | Open |\n"
+        );
+        assert_eq!(
+            read(&folder, "Books/Dune.md"),
+            "# Dune\n\n\
+             * Notes: A classic \\| must read\n\
+             * Pages: 412\n\
+             * Read: 2026-11-13\n\
+             * Status: Done\n\
+             \n\
+             Spice.\n"
+        );
+        assert_eq!(
+            read(&folder, "Books/Emma.md"),
+            "# Emma\n\n* Pages: 1.5\n* Status: Open\n"
+        );
+        let targets = link_targets(&folder.join("Books.md"), &table);
+        assert_eq!(targets.len(), 2);
+        for target in targets {
+            assert!(target.is_file(), "{}", target.display());
+        }
+    }
+
+    #[tokio::test]
+    async fn a_database_without_properties_or_rows_is_still_a_table() {
+        let workspace = Workspace::new().await;
+        let plain = workspace.database("Plain", None).await;
+        workspace.row(&plain, "Only a title", &[]).await;
+        let empty = workspace.database("Empty", None).await;
+        workspace
+            .property(&empty, "Notes", PropertyType::Text)
+            .await;
+        workspace.database("", None).await;
+
+        workspace.export(Scope::All).await.unwrap();
+
+        let folder = workspace.out().join("Notiva export");
+        assert_eq!(
+            files(&folder),
+            [
+                "Empty.md",
+                "Plain.md",
+                "Plain/Only a title.md",
+                "Untitled.md"
+            ]
+        );
+        assert_eq!(
+            read(&folder, "Plain.md"),
+            "# Plain\n\n| Name |\n| --- |\n| [Only a title](Plain/Only%20a%20title.md) |\n"
+        );
+        assert_eq!(read(&folder, "Plain/Only a title.md"), "# Only a title\n");
+        assert_eq!(
+            read(&folder, "Empty.md"),
+            "# Empty\n\n| Name | Notes |\n| --- | --- |\n"
+        );
+        assert_eq!(
+            read(&folder, "Untitled.md"),
+            "# Untitled\n\n| Name |\n| --- |\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn rows_with_an_empty_or_the_same_title_get_their_own_files() {
+        let workspace = Workspace::new().await;
+        let books = workspace.database("Books", None).await;
+        let notes = workspace.property(&books, "", PropertyType::Text).await;
+        let rows = [
+            workspace.row(&books, "", &[]).await,
+            workspace.row(&books, "Dune", &[]).await,
+            workspace.row(&books, "Dune", &[]).await,
+            workspace.row(&books, " [a | b] ", &[]).await,
+        ];
+        for (row, value) in rows.iter().zip(["first", "second", "third", " a\\b\nc "]) {
+            workspace
+                .cell(row, &notes, CellValue::Text(value.into()))
+                .await;
+        }
+
+        workspace.export(Scope::All).await.unwrap();
+
+        let folder = workspace.out().join("Notiva export");
+        assert_eq!(
+            files(&folder),
+            [
+                "Books.md",
+                "Books/Dune 2.md",
+                "Books/Dune.md",
+                "Books/Untitled.md",
+                "Books/[a - b].md",
+            ]
+        );
+        let table = read(&folder, "Books.md");
+        assert_eq!(
+            table,
+            "# Books\n\n\
+             | Name | Untitled |\n\
+             | --- | --- |\n\
+             | [Untitled](Books/Untitled.md) | first |\n\
+             | [Dune](Books/Dune.md) | second |\n\
+             | [Dune](Books/Dune%202.md) | third |\n\
+             | [\\[a \\| b\\]](Books/%5Ba%20-%20b%5D.md) | a\\\\b<br>c |\n"
+        );
+        assert_eq!(
+            read(&folder, "Books/Dune 2.md"),
+            "# Dune\n\n* Untitled: third\n"
+        );
+        assert_eq!(
+            read(&folder, "Books/[a - b].md"),
+            "# \\[a \\| b\\]\n\n* Untitled: a\\\\b  \n  c\n"
+        );
+        for target in link_targets(&folder.join("Books.md"), &table) {
+            assert!(target.is_file(), "{}", target.display());
+        }
+    }
+
+    #[tokio::test]
+    async fn a_cell_whose_option_was_deleted_is_empty() {
+        let workspace = Workspace::new().await;
+        let books = workspace.database("Books", None).await;
+        let status = workspace.select(&books, "Status").await;
+        let dune = workspace.row(&books, "Dune", &[]).await;
+        workspace
+            .cell(&dune, &status, CellValue::Select("done".into()))
+            .await;
+        workspace
+            .storage
+            .delete_select_option(&status, "done")
+            .await
+            .unwrap();
+
+        workspace.export(Scope::All).await.unwrap();
+
+        let folder = workspace.out().join("Notiva export");
+        assert_eq!(
+            read(&folder, "Books.md"),
+            "# Books\n\n| Name | Status |\n| --- | --- |\n| [Dune](Books/Dune.md) |  |\n"
+        );
+        assert_eq!(read(&folder, "Books/Dune.md"), "# Dune\n");
+    }
+
+    #[tokio::test]
+    async fn databases_below_pages_and_pages_below_rows_follow_the_layout() {
+        let workspace = Workspace::new().await;
+        let projects = workspace.page("Projects", None, &[]).await;
+        let tasks = workspace.database("Tasks", Some(&projects)).await;
+        let done = workspace.property(&tasks, "Done", PropertyType::Text).await;
+        let write = workspace.row(&tasks, "Write", &[]).await;
+        workspace
+            .cell(&write, &done, CellValue::Text("yes".into()))
+            .await;
+        workspace
+            .page(
+                "Notes",
+                Some(&write),
+                &[paragraph(
+                    "n1",
+                    json!([
+                        { "type": "text", "text": "For ", "styles": {} },
+                        { "type": "pageLink", "props": { "pageId": write } }
+                    ]),
+                )],
+            )
+            .await;
+        let steps = workspace.database("Steps", Some(&write)).await;
+        workspace.row(&steps, "Draft", &[]).await;
+
+        let summary = workspace.export(Scope::All).await.unwrap();
+
+        let folder = workspace.out().join("Notiva export");
+        assert_eq!(summary.pages, 6);
+        assert_eq!(
+            files(&folder),
+            [
+                "Projects.md",
+                "Projects/Tasks.md",
+                "Projects/Tasks/Write.md",
+                "Projects/Tasks/Write/Notes.md",
+                "Projects/Tasks/Write/Steps.md",
+                "Projects/Tasks/Write/Steps/Draft.md",
+            ]
+        );
+        assert_eq!(
+            read(&folder, "Projects/Tasks.md"),
+            "# Tasks\n\n| Name | Done |\n| --- | --- |\n| [Write](Tasks/Write.md) | yes |\n"
+        );
+        assert_eq!(
+            read(&folder, "Projects/Tasks/Write.md"),
+            "# Write\n\n* Done: yes\n"
+        );
+        assert_eq!(
+            read(&folder, "Projects/Tasks/Write/Notes.md"),
+            "# Notes\n\nFor [Write](../Write.md)\n"
+        );
+        assert_eq!(
+            read(&folder, "Projects/Tasks/Write/Steps.md"),
+            "# Steps\n\n| Name |\n| --- |\n| [Draft](Steps/Draft.md) |\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_row_exported_on_its_own_keeps_its_properties() {
+        let workspace = Workspace::new().await;
+        let books = workspace.database("Books", None).await;
+        let pages = workspace
+            .property(&books, "Pages", PropertyType::Number)
+            .await;
+        let dune = workspace
+            .row(&books, "Dune", &[paragraph("d1", text("Spice."))])
+            .await;
+        workspace.row(&books, "Emma", &[]).await;
+        workspace
+            .cell(&dune, &pages, CellValue::Number(412.0))
+            .await;
+
+        let summary = workspace.export(Scope::Page(&dune)).await.unwrap();
+
+        let folder = workspace.out().join("Notiva export");
+        assert_eq!(summary.pages, 1);
+        assert_eq!(files(&folder), ["Dune.md"]);
+        assert_eq!(
+            read(&folder, "Dune.md"),
+            "# Dune\n\n* Pages: 412\n\nSpice.\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_inline_database_links_to_its_file_or_says_it_is_gone() {
+        let workspace = Workspace::new().await;
+        let books = workspace.database("Books & more", None).await;
+        let other = workspace.page("Other", None, &[]).await;
+        let database_block = |id: &str, target: &str| {
+            block(id, "database", Value::Null, json!({ "databaseId": target }))
+        };
+        let home = workspace
+            .page(
+                "Home",
+                None,
+                &[
+                    paragraph("h1", text("Before")),
+                    database_block("h2", &books),
+                    database_block("h3", "missing"),
+                    // An ordinary page is not a database.
+                    database_block("h4", &other),
+                    block("h5", "database", Value::Null, json!({})),
+                    paragraph("h6", text("After")),
+                ],
+            )
+            .await;
+
+        workspace.export(Scope::All).await.unwrap();
+        workspace.export(Scope::Page(&home)).await.unwrap();
+
+        let all = workspace.out().join("Notiva export");
+        let text = read(&all, "Home.md");
+        assert_eq!(
+            text,
+            "# Home\n\nBefore\n\n[Books & more](Books%20%26%20more.md)\n\n\
+             Deleted database\n\nDeleted database\n\nDeleted database\n\nAfter\n"
+        );
+        for target in link_targets(&all.join("Home.md"), &text) {
+            assert!(target.is_file(), "{}", target.display());
+        }
+        // Outside the export the database is named, not linked.
+        assert_eq!(
+            read(&workspace.out().join("Notiva export 2"), "Home.md"),
+            "# Home\n\nBefore\n\nBooks & more\n\n\
+             Deleted database\n\nDeleted database\n\nDeleted database\n\nAfter\n"
+        );
+    }
+
+    /// The export reads a database with a fixed number of queries. Each row
+    /// still costs its file, so this measures the whole export and prints it.
+    #[tokio::test]
+    async fn a_database_with_thousands_of_rows_is_exported_at_once() {
+        const ROWS: usize = 3_000;
+        let workspace = Workspace::new().await;
+        let books = workspace.database("Books", None).await;
+        let notes = workspace
+            .property(&books, "Notes", PropertyType::Text)
+            .await;
+        workspace
+            .storage
+            .seed_rows(&books, &notes, ROWS)
+            .await
+            .unwrap();
+
+        let started = std::time::Instant::now();
+        let summary = workspace.export(Scope::All).await.unwrap();
+        let elapsed = started.elapsed();
+        eprintln!("exported a database with {ROWS} rows in {elapsed:?}");
+
+        let folder = workspace.out().join("Notiva export");
+        assert_eq!(summary.pages, ROWS + 1);
+        assert_eq!(
+            read(&folder, "Books.md").lines().count(),
+            // Title, blank line, header, delimiter and one line per row.
+            ROWS + 4
+        );
+        assert_eq!(
+            read(&folder, &format!("Books/Row {}.md", ROWS - 1)),
+            format!("# Row {0}\n\n* Notes: Value {0}\n\nContent {0}\n", ROWS - 1)
+        );
     }
 }

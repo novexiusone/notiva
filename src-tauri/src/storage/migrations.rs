@@ -41,6 +41,16 @@ pub(super) const MIGRATIONS: &[Migration] = &[
         name: "databases",
         sql: include_str!("migrations/0005_databases.surql"),
     },
+    Migration {
+        version: 6,
+        name: "page_favourites",
+        sql: include_str!("migrations/0006_page_favourites.surql"),
+    },
+    Migration {
+        version: 7,
+        name: "page_appearance",
+        sql: include_str!("migrations/0007_page_appearance.surql"),
+    },
 ];
 
 const BOOTSTRAP: &str = "

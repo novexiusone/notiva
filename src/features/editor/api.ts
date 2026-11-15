@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
+import { pagesKey } from '@/features/pages/queryKeys';
 import { commands, type Block } from '@/lib/commands';
 
 const blocksKey = (pageId: string) => ['blocks', pageId] as const;
@@ -26,6 +27,7 @@ export function useSaveBlocks(pageId: string) {
       return commands.saveBlocks(pageId, blocks).then(() => {
         // A saved page may have gained or lost links to other pages.
         void queryClient.invalidateQueries({ queryKey: ['backlinks'] });
+        void queryClient.invalidateQueries({ queryKey: pagesKey });
       });
     },
     [pageId, queryClient],

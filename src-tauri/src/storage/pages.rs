@@ -10,7 +10,8 @@ use crate::domain::{Page, PageKind};
 /// Selects a page with its ids as plain strings.
 const PAGE_FIELDS: &str = "record::id(id) AS id, title, \
      IF parent = NONE { NONE } ELSE { record::id(parent) } AS parent_id, position, kind, \
-     IF database = NONE { NONE } ELSE { record::id(database) } AS database_id";
+     IF database = NONE { NONE } ELSE { record::id(database) } AS database_id, is_favorite, \
+     icon, banner, <string> updated_at AS updated_at";
 
 /// Turns an optional page id into an optional record link.
 const PARENT: &str = "IF $parent_id = NONE { NONE } ELSE { type::record('page', $parent_id) }";
@@ -26,6 +27,10 @@ struct PageRow {
     position: f64,
     kind: Option<String>,
     database_id: Option<String>,
+    is_favorite: Option<bool>,
+    icon: Option<String>,
+    banner: Option<String>,
+    updated_at: String,
 }
 
 impl From<PageRow> for Page {
@@ -41,6 +46,10 @@ impl From<PageRow> for Page {
                 _ => PageKind::Page,
             },
             database_id: row.database_id,
+            is_favorite: row.is_favorite.unwrap_or(false),
+            icon: row.icon,
+            banner: row.banner,
+            updated_at: row.updated_at,
         }
     }
 }
@@ -117,6 +126,51 @@ impl Storage {
             ))
             .bind(("id", id.to_owned()))
             .bind(("title", title.to_owned()))
+            .await?
+            .check()?
+            .take(0)?;
+
+        row.map(Page::from).ok_or_else(|| not_found(id))
+    }
+
+    pub async fn set_favorite(&self, id: &str, favorite: bool) -> Result<Page, StorageError> {
+        let row: Option<PageRow> = self
+            .db
+            .query(format!(
+                "UPDATE type::record('page', $id) SET is_favorite = $favorite
+                     WHERE id != NONE RETURN {PAGE_FIELDS}"
+            ))
+            .bind(("id", id.to_owned()))
+            .bind(("favorite", favorite))
+            .await?
+            .check()?
+            .take(0)?;
+
+        row.map(Page::from).ok_or_else(|| not_found(id))
+    }
+
+    pub async fn update_appearance(
+        &self,
+        id: &str,
+        icon: Option<&str>,
+        banner: Option<&str>,
+    ) -> Result<Page, StorageError> {
+        if icon == Some("") || banner == Some("") {
+            return Err(StorageError::Invalid(
+                "an icon or banner must be a non-empty string or none".into(),
+            ));
+        }
+
+        let row: Option<PageRow> = self
+            .db
+            .query(format!(
+                "UPDATE type::record('page', $id)
+                     SET icon = $icon, banner = $banner, updated_at = time::now()
+                     WHERE id != NONE RETURN {PAGE_FIELDS}"
+            ))
+            .bind(("id", id.to_owned()))
+            .bind(("icon", icon.map(str::to_owned)))
+            .bind(("banner", banner.map(str::to_owned)))
             .await?
             .check()?
             .take(0)?;
@@ -372,6 +426,76 @@ mod tests {
 
         assert_eq!(renamed.title, "Reading list");
         assert_eq!(storage.list_pages().await.unwrap()[0].title, "Reading list");
+    }
+
+    #[tokio::test]
+    async fn a_page_can_be_favourited_and_unfavourited() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap();
+        assert!(!page.is_favorite);
+
+        let favourite = storage.set_favorite(&page.id, true).await.unwrap();
+        assert!(favourite.is_favorite);
+        assert_eq!(favourite.updated_at, page.updated_at);
+        assert!(storage.list_pages().await.unwrap()[0].is_favorite);
+
+        let unfavourited = storage.set_favorite(&page.id, false).await.unwrap();
+        assert!(!unfavourited.is_favorite);
+    }
+
+    #[tokio::test]
+    async fn favouriting_an_unknown_page_fails() {
+        let storage = storage().await;
+
+        let error = storage.set_favorite("missing", true).await.unwrap_err();
+
+        assert!(matches!(error, StorageError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn appearance_is_stored_and_can_be_cleared() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap();
+        assert_eq!(page.icon, None);
+        assert_eq!(page.banner, None);
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+        let updated = storage
+            .update_appearance(
+                &page.id,
+                Some("book"),
+                Some("notiva-image://localhost/cover.png"),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(updated.icon.as_deref(), Some("book"));
+        assert_eq!(
+            updated.banner.as_deref(),
+            Some("notiva-image://localhost/cover.png")
+        );
+        assert!(updated.updated_at > page.updated_at);
+
+        let cleared = storage
+            .update_appearance(&page.id, None, None)
+            .await
+            .unwrap();
+        assert_eq!(cleared.icon, None);
+        assert_eq!(cleared.banner, None);
+    }
+
+    #[tokio::test]
+    async fn appearance_rejects_empty_values_and_unknown_pages() {
+        let storage = storage().await;
+        let page = storage.create_page(None).await.unwrap();
+
+        let empty_icon = storage.update_appearance(&page.id, Some(""), None).await;
+        let empty_banner = storage.update_appearance(&page.id, None, Some("")).await;
+        let unknown = storage.update_appearance("missing", None, None).await;
+
+        assert!(matches!(empty_icon, Err(StorageError::Invalid(_))));
+        assert!(matches!(empty_banner, Err(StorageError::Invalid(_))));
+        assert!(matches!(unknown, Err(StorageError::NotFound(_))));
     }
 
     #[tokio::test]

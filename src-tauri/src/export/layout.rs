@@ -165,6 +165,10 @@ mod tests {
             position,
             kind: crate::domain::PageKind::Page,
             database_id: None,
+            is_favorite: false,
+            icon: None,
+            banner: None,
+            updated_at: "2026-11-15T00:00:00Z".into(),
         }
     }
 

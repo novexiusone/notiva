@@ -37,7 +37,18 @@ export function page(
   parentId: string | null = null,
   position = 0,
 ): Page {
-  return { id, title, parentId, position, kind: 'page', databaseId: null };
+  return {
+    id,
+    title,
+    parentId,
+    position,
+    kind: 'page',
+    databaseId: null,
+    isFavorite: false,
+    icon: null,
+    banner: null,
+    updatedAt: '2026-01-01T00:00:00Z',
+  };
 }
 
 export function database(
@@ -46,10 +57,32 @@ export function database(
   parentId: string | null = null,
   position = 0,
 ): Page {
-  return { id, title, parentId, position, kind: 'database', databaseId: null };
+  return {
+    id,
+    title,
+    parentId,
+    position,
+    kind: 'database',
+    databaseId: null,
+    isFavorite: false,
+    icon: null,
+    banner: null,
+    updatedAt: '2026-01-01T00:00:00Z',
+  };
 }
 
 /** A row of the database `databaseId`. */
 export function row(id: string, title: string, databaseId: string, position = 0): Page {
-  return { id, title, parentId: databaseId, position, kind: 'page', databaseId };
+  return {
+    id,
+    title,
+    parentId: databaseId,
+    position,
+    kind: 'page',
+    databaseId,
+    isFavorite: false,
+    icon: null,
+    banner: null,
+    updatedAt: '2026-01-01T00:00:00Z',
+  };
 }

@@ -36,6 +36,17 @@ test('pressing Enter in the title moves into the editor', async ({ page }) => {
   await expect(title(page)).toHaveValue('Notes');
 });
 
+test('cmd+z and redo in the title leave the document unchanged', async ({ page }) => {
+  await newPage(page, 'Notes');
+  await page.keyboard.type('Keep this sentence');
+
+  await title(page).click();
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(block(page, 'paragraph').first()).toHaveText('Keep this sentence');
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expect(block(page, 'paragraph').first()).toHaveText('Keep this sentence');
+});
+
 test('markdown shortcuts create the block types of the MVP', async ({ page }) => {
   await newPage(page, 'Blocks');
 
@@ -75,6 +86,17 @@ test('content is saved without a save button and is back after a restart', async
   await expect(block(page, 'paragraph').first()).toHaveText('Wrote the editor.');
   // Blocks keep their identity across save and load.
   expect((await blockIds(page)).slice(0, 2)).toEqual(idsBefore.slice(0, 2));
+});
+
+test('saving content updates the last edited timestamp', async ({ page }) => {
+  await newPage(page, 'Journal');
+  const edited = page.locator('time');
+  const before = await edited.getAttribute('datetime');
+
+  await page.keyboard.type('New text');
+  await waitForSave(page, 'New text');
+
+  await expect.poll(() => edited.getAttribute('datetime')).not.toBe(before);
 });
 
 test('leaving a page right after typing does not lose the change', async ({ page }) => {

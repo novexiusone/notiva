@@ -5,6 +5,8 @@ import { DatabaseView } from '@/features/databases/DatabaseView';
 import { DatabaseLink, RowProperties } from '@/features/databases/RowProperties';
 import { Editor, type EditorHandle } from '@/features/editor/Editor';
 import { Backlinks } from '@/features/links/Backlinks';
+import { PageHeader } from '@/features/pages/PageHeader';
+import { PageIcon } from '@/features/pages/PageIcon';
 import { usePages, useRenamePage } from '@/features/pages/api';
 import { rememberLastPage } from '@/lib/localState';
 import { cn } from '@/lib/utils';
@@ -16,6 +18,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const pages = usePages();
   const renamePage = useRenamePage();
   const editor = useRef<EditorHandle>(null);
+  const titleInput = useRef<HTMLInputElement>(null);
   const page = pages.data?.find((candidate) => candidate.id === pageId);
 
   useEffect(() => {
@@ -28,6 +31,7 @@ export function PageView({ pageId }: { pageId: string }) {
 
   const title = (
     <input
+      ref={titleInput}
       // A fresh input per page, so focus and undo history do not carry over.
       key={page.id}
       autoFocus={page.title === ''}
@@ -45,30 +49,41 @@ export function PageView({ pageId }: { pageId: string }) {
     />
   );
 
-  // A database shows its rows where a page has its text. Only the title keeps
-  // the reading width; what is below it decides for itself.
-  if (page.kind === 'database') {
-    return (
-      <article className="pt-16 pb-32">
-        <div className={column}>{title}</div>
-        <DatabaseView databaseId={page.id} />
-      </article>
-    );
-  }
-
   // A row is a page that also shows its database and its properties.
   const { databaseId } = page;
 
   return (
-    <article className={cn(column, 'pt-16 pb-32')}>
-      {databaseId !== null ? <DatabaseLink databaseId={databaseId} /> : null}
-      {title}
-      {databaseId !== null ? (
-        // Fresh per row, so an open editor does not carry over to the next one.
-        <RowProperties key={`properties-${page.id}`} rowId={page.id} databaseId={databaseId} />
+    <article className="relative pb-32">
+      <PageHeader
+        page={page}
+        pages={pages.data ?? []}
+        onRename={() => {
+          titleInput.current?.focus();
+          titleInput.current?.select();
+        }}
+      />
+      {page.banner !== null ? (
+        <img src={page.banner} alt={t('pages.banner')} className="h-40 w-full object-cover" />
       ) : null}
-      <Editor pageId={page.id} ref={editor} />
-      <Backlinks pageId={page.id} />
+      <div className={cn(column, page.banner === null ? 'pt-16' : 'pt-8')}>
+        {databaseId !== null ? <DatabaseLink databaseId={databaseId} /> : null}
+        {page.icon !== null ? <PageIcon page={page} size={40} className="mb-4" /> : null}
+        {title}
+      </div>
+      {page.kind === 'database' ? (
+        // A database shows its rows where a page has its text. Only the title
+        // keeps the reading width; what is below it decides for itself.
+        <DatabaseView databaseId={page.id} />
+      ) : (
+        <div className={column}>
+          {databaseId !== null ? (
+            // Fresh per row, so an open editor does not carry over to the next one.
+            <RowProperties key={`properties-${page.id}`} rowId={page.id} databaseId={databaseId} />
+          ) : null}
+          <Editor pageId={page.id} ref={editor} />
+          <Backlinks pageId={page.id} />
+        </div>
+      )}
     </article>
   );
 }

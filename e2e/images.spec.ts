@@ -28,7 +28,7 @@ test('an image is added from the slash menu and is back after a restart', async 
   await page.keyboard.type('/image');
   await page.keyboard.press('Enter');
 
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.locator('input[placeholder="Upload image"]').setInputFiles({
     name: 'pixel.png',
     mimeType: 'image/png',
     buffer: PNG,
@@ -97,7 +97,7 @@ test('a file that is not an image is refused', async ({ page }) => {
   await page.keyboard.type('/image');
   await page.keyboard.press('Enter');
 
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.locator('input[placeholder="Upload image"]').setInputFiles({
     name: 'notes.png',
     mimeType: 'image/png',
     buffer: Buffer.from('this is plain text, not a picture'),

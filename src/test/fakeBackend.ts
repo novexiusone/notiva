@@ -56,9 +56,17 @@ function positionAfter(items: readonly { position: number }[]): number {
   return items.reduce((last, item) => Math.max(last, item.position + 1), 0);
 }
 
-/** Pages stored before databases existed have neither field. */
-function withDatabaseFields(page: Page): Page {
-  return { ...page, kind: page.kind ?? 'page', databaseId: page.databaseId ?? null };
+/** Pages stored before newer fields existed get their safe defaults. */
+function withPageFields(page: Page): Page {
+  return {
+    ...page,
+    kind: page.kind ?? 'page',
+    databaseId: page.databaseId ?? null,
+    isFavorite: page.isFavorite ?? false,
+    icon: page.icon ?? null,
+    banner: page.banner ?? null,
+    updatedAt: page.updatedAt ?? '2026-01-01T00:00:00Z',
+  };
 }
 
 /** Whether a value is a day of the calendar written as `yyyy-MM-dd`. */
@@ -407,7 +415,7 @@ export function installFakeBackend({
     const storedDatabases = window.localStorage.getItem(DATABASES_KEY);
     if (storedDatabases !== null) databases = JSON.parse(storedDatabases) as DatabaseState;
   }
-  pages = pages.map(withDatabaseFields);
+  pages = pages.map(withPageFields);
 
   const save = (next: Page[]) => {
     pages = next;
@@ -580,13 +588,41 @@ export function installFakeBackend({
           position: childIds(pages, parentId).length,
           kind: 'page',
           databaseId: null,
+          isFavorite: false,
+          icon: null,
+          banner: null,
+          updatedAt: new Date().toISOString(),
         };
         save([...pages, page]);
         return page;
       }
 
       case 'rename_page': {
-        const page = { ...require(args.id as string), title: args.title as string };
+        const page = {
+          ...require(args.id as string),
+          title: args.title as string,
+          updatedAt: new Date().toISOString(),
+        };
+        save(pages.map((candidate) => (candidate.id === page.id ? page : candidate)));
+        return page;
+      }
+
+      case 'set_favorite': {
+        const page = { ...require(args.id as string), isFavorite: args.favorite as boolean };
+        save(pages.map((candidate) => (candidate.id === page.id ? page : candidate)));
+        return page;
+      }
+
+      case 'update_appearance': {
+        if (args.icon === '' || args.banner === '') {
+          fail('invalid', 'an icon or banner must be a non-empty string or null');
+        }
+        const page = {
+          ...require(args.id as string),
+          icon: args.icon as string | null,
+          banner: args.banner as string | null,
+          updatedAt: new Date().toISOString(),
+        };
         save(pages.map((candidate) => (candidate.id === page.id ? page : candidate)));
         return page;
       }
@@ -641,6 +677,10 @@ export function installFakeBackend({
           position: childIds(pages, parentId).length,
           kind: 'database',
           databaseId: null,
+          isFavorite: false,
+          icon: null,
+          banner: null,
+          updatedAt: new Date().toISOString(),
         };
         const view: View = {
           id: crypto.randomUUID(),
@@ -704,7 +744,7 @@ export function installFakeBackend({
               typeof option.id === 'string' &&
               option.id !== '' &&
               typeof option.name === 'string' &&
-              typeof option.color === 'string',
+              SELECT_COLORS.some((color) => color === option.color),
           );
           if (!wellFormed) fail('invalid', 'an option needs an id, a name and a colour');
           if (new Set(options.map((option) => option.id)).size !== options.length) {
@@ -840,6 +880,10 @@ export function installFakeBackend({
           position: positionAfter(rowsOf(database.id)),
           kind: 'page',
           databaseId: database.id,
+          isFavorite: false,
+          icon: null,
+          banner: null,
+          updatedAt: new Date().toISOString(),
         };
         save([...pages, page]);
         return { id: page.id, title: page.title, position: page.position, cells: {} } satisfies Row;
@@ -859,6 +903,11 @@ export function installFakeBackend({
             [row.id]: withCell(databases.cells[row.id], property.id, value),
           },
         });
+        save(
+          pages.map((page) =>
+            page.id === row.id ? { ...page, updatedAt: new Date().toISOString() } : page,
+          ),
+        );
         return null;
       }
 
@@ -891,6 +940,11 @@ export function installFakeBackend({
         const pageId = args.pageId as string;
         require(pageId);
         saveBlocks({ ...blocks, [pageId]: structuredClone(args.blocks as Block[]) });
+        save(
+          pages.map((page) =>
+            page.id === pageId ? { ...page, updatedAt: new Date().toISOString() } : page,
+          ),
+        );
         return null;
       }
 

@@ -106,7 +106,7 @@ Queries use bound parameters, never string formatting of values.
 - One test opens a database in a temporary directory, writes, closes, reopens and reads, to prove persistence.
 - Migration tests: a fresh database ends at the latest version; running the migrations twice changes nothing; a newer schema version is refused.
 - Schema tests exercise the rules that matter: required fields are enforced, deleting a page removes its blocks and links, backlinks and full-text search return what was written.
-- The benchmark is an ignored test. It creates 10,000 pages with blocks and links and prints timings for: load one page with its blocks, load the page tree, full-text search, backlinks of a page.
+- The benchmark is an ignored test. It creates 10,000 pages with blocks and links and prints timings for: load one page with its blocks, load the page tree, full-text search, backlinks of a page. It also creates one database with 10,000 rows and measures the commands of `SPEC-databases.md`.
 
 ## Boundaries
 

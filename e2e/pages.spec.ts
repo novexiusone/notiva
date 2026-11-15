@@ -13,7 +13,7 @@ async function createPage(page: Page, name: string) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('No pages yet')).toBeVisible();
+  await expect(page.getByText(/No pages yet|Noch keine Seiten/)).toBeVisible();
 });
 
 test('a new page is opened, titled and still there after a restart', async ({ page }) => {
@@ -64,4 +64,110 @@ test('deleting a page asks first and takes its subpages along', async ({ page })
   await dialog.getByRole('button', { name: 'Delete' }).click();
 
   await expect(rows(page)).toHaveText(['Keep me']);
+});
+
+test('a favourite survives a reload, stays in Private and disappears when deleted', async ({
+  page,
+}) => {
+  await createPage(page, 'Important');
+  const favourites = page.getByRole('navigation', { name: 'Favourites' });
+  await expect(favourites.getByText('No favourites yet')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Add to favourites' }).click();
+  await expect(favourites.getByRole('button', { name: 'Important' })).toBeVisible();
+  await page.reload();
+  await expect(favourites.getByRole('button', { name: 'Important' })).toBeVisible();
+  await expect(row(page, 'Important')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Remove from favourites' }).click();
+  await expect(favourites.getByRole('button', { name: 'Important' })).toHaveCount(0);
+  await expect(row(page, 'Important')).toBeVisible();
+  await page.getByRole('button', { name: 'Add to favourites' }).click();
+
+  await row(page, 'Important').hover();
+  await row(page, 'Important').getByRole('button', { name: 'Page actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(favourites.getByRole('button', { name: 'Important' })).toHaveCount(0);
+});
+
+test('icon, banner and page actions work from the page menu and survive a reload', async ({
+  page,
+}) => {
+  await createPage(page, 'Decorated');
+  const main = page.getByRole('main');
+  const actions = main.getByRole('button', { name: 'Page actions' });
+  const banner = main.getByRole('img', { name: 'Page banner' });
+
+  await actions.click();
+  await page.getByRole('menuitem', { name: 'Add icon' }).hover();
+  // Let Radix finish opening the submenu before moving the pointer into it.
+  await page.waitForTimeout(300);
+  await page.getByRole('menuitem', { name: 'Book', exact: true }).click();
+  await expect(main.locator('.lucide-book-open')).toBeVisible();
+  await expect(row(page, 'Decorated').locator('.lucide-book-open')).toBeVisible();
+
+  await actions.click();
+  await page.getByRole('menuitem', { name: 'Add banner' }).click();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'pixel.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      'base64',
+    ),
+  });
+  await expect(banner).toHaveAttribute('src', /^data:image\/png;base64,/);
+
+  await page.reload();
+  await expect(main.locator('.lucide-book-open')).toBeVisible();
+  await expect(banner).toBeVisible();
+
+  await actions.click();
+  await page.getByRole('menuitem', { name: 'Remove icon' }).click();
+  await expect(main.locator('.lucide-book-open')).toHaveCount(0);
+  await actions.click();
+  await page.getByRole('menuitem', { name: 'Remove banner' }).click();
+  await expect(banner).toHaveCount(0);
+
+  await actions.click();
+  await page.getByRole('menuitem', { name: 'Export as Markdown…' }).click();
+  await expect(
+    page.getByText('Exported 1 page to /Users/demo/Documents/Notiva export'),
+  ).toBeVisible();
+
+  await actions.click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('Delete “Decorated”?');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
+});
+
+test('the page menu adds a database below the open page', async ({ page }) => {
+  await createPage(page, 'Parent');
+  await page.getByRole('main').getByRole('button', { name: 'Page actions' }).click();
+  await page.getByRole('menuitem', { name: 'Add database' }).click();
+
+  await expect(title(page)).toBeFocused();
+  await expect(title(page)).toHaveValue('');
+  await expect(title(page)).toHaveAttribute('placeholder', 'Untitled');
+  await expect(page.getByRole('region', { name: 'Rows' })).toBeVisible();
+  await expect(row(page, 'Untitled')).toHaveAttribute('aria-level', '2');
+});
+
+test.describe('the page header in light mode and German', () => {
+  test.use({ colorScheme: 'light', locale: 'de-DE' });
+
+  test('uses the theme and translates its controls and edit time', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Neue Seite' }).click();
+
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(242, 242, 242)');
+    await expect(page.getByRole('navigation', { name: 'Favoriten' })).toBeVisible();
+    await expect(page.getByText(/^Bearbeitet /)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Zu Favoriten hinzufügen' })).toBeVisible();
+    await page.getByRole('main').getByRole('button', { name: 'Seitenaktionen' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Icon hinzufügen' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Banner hinzufügen' })).toBeVisible();
+  });
 });

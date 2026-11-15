@@ -26,6 +26,7 @@ use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, SurrealKv};
 
 pub use error::StorageError;
+pub(crate) use properties::number_as_text;
 
 const NAMESPACE: &str = "notiva";
 const DATABASE: &str = "main";
