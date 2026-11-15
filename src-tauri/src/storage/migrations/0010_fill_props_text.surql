@@ -1,4 +1,4 @@
--- Fills `props_text` for the rows that existed before schema version 6.
+-- Fills `props_text` for the rows that existed before schema version 9.
 -- The rules are those of `props_text` in `storage/rows.rs`, which writes the
 -- field from then on; a test keeps the two the same. The functions are only
 -- needed here and are removed again at the end.

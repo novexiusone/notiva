@@ -20,7 +20,7 @@ The user finds a page by typing a few letters of its title or of anything writte
 
 - Search runs in the backend on the full-text indexes over `page.title`, `block.text` and `page.props_text`. The three queries run in one request and are merged in Rust.
 - `page.props_text` is derived from a row's cells: one line per property that has a text value or a select option with a name, in the order of the properties, written as `Name: value` (only the value when the property has no name). Line breaks inside a value become spaces, so a line is always one property. Values a reader would read as empty, such as an option that is gone, add nothing. An ordinary page has no `props_text`, a new row neither.
-- Schema version 6 defines the field and its index, with the same analyzer as the other two. Schema version 7 fills the field for the rows that exist. They are two migrations because SurrealDB 4.0.1 refuses to define an index and write records of its table in one transaction, in either order.
+- Schema version 9 defines the field and its index, with the same analyzer as the other two. Schema version 10 fills the field for the rows that exist. They are two migrations because SurrealDB 4.0.1 refuses to define an index and write records of its table in one transaction, in either order.
 - The repository computes the text in Rust (`props_text` in `storage/rows.rs`) and writes it in the same statement as the cells. Every write that can change it does so: `set_cell`; `update_property` when the property is renamed or an option is renamed or left out (only the rows whose text changes); `delete_select_option`; `change_property_type`; `delete_property`. The bulk commands read the cells of the rows concerned once, then write cells and text with their one statement over a bound array, inside their transaction.
 - `set_cell` reads the row's cells, computes the text, and writes only if the cells are still the same; otherwise it starts again, five times at most. So two writes to one row cannot leave a text that misses one of them. The bulk commands keep the window they already have for cells: a cell written between their read and their write can leave that row's text stale until its next write.
 - The migration that fills the field writes the same rules in SurrealQL, as functions that it removes again at its end. A test checks that it writes what the repository computes, row by row.
@@ -87,8 +87,8 @@ src-tauri/src/
   storage/rows.rs          → `props_text`, written with a cell
   storage/properties.rs    → keeps `props_text` current when properties and options change
   storage/migrations/0003_search_prefixes.surql
-  storage/migrations/0006_search_properties.surql → the field `props_text` and its index
-  storage/migrations/0007_fill_props_text.surql   → fills it for existing rows
+  storage/migrations/0009_search_properties.surql → the field `props_text` and its index
+  storage/migrations/0010_fill_props_text.surql   → fills it for existing rows
   commands/search.rs
 src/features/search/
   SearchDialog.tsx         → the dialog, built on cmdk
