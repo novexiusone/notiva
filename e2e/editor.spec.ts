@@ -36,6 +36,17 @@ test('pressing Enter in the title moves into the editor', async ({ page }) => {
   await expect(title(page)).toHaveValue('Notes');
 });
 
+test('cmd+z and redo in the title leave the document unchanged', async ({ page }) => {
+  await newPage(page, 'Notes');
+  await page.keyboard.type('Keep this sentence');
+
+  await title(page).click();
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(block(page, 'paragraph').first()).toHaveText('Keep this sentence');
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expect(block(page, 'paragraph').first()).toHaveText('Keep this sentence');
+});
+
 test('markdown shortcuts create the block types of the MVP', async ({ page }) => {
   await newPage(page, 'Blocks');
 

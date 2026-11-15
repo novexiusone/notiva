@@ -29,6 +29,7 @@ It is delivered in three steps, one pull request each:
 - Block types in the MVP: paragraph, headings 1 to 3, bullet list, numbered list, check list, code block, quote, image. BlockNote's other default blocks (table, toggle, file, video, audio) are switched off so that nothing can be written that export and search do not handle yet.
 - Blocks have a drag handle and a `+` on hover. Nested blocks (indented list items) are supported.
 - Undo, redo and the usual formatting shortcuts come from BlockNote and apply within one editor session.
+- An app-level capture-phase `beforeinput` guard drops undo/redo events whose target is not the focused field. This keeps the web view's single document history from undoing editor content while the title or another input has focus, and also covers interactive blocks.
 - Pressing Enter in the title moves the cursor into the first block.
 
 ### Saving (#13)
@@ -94,6 +95,7 @@ src-tauri/src/
 src/features/editor/
   Editor.tsx                 → BlockNote view for one page
   useAutosave.ts             → debounce, flush, retry
+  useUndoFocusGuard.ts       → app-level undo/redo event guard
   schema.ts                  → the block types that are switched on
   SlashMenu.tsx              → the custom slash menu
   slashMenuItems.ts          → entries, groups, Markdown shortcuts
