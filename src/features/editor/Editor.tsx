@@ -34,6 +34,10 @@ export function Editor({ pageId, ref }: EditorProps) {
   return <LoadedEditor key={pageId} pageId={pageId} initialBlocks={blocks.data} ref={ref} />;
 }
 
+/** What inside an embedded database takes clicks of its own. */
+const CONTROLS =
+  'button, a, input, textarea, select, [role="tab"], [role="gridcell"], [role="columnheader"], [role="menuitem"]';
+
 function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlocks: Block[] }) {
   const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme();
@@ -68,6 +72,29 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
         setInsertError(t(refused ? 'editor.imageRefused' : 'editor.imageFailed'));
         throw error;
       }
+    },
+    _tiptapOptions: {
+      editorProps: {
+        // Keys pressed inside an embedded database belong to the database. Without
+        // this, Backspace in a cell with the block selected removes the block.
+        handleDOMEvents: {
+          keydown: (_view, event) =>
+            event.target instanceof Element &&
+            event.target.closest('[data-database-block]') !== null,
+          // A click on a control of the block must not select the block or leave the
+          // editor holding the focus, or the next Backspace edits the document.
+          mousedown: (view, event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return false;
+            const block = target.closest<HTMLElement>('[data-database-block]');
+            if (!block || !target.closest(CONTROLS)) return false;
+            view.dom.blur();
+            window.getSelection()?.removeAllRanges();
+            block.focus({ preventScroll: true });
+            return true;
+          },
+        },
+      },
     },
     // The backend stores exactly what the editor produced, so this is the editor's own shape.
     initialContent: initialBlocks.length > 0 ? (initialBlocks as never) : undefined,

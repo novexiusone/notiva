@@ -4,6 +4,7 @@ import { MainArea } from '@/components/layout/MainArea';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import { useUndoFocusGuard } from '@/features/editor/useUndoFocusGuard';
+import { useNoBackNavigation } from '@/lib/useNoBackNavigation';
 import { SearchDialog } from '@/features/search/SearchDialog';
 import { useSearchShortcut } from '@/features/search/useSearchShortcut';
 
@@ -11,6 +12,7 @@ export function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   useSearchShortcut(useCallback(() => setSearchOpen((open) => !open), []));
   useUndoFocusGuard();
+  useNoBackNavigation();
 
   return (
     <div className="flex h-full">
