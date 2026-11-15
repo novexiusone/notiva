@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-11-15
+
+### Added
+
+- **export:** Export databases as tables and rows as files (#91)
+- **database-views:** Add view tabs and the filter, sort, group and properties menus (#92)
+- **pages:** Add favourites and private sidebar (#98)
+- **pages:** Add icons banners and the page header (#99)
+- **databases:** Show a row's properties on its page (#93)
+- **pages:** Add the top bar with path, icon picker and export panel (#105)
+
+### Fixed
+
+- **databases:** Reject unknown select option colors (#94)
+- **editor:** Keep undo out of the title (#100)
+
 ## [0.5.0] - 2026-11-14
 
 ### Added
@@ -48,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **repo-workflow:** Set initial release version (#48)
 
+[0.6.0]: https://github.com/novexiusone/notiva/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/novexiusone/notiva/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/novexiusone/notiva/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/novexiusone/notiva/compare/v0.2.0...v0.3.0
