@@ -7,7 +7,7 @@ const properties = (page: Page) => page.getByRole('group', { name: 'Properties' 
 /** The value of a property on a row's page, by the property's name. */
 const value = (page: Page, name: string) =>
   properties(page).getByRole('button', { name: new RegExp(`^${name}( |$)`) });
-const backLink = (page: Page) => page.getByRole('main').getByRole('link', { name: 'Tasks' });
+const backLink = (page: Page) => page.getByRole('article').getByRole('link', { name: 'Tasks' });
 
 /** The cell of a row (by its title) in a column (by its header). */
 async function cell(page: Page, rowName: string, column: string) {
@@ -133,5 +133,5 @@ test('an ordinary page shows no properties and no link back', async ({ page }) =
   await expect(title(page)).toHaveValue('Notes');
   await expect(page.locator('.bn-editor')).toBeVisible();
   await expect(properties(page)).toHaveCount(0);
-  await expect(page.getByRole('main').getByRole('link')).toHaveCount(0);
+  await expect(page.getByRole('article').getByRole('link')).toHaveCount(0);
 });

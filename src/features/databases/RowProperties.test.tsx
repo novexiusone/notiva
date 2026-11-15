@@ -2,6 +2,9 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { commands, type Property, type PropertyType, type SelectOption } from '@/lib/commands';
 import { database, page, renderApp, row } from '@/test/renderApp';
 
+// The path in the top bar links the database as well; this is the link above the title.
+const inArticle = () => within(screen.getByRole('article'));
+
 function property(id: string, name: string, type: PropertyType, position: number): Property {
   return { id, databaseId: 'db', name, type, position, options: [], targetId: null };
 }
@@ -104,7 +107,9 @@ describe('the page of a row', () => {
   it('links back to its database by name, without a view of its own', async () => {
     const { user, router } = renderApp(tasks);
 
-    const link = await screen.findByRole('link', { name: 'Tasks' });
+    const link = await within(await screen.findByRole('article')).findByRole('link', {
+      name: 'Tasks',
+    });
     expect(link).toHaveAttribute('href', '/page/db');
     expect(link.querySelector('.lucide-table')).toBeInTheDocument();
 
@@ -116,10 +121,9 @@ describe('the page of a row', () => {
   it('names an untitled database "Untitled" in the link', async () => {
     renderApp({ ...tasks, pages: [database('db', ''), row('r1', 'Write spec', 'db')] });
 
-    expect(await screen.findByRole('link', { name: 'Untitled' })).toHaveAttribute(
-      'href',
-      '/page/db',
-    );
+    expect(
+      await within(await screen.findByRole('article')).findByRole('link', { name: 'Untitled' }),
+    ).toHaveAttribute('href', '/page/db');
   });
 
   it('edits a text value in place and saves it on Enter', async () => {
@@ -289,7 +293,7 @@ describe('the page of a row', () => {
     await user.clear(input);
     await user.type(input, 'From the page{Enter}');
 
-    await user.click(screen.getByRole('link', { name: 'Tasks' }));
+    await user.click(inArticle().getByRole('link', { name: 'Tasks' }));
     const grid = await screen.findByRole('grid', { name: 'Tasks' });
     const line = await within(grid).findByRole('row', { name: 'Write spec' });
     expect(line).toHaveTextContent('From the page');
@@ -310,7 +314,7 @@ describe('the page of a row', () => {
     const { user } = renderApp(tasks);
     await value('Notes');
 
-    await user.click(screen.getByRole('link', { name: 'Tasks' }));
+    await user.click(inArticle().getByRole('link', { name: 'Tasks' }));
     const grid = await screen.findByRole('grid', { name: 'Tasks' });
     await user.click(within(grid).getByRole('button', { name: 'Notes' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
@@ -344,7 +348,7 @@ describe('the page of a row', () => {
       'The properties could not be loaded.',
     );
     expect(screen.queryByRole('group', { name: 'Properties' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Tasks' })).toBeInTheDocument();
+    expect(inArticle().getByRole('link', { name: 'Tasks' })).toBeInTheDocument();
     await waitFor(() => expect(document.querySelector('.bn-editor')).not.toBeNull());
     const title = screen.getByRole('textbox', { name: 'Page title' });
     await user.type(title, ' now');
@@ -384,7 +388,9 @@ describe('the page of a row', () => {
     vi.spyOn(commands, 'listRows').mockResolvedValue([]);
     renderApp(tasks);
 
-    expect(await screen.findByRole('link', { name: 'Tasks' })).toBeInTheDocument();
+    expect(
+      await within(await screen.findByRole('article')).findByRole('link', { name: 'Tasks' }),
+    ).toBeInTheDocument();
     await waitFor(() => expect(document.querySelector('.bn-editor')).not.toBeNull());
     expect(screen.queryByRole('group', { name: 'Properties' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
@@ -411,7 +417,7 @@ describe('pages that are not rows', () => {
 
     await screen.findByRole('grid', { name: 'Tasks' });
     expect(screen.queryByRole('group', { name: 'Properties' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Tasks' })).toBeNull();
+    expect(inArticle().queryByRole('link', { name: 'Tasks' })).toBeNull();
     // The table's own query, and nothing more.
     expect(listRows).toHaveBeenCalledTimes(1);
   });

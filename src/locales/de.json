@@ -24,22 +24,12 @@
     "addIcon": "Icon hinzufügen",
     "changeIcon": "Icon ändern",
     "removeIcon": "Icon entfernen",
-    "addBanner": "Banner hinzufügen",
-    "changeBanner": "Banner ändern",
-    "removeBanner": "Banner entfernen",
-    "chooseBanner": "Bannerbild auswählen",
-    "banner": "Seitenbanner",
-    "bannerFailed": "Der Banner konnte nicht gespeichert werden.",
-    "icons": {
-      "book": "Buch",
-      "checklist": "Checkliste",
-      "document": "Dokument",
-      "folder": "Ordner",
-      "heart": "Herz",
-      "idea": "Idee",
-      "star": "Stern",
-      "target": "Ziel"
-    },
+    "addBanner": "Cover hinzufügen",
+    "changeBanner": "Cover ändern",
+    "removeBanner": "Cover entfernen",
+    "chooseBanner": "Coverbild auswählen",
+    "banner": "Seitencover",
+    "bannerFailed": "Das Cover konnte nicht gespeichert werden.",
     "actions": "Seitenaktionen",
     "rename": "Umbenennen",
     "delete": "Löschen",
@@ -55,7 +45,29 @@
     "deleteDescriptionWithSubpagesAndRows": "Dabei werden auch {{subpages}} und {{rows}} gelöscht. Das lässt sich nicht rückgängig machen.",
     "subpageCount_one": "{{count}} Unterseite",
     "subpageCount_other": "{{count}} Unterseiten",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "addCover": "Cover hinzufügen",
+    "path": "Pfad",
+    "iconPicker": "Icon auswählen",
+    "picker": {
+      "emoji": "Emoji",
+      "icons": "Icons",
+      "remove": "Entfernen",
+      "filter": "Filtern…",
+      "random": "Zufälliges Emoji",
+      "none": "Nichts gefunden",
+      "groups": {
+        "smileys": "Smileys & Emotionen",
+        "people": "Personen & Körper",
+        "animals": "Tiere & Natur",
+        "food": "Essen & Trinken",
+        "travel": "Reisen & Orte",
+        "activities": "Aktivitäten",
+        "objects": "Objekte",
+        "symbols": "Symbole",
+        "flags": "Flaggen"
+      }
+    }
   },
   "databases": {
     "new": "Neue Datenbank",
@@ -213,6 +225,13 @@
     "chooseFolder": "Zielordner für den Export wählen",
     "done_one": "{{count}} Seite nach {{directory}} exportiert",
     "done_other": "{{count}} Seiten nach {{directory}} exportiert",
-    "failed": "Der Export ist fehlgeschlagen: {{message}}"
+    "failed": "Der Export ist fehlgeschlagen: {{message}}",
+    "menu": "Exportieren",
+    "panelTitle": "Exportieren",
+    "panelDescription": "„{{title}}“ mit seinen Unterseiten exportieren.",
+    "formats": "Exportformate",
+    "markdown": "Markdown",
+    "run": "Exportieren",
+    "close": "Schließen"
   }
 }

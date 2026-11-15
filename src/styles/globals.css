@@ -201,8 +201,19 @@
 .bn-root.bn-container.bn-shadcn {
   --bn-colors-editor-background: transparent;
   --bn-colors-editor-text: var(--foreground);
-  --bn-colors-side-menu: var(--muted-foreground);
+  --bn-colors-side-menu: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
   --bn-font-family: inherit;
+}
+
+.bn-root.bn-container.bn-shadcn .bn-side-menu {
+  /* Close together, but clear of the text; padding keeps the hover area joined. */
+  gap: 2px;
+  padding-right: 14px;
+}
+
+.bn-root.bn-container.bn-shadcn .bn-side-menu .bn-button svg {
+  width: 18px;
+  height: 18px;
 }
 
 .bn-root.bn-container.bn-shadcn .bn-editor {
