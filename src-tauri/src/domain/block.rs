@@ -184,6 +184,21 @@ mod tests {
     }
 
     #[test]
+    fn a_database_block_has_no_text_and_no_page_links() {
+        // The editor stores an embedded database by its id only, without inline content.
+        let database: Block = serde_json::from_value(json!({
+            "id": "b1",
+            "type": "database",
+            "props": { "databaseId": "db1" },
+            "children": []
+        }))
+        .unwrap();
+
+        assert_eq!(database.plain_text(), "");
+        assert!(database.page_links().is_empty());
+    }
+
+    #[test]
     fn the_editor_shape_round_trips_through_json() {
         let json = json!({
             "id": "b1",

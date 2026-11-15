@@ -17,6 +17,7 @@ import {
   HEADER_HEIGHT,
   ROW_HEIGHT,
   TABLE_INSET,
+  TABLE_MAX_HEIGHT,
   tableWidth,
 } from './layout';
 import { TableRow } from './Row';
@@ -146,8 +147,8 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
         aria-label={t('databases.table.rows')}
         ref={scrollRef}
         // Inline, so that the test setup can tell the scroll container apart.
-        style={{ overflow: 'auto' }}
-        className="max-h-[calc(100dvh-2.75rem)] overscroll-x-contain"
+        style={{ overflow: 'auto', maxHeight: TABLE_MAX_HEIGHT }}
+        className="overscroll-x-contain"
       >
         <div
           className="w-max min-w-full pb-4"

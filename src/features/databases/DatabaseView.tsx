@@ -1,5 +1,5 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -17,27 +17,43 @@ import { ViewTabs } from '@/features/databases/ViewTabs';
 import { viewTypeDefinition, type ViewType } from '@/features/databases/viewTypes';
 import type { Database, Row, View, ViewConfig } from '@/lib/commands';
 import { lastActiveView, rememberActiveView } from '@/lib/localState';
+import { cn } from '@/lib/utils';
+
+type DatabaseViewProps = {
+  databaseId: string;
+  /**
+   * Shown inside another page. The address then belongs to that page, so the
+   * active view is the one remembered for the database on this machine.
+   */
+  embedded?: boolean;
+};
 
 /**
  * What a database page shows below its title: the tabs of its views and what
  * the active view shows. It sets its own width, so that the table can use the
  * whole main area without a change to the page around it.
  */
-export function DatabaseView({ databaseId }: { databaseId: string }) {
+export function DatabaseView({ databaseId, embedded = false }: DatabaseViewProps) {
   const { t } = useTranslation();
   const database = useDatabase(databaseId);
   const rows = useRows(databaseId);
 
   if (database.isError || rows.isError) {
     return (
-      <p role="alert" className="text-muted-foreground mx-auto w-full max-w-[720px] px-12 text-sm">
+      <p
+        role="alert"
+        className={cn(
+          'text-muted-foreground text-sm',
+          !embedded && 'mx-auto w-full max-w-[720px] px-12',
+        )}
+      >
         {t('databases.table.loadFailed')}
       </p>
     );
   }
   if (!database.isSuccess || !rows.isSuccess) return null;
 
-  return <DatabaseViews database={database.data} rows={rows.data} />;
+  return <DatabaseViews database={database.data} rows={rows.data} embedded={embedded} />;
 }
 
 /**
@@ -61,11 +77,23 @@ function newViewName(views: View[], base: string) {
   return `${base} ${number}`;
 }
 
-function DatabaseViews({ database, rows }: { database: Database; rows: Row[] }) {
+function DatabaseViews({
+  database,
+  rows,
+  embedded,
+}: {
+  database: Database;
+  rows: Row[];
+  embedded: boolean;
+}) {
   const { t } = useTranslation();
   const databaseId = database.page.id;
-  const search: { view?: string } = useSearch({ strict: false });
+  const address: { view?: string } = useSearch({ strict: false });
   const navigate = useNavigate();
+  // Embedded, the view lives in the memory below, which outlasts the block's component
+  // (moving the block builds it anew); this state only makes a switch show at once.
+  const [embeddedView, setEmbeddedView] = useState(() => lastActiveView(databaseId) ?? undefined);
+  const search = embedded ? { view: embeddedView } : address;
   const queryClient = useQueryClient();
   const createView = useCreateView(databaseId);
   const { change: changeView, flush: flushViews } = useUpdateView(databaseId);
@@ -74,8 +102,14 @@ function DatabaseViews({ database, rows }: { database: Database; rows: Row[] }) 
   const active = activeViewOf(views, databaseId, search.view);
   const activeId = active?.id ?? null;
 
-  const show = (id: string, replace = false) =>
-    navigate({ to: '.', search: (previous) => ({ ...previous, view: id }), replace });
+  const show = (id: string, replace = false) => {
+    if (embedded) {
+      rememberActiveView(databaseId, id);
+      setEmbeddedView(id);
+      return;
+    }
+    void navigate({ to: '.', search: (previous) => ({ ...previous, view: id }), replace });
+  };
 
   useEffect(() => {
     if (activeId === null) return;
@@ -84,14 +118,14 @@ function DatabaseViews({ database, rows }: { database: Database; rows: Row[] }) 
     // A view that was just created is in the cache before this component has seen it.
     const cached = queryClient.getQueryData<Database>(databaseKeys.database(databaseId));
     const known = cached?.views.some((view) => view.id === search.view) ?? false;
-    if (search.view !== undefined && search.view !== activeId && !known) {
+    if (!embedded && search.view !== undefined && search.view !== activeId && !known) {
       void navigate({
         to: '.',
         search: (previous) => ({ ...previous, view: activeId }),
         replace: true,
       });
     }
-  }, [activeId, databaseId, search.view, navigate, queryClient]);
+  }, [activeId, databaseId, embedded, search.view, navigate, queryClient]);
 
   // A change that waits for its pause is sent when another view is shown,
   // when the database is left, and when the page goes away.
@@ -110,7 +144,7 @@ function DatabaseViews({ database, rows }: { database: Database; rows: Row[] }) 
 
   const select = (id: string) => {
     if (activeId !== null) flushViews(activeId);
-    void show(id);
+    show(id);
   };
 
   const add = (type: ViewType) =>
@@ -126,7 +160,7 @@ function DatabaseViews({ database, rows }: { database: Database; rows: Row[] }) 
     if (id === activeId) {
       const index = views.findIndex((view) => view.id === id);
       const neighbour = views[index + 1] ?? views[index - 1];
-      if (neighbour) void show(neighbour.id, true);
+      if (neighbour) show(neighbour.id, true);
     }
     deleteView.mutate(id);
   };
