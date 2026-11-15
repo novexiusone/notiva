@@ -31,6 +31,7 @@ test('typing a slash opens the menu with its groups, shortcuts and footer', asyn
     'Quote>',
     'Code```',
     'Image',
+    'Page',
     'Database',
   ]);
   await expect(page.getByText('Type to filter')).toBeVisible();
@@ -93,4 +94,27 @@ test('a filter without matches says so', async ({ page }) => {
   await page.keyboard.type('/zzz');
 
   await expect(page.getByText('No matching blocks')).toBeVisible();
+});
+
+test('"Page" creates a subpage, links to it from the text and opens it', async ({ page }) => {
+  const title = page.getByRole('main').getByRole('textbox', { name: 'Page title' });
+
+  await page.keyboard.type('/subpage');
+  await expect(options(page)).toHaveText(['Page']);
+  await page.keyboard.press('Enter');
+
+  // The new page is open and its title is ready to be typed.
+  await expect(title).toHaveValue('');
+  await expect(title).toBeFocused();
+  await title.fill('Child');
+  await expect(page.getByRole('treeitem')).toHaveText(['Slash', 'Child']);
+
+  // The page it was made on has a link to it, which follows the title.
+  await page
+    .getByRole('main')
+    .getByRole('navigation', { name: 'Path' })
+    .getByRole('link', { name: 'Slash' })
+    .click();
+  await expect(title).toHaveValue('Slash');
+  await expect(editor(page).locator('[data-page-link]')).toHaveText('Child');
 });

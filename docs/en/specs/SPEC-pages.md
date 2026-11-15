@@ -21,6 +21,7 @@ A page's content is the `editor` module's job; a database's table belongs to `da
 ## Behaviour
 
 - **Create.** The `+` in the "Private" header creates a top-level page. The `+` on a row creates a subpage and expands the row. A new page is titled "Untitled", is opened immediately and has its title focused.
+- **Create from inside a page.** "Page" in the editor's slash menu creates a subpage below the open page, inserts a link to it in the text (it follows the subpage's title) and opens the new page with its title focused. The subpage appears in the tree like any other. If creating fails, nothing is inserted and a message says so.
 - **Open.** Clicking a row opens the page at `/page/<id>`. The open page is highlighted in the tree and in Favourites when present there.
 - **Rename.** The title in the main area is editable; the tree follows as you type. "Rename" in the row menu edits the name inline in the tree. An empty title is stored as an empty string and shown as "Untitled".
 - **Move.** Rows can be dragged to reorder them or to drop them into another page. A page cannot be dropped into itself or into one of its descendants.

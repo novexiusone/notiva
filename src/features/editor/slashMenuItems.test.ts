@@ -12,6 +12,8 @@ vi.mock('@blocknote/core/extensions', async (importOriginal) => ({
 const editor = {} as Parameters<typeof getSlashMenuItems>[0];
 const noActions: SlashMenuActions = {
   createDatabase: () => Promise.reject(new Error('not expected')),
+  createPage: () => Promise.reject(new Error('not expected')),
+  openPage: () => {},
   onFailure: () => {},
 };
 const items = (query: string, actions = noActions) =>
@@ -27,7 +29,7 @@ describe('getSlashMenuItems', () => {
       'Bulleted list',
       'To-do list',
     ]);
-    expect(all.filter((item) => item.group === 'basic')).toHaveLength(11);
+    expect(all.filter((item) => item.group === 'basic')).toHaveLength(12);
   });
 
   it('gives every entry an id of its own, so one block can appear in both groups', () => {
@@ -101,7 +103,7 @@ describe('getSlashMenuItems', () => {
       const createDatabase = vi.fn(() => new Promise<string>((resolve) => (created = resolve)));
       const onFailure = vi.fn();
 
-      choose({ createDatabase, onFailure });
+      choose({ ...noActions, createDatabase, onFailure });
 
       expect(createDatabase).toHaveBeenCalledOnce();
       // Nothing is inserted while the database does not exist yet.
@@ -119,10 +121,51 @@ describe('getSlashMenuItems', () => {
       const error = { kind: 'storage', message: 'disk full' };
       const onFailure = vi.fn();
 
-      choose({ createDatabase: () => Promise.reject(error), onFailure });
+      choose({ ...noActions, createDatabase: () => Promise.reject(error), onFailure });
 
-      await vi.waitFor(() => expect(onFailure).toHaveBeenCalledWith(error));
+      await vi.waitFor(() => expect(onFailure).toHaveBeenCalledWith(error, 'database'));
       expect(insert).not.toHaveBeenCalled();
+    });
+  });
+
+  it('lists the page in the basic blocks and finds it by typing', () => {
+    expect(items('seite').map((item) => item.title)).toEqual(['Page']);
+    expect(items('subpage').map((item) => item.title)).toEqual(['Page']);
+    expect(items('').filter((item) => item.title === 'Page')).toHaveLength(1);
+  });
+
+  describe('choosing "Page"', () => {
+    const insert = vi.mocked(insertOrUpdateBlockForSlashMenu);
+
+    beforeEach(() => insert.mockReset());
+
+    const choose = (actions: SlashMenuActions) =>
+      items('subpage', actions)
+        .find((item) => item.title === 'Page')!
+        .onItemClick();
+
+    it('creates the page, inserts a link to it and opens it', async () => {
+      const openPage = vi.fn();
+
+      choose({ ...noActions, createPage: () => Promise.resolve('p1'), openPage });
+
+      await vi.waitFor(() => expect(openPage).toHaveBeenCalledWith('p1'));
+      expect(insert).toHaveBeenCalledWith(editor, {
+        type: 'paragraph',
+        content: [{ type: 'pageLink', props: { pageId: 'p1' } }, ' '],
+      });
+    });
+
+    it('inserts nothing and opens nothing when creating fails', async () => {
+      const error = { kind: 'internal', message: 'disk full' };
+      const onFailure = vi.fn();
+      const openPage = vi.fn();
+
+      choose({ ...noActions, createPage: () => Promise.reject(error), onFailure, openPage });
+
+      await vi.waitFor(() => expect(onFailure).toHaveBeenCalledWith(error, 'page'));
+      expect(insert).not.toHaveBeenCalled();
+      expect(openPage).not.toHaveBeenCalled();
     });
   });
 });

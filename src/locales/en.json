@@ -191,7 +191,8 @@
     "saveFailed": "The last change could not be saved. It will be tried again with the next change.",
     "imageRefused": "Only PNG, JPEG, GIF and WebP images up to 20 MiB can be added.",
     "imageFailed": "The image could not be stored.",
-    "databaseFailed": "The database could not be created."
+    "databaseFailed": "The database could not be created.",
+    "pageFailed": "The page could not be created."
   },
   "slashMenu": {
     "filter": "Type to filter",
@@ -210,7 +211,8 @@
       "quote": "Quote",
       "codeBlock": "Code",
       "image": "Image",
-      "database": "Database"
+      "database": "Database",
+      "page": "Page"
     }
   },
   "links": {

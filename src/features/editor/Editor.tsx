@@ -4,6 +4,7 @@ import { BlockNoteView } from '@blocknote/shadcn';
 import '@blocknote/shadcn/style.css';
 import { useImperativeHandle, useMemo, useState, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from '@tanstack/react-router';
 import { useCreateDatabase } from '@/features/databases/api';
 import { useBlocks, useSaveBlocks } from '@/features/editor/api';
 import { schema } from '@/features/editor/schema';
@@ -17,7 +18,7 @@ import { SlashMenuQueryContext } from '@/features/editor/slashMenuQuery';
 import { useAutosave } from '@/features/editor/useAutosave';
 import { getPageLinkItems, type PageLinkItem } from '@/features/links/pageLinkItems';
 import { PageLinkMenu } from '@/features/links/PageLinkMenu';
-import { usePages } from '@/features/pages/api';
+import { useCreatePage, usePages } from '@/features/pages/api';
 import { commands, type Block, type CommandError } from '@/lib/commands';
 import { useColorScheme } from '@/lib/useColorScheme';
 
@@ -47,15 +48,23 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
   // What went wrong with the last image or block that was to be added.
   const [insertError, setInsertError] = useState<string | null>(null);
   const { mutateAsync: createDatabase } = useCreateDatabase();
+  const { mutateAsync: createPage } = useCreatePage();
+  const navigate = useNavigate();
   const slashActions = useMemo<SlashMenuActions>(
     () => ({
       createDatabase: async () => {
         setInsertError(null);
         return (await createDatabase(pageId)).page.id;
       },
-      onFailure: () => setInsertError(t('editor.databaseFailed')),
+      createPage: async () => {
+        setInsertError(null);
+        return (await createPage(pageId)).id;
+      },
+      openPage: (id) => void navigate({ to: '/page/$pageId', params: { pageId: id } }),
+      onFailure: (_error, what) =>
+        setInsertError(t(what === 'page' ? 'editor.pageFailed' : 'editor.databaseFailed')),
     }),
-    [createDatabase, pageId, t],
+    [createDatabase, createPage, navigate, pageId, t],
   );
 
   const editor = useCreateBlockNote({
