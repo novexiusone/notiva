@@ -6,7 +6,7 @@ Notes must never be locked in. The user can write any page, with its subpages, o
 
 ## Behaviour
 
-- **Export a page.** "Export as Markdown…" in a page's menu asks for a folder and exports that page together with its subpages. For a database, the subpages are its rows.
+- **Export a page.** "Export" in a page's menu opens a panel that slides in from the right. It lists the formats (Markdown only for now) and has an Export button; that asks for a folder and exports the page together with its subpages. For a database, the subpages are its rows. Escape or the close button dismisses the panel, and it closes when the export has finished or reports why it failed.
 - **Export everything.** "Export all pages…" in the settings menu asks for a folder and exports every page.
 - **Never overwrites.** The export is written into a new folder inside the chosen one, named "Notiva export" (or "Notiva export 2", and so on, when that exists).
 - **Feedback.** When it is done, a notice says how many pages were written and where. Databases and rows count as pages. If it fails, the notice says why and nothing half-written is left behind as the result.

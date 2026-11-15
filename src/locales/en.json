@@ -24,22 +24,12 @@
     "addIcon": "Add icon",
     "changeIcon": "Change icon",
     "removeIcon": "Remove icon",
-    "addBanner": "Add banner",
-    "changeBanner": "Change banner",
-    "removeBanner": "Remove banner",
-    "chooseBanner": "Choose banner image",
-    "banner": "Page banner",
-    "bannerFailed": "The banner could not be stored.",
-    "icons": {
-      "book": "Book",
-      "checklist": "Checklist",
-      "document": "Document",
-      "folder": "Folder",
-      "heart": "Heart",
-      "idea": "Idea",
-      "star": "Star",
-      "target": "Target"
-    },
+    "addBanner": "Add cover",
+    "changeBanner": "Change cover",
+    "removeBanner": "Remove cover",
+    "chooseBanner": "Choose cover image",
+    "banner": "Page cover",
+    "bannerFailed": "The cover could not be stored.",
     "actions": "Page actions",
     "rename": "Rename",
     "delete": "Delete",
@@ -55,7 +45,29 @@
     "deleteDescriptionWithSubpagesAndRows": "This also deletes {{subpages}} and {{rows}}. This cannot be undone.",
     "subpageCount_one": "{{count}} subpage",
     "subpageCount_other": "{{count}} subpages",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "addCover": "Add cover",
+    "path": "Path",
+    "iconPicker": "Choose an icon",
+    "picker": {
+      "emoji": "Emoji",
+      "icons": "Icons",
+      "remove": "Remove",
+      "filter": "Filter…",
+      "random": "Random emoji",
+      "none": "Nothing found",
+      "groups": {
+        "smileys": "Smileys & emotion",
+        "people": "People & body",
+        "animals": "Animals & nature",
+        "food": "Food & drink",
+        "travel": "Travel & places",
+        "activities": "Activities",
+        "objects": "Objects",
+        "symbols": "Symbols",
+        "flags": "Flags"
+      }
+    }
   },
   "databases": {
     "new": "New database",
@@ -208,6 +220,13 @@
     "chooseFolder": "Choose where to put the export",
     "done_one": "Exported {{count}} page to {{directory}}",
     "done_other": "Exported {{count}} pages to {{directory}}",
-    "failed": "The export failed: {{message}}"
+    "failed": "The export failed: {{message}}",
+    "menu": "Export",
+    "panelTitle": "Export",
+    "panelDescription": "Export “{{title}}” with its subpages.",
+    "formats": "Export formats",
+    "markdown": "Markdown",
+    "run": "Export",
+    "close": "Close"
   }
 }

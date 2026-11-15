@@ -97,18 +97,16 @@ test('icon, banner and page actions work from the page menu and survive a reload
   await createPage(page, 'Decorated');
   const main = page.getByRole('main');
   const actions = main.getByRole('button', { name: 'Page actions' });
-  const banner = main.getByRole('img', { name: 'Page banner' });
+  const banner = main.getByRole('img', { name: 'Page cover' });
 
-  await actions.click();
-  await page.getByRole('menuitem', { name: 'Add icon' }).hover();
-  // Let Radix finish opening the submenu before moving the pointer into it.
-  await page.waitForTimeout(300);
-  await page.getByRole('menuitem', { name: 'Book', exact: true }).click();
-  await expect(main.locator('.lucide-book-open')).toBeVisible();
+  await main.getByRole('button', { name: 'Add icon' }).click();
+  await page.getByRole('tab', { name: 'Icons' }).click();
+  await page.getByRole('button', { name: 'book', exact: true }).click();
+  await expect(main.locator('article .lucide-book-open')).toBeVisible();
   await expect(row(page, 'Decorated').locator('.lucide-book-open')).toBeVisible();
 
   await actions.click();
-  await page.getByRole('menuitem', { name: 'Add banner' }).click();
+  await page.getByRole('menuitem', { name: 'Add cover' }).click();
   await page.locator('input[type="file"]').setInputFiles({
     name: 'pixel.png',
     mimeType: 'image/png',
@@ -120,18 +118,19 @@ test('icon, banner and page actions work from the page menu and survive a reload
   await expect(banner).toHaveAttribute('src', /^data:image\/png;base64,/);
 
   await page.reload();
-  await expect(main.locator('.lucide-book-open')).toBeVisible();
+  await expect(main.locator('article .lucide-book-open')).toBeVisible();
   await expect(banner).toBeVisible();
 
   await actions.click();
   await page.getByRole('menuitem', { name: 'Remove icon' }).click();
-  await expect(main.locator('.lucide-book-open')).toHaveCount(0);
+  await expect(main.locator('article .lucide-book-open')).toHaveCount(0);
   await actions.click();
-  await page.getByRole('menuitem', { name: 'Remove banner' }).click();
+  await page.getByRole('menuitem', { name: 'Remove cover' }).click();
   await expect(banner).toHaveCount(0);
 
   await actions.click();
-  await page.getByRole('menuitem', { name: 'Export as Markdown…' }).click();
+  await page.getByRole('menuitem', { name: 'Export', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Export' }).click();
   await expect(
     page.getByText('Exported 1 page to /Users/demo/Documents/Notiva export'),
   ).toBeVisible();
@@ -143,16 +142,26 @@ test('icon, banner and page actions work from the page menu and survive a reload
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
 });
 
-test('the page menu adds a database below the open page', async ({ page }) => {
+test('the top bar shows the path to the page and links to its parents', async ({ page }) => {
   await createPage(page, 'Parent');
-  await page.getByRole('main').getByRole('button', { name: 'Page actions' }).click();
-  await page.getByRole('menuitem', { name: 'Add database' }).click();
+  await row(page, 'Parent').getByRole('button', { name: 'Add a subpage' }).click();
+  await title(page).fill('Child');
 
-  await expect(title(page)).toBeFocused();
-  await expect(title(page)).toHaveValue('');
-  await expect(title(page)).toHaveAttribute('placeholder', 'Untitled');
-  await expect(page.getByRole('region', { name: 'Rows' })).toBeVisible();
-  await expect(row(page, 'Untitled')).toHaveAttribute('aria-level', '2');
+  const path = page.getByRole('main').getByRole('navigation', { name: 'Path' });
+  await expect(path.getByRole('link', { name: 'Parent' })).toBeVisible();
+  await expect(path.locator('[aria-current="page"]')).toHaveText('Child');
+
+  await path.getByRole('link', { name: 'Parent' }).click();
+  await expect(title(page)).toHaveValue('Parent');
+});
+
+test('the page menu has no rename or add database', async ({ page }) => {
+  await createPage(page, 'Plain');
+  await page.getByRole('main').getByRole('button', { name: 'Page actions' }).click();
+
+  await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Add database' })).toHaveCount(0);
 });
 
 test.describe('the page header in light mode and German', () => {
@@ -168,6 +177,6 @@ test.describe('the page header in light mode and German', () => {
     await expect(page.getByRole('button', { name: 'Zu Favoriten hinzufügen' })).toBeVisible();
     await page.getByRole('main').getByRole('button', { name: 'Seitenaktionen' }).click();
     await expect(page.getByRole('menuitem', { name: 'Icon hinzufügen' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Banner hinzufügen' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Cover hinzufügen' })).toBeVisible();
   });
 });

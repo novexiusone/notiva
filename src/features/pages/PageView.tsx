@@ -1,12 +1,13 @@
 import { Navigate } from '@tanstack/react-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DatabaseView } from '@/features/databases/DatabaseView';
 import { Editor, type EditorHandle } from '@/features/editor/Editor';
 import { Backlinks } from '@/features/links/Backlinks';
 import { PageHeader } from '@/features/pages/PageHeader';
-import { PageIcon } from '@/features/pages/PageIcon';
+import { AppearanceRow } from '@/features/pages/PageAppearance';
 import { usePages, useRenamePage } from '@/features/pages/api';
+import { useBannerChooser } from '@/features/pages/useBannerChooser';
 import { rememberLastPage } from '@/lib/localState';
 import { cn } from '@/lib/utils';
 
@@ -19,6 +20,8 @@ export function PageView({ pageId }: { pageId: string }) {
   const editor = useRef<EditorHandle>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const page = pages.data?.find((candidate) => candidate.id === pageId);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const banner = useBannerChooser(pageId);
 
   useEffect(() => {
     if (page) rememberLastPage(page.id);
@@ -53,16 +56,20 @@ export function PageView({ pageId }: { pageId: string }) {
       <PageHeader
         page={page}
         pages={pages.data ?? []}
-        onRename={() => {
-          titleInput.current?.focus();
-          titleInput.current?.select();
-        }}
+        onChooseIcon={() => setPickerOpen(true)}
+        onChooseBanner={banner.choose}
       />
+      {banner.input}
       {page.banner !== null ? (
         <img src={page.banner} alt={t('pages.banner')} className="h-40 w-full object-cover" />
       ) : null}
-      <div className={cn(column, page.banner === null ? 'pt-16' : 'pt-8')}>
-        {page.icon !== null ? <PageIcon page={page} size={40} className="mb-4" /> : null}
+      <div className={cn(column, 'group/appearance', page.banner === null ? 'pt-12' : 'pt-6')}>
+        <AppearanceRow
+          page={page}
+          pickerOpen={pickerOpen}
+          onPickerOpenChange={setPickerOpen}
+          onChooseBanner={banner.choose}
+        />
         {title}
       </div>
       {page.kind === 'database' ? (
