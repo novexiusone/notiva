@@ -38,23 +38,25 @@ describe('buildTree', () => {
         id: 'a',
         title: 'A',
         kind: 'page',
+        icon: null,
         children: [
           {
             id: 'a1',
             title: 'A1',
             kind: 'page',
-            children: [{ id: 'a1x', title: 'A1X', kind: 'page', children: [] }],
+            icon: null,
+            children: [{ id: 'a1x', title: 'A1X', kind: 'page', icon: null, children: [] }],
           },
-          { id: 'a2', title: 'A2', kind: 'page', children: [] },
+          { id: 'a2', title: 'A2', kind: 'page', icon: null, children: [] },
         ],
       },
-      { id: 'b', title: 'B', kind: 'page', children: [] },
+      { id: 'b', title: 'B', kind: 'page', icon: null, children: [] },
     ]);
   });
 
   it('keeps a page whose parent is missing as a top-level page', () => {
     expect(buildTree([page('orphan', 'Orphan', 'gone')])).toEqual([
-      { id: 'orphan', title: 'Orphan', kind: 'page', children: [] },
+      { id: 'orphan', title: 'Orphan', kind: 'page', icon: null, children: [] },
     ]);
   });
 
@@ -64,9 +66,10 @@ describe('buildTree', () => {
         id: 'a',
         title: 'A',
         kind: 'page',
-        children: [{ id: 'db', title: 'Tasks', kind: 'database', children: [] }],
+        icon: null,
+        children: [{ id: 'db', title: 'Tasks', kind: 'database', icon: null, children: [] }],
       },
-      { id: 'top', title: 'Top-level database', kind: 'database', children: [] },
+      { id: 'top', title: 'Top-level database', kind: 'database', icon: null, children: [] },
     ]);
   });
 

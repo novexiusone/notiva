@@ -116,6 +116,17 @@ describe('useSetCell', () => {
     await waitFor(async () => expect((await commands.listRows('db'))[1]!.cells.amount).toBe(7));
   });
 
+  it('updates the row page edit timestamp after a cell is saved', async () => {
+    const { current, pages } = await renderDatabase(() => ({ setCell: useSetCell('db') }));
+    const before = pages().find((page) => page.id === 'r2')!.updatedAt;
+
+    act(() => current().setCell('r2', 'amount', 7));
+
+    await waitFor(() =>
+      expect(pages().find((page) => page.id === 'r2')!.updatedAt).not.toBe(before),
+    );
+  });
+
   it('empties a cell with null', async () => {
     const { current, cells } = await renderDatabase(() => ({ setCell: useSetCell('db') }));
 
@@ -269,6 +280,9 @@ describe('databases and rows as pages', () => {
       kind: 'page',
       databaseId: 'db',
       isFavorite: false,
+      icon: null,
+      banner: null,
+      updatedAt: expect.any(String),
     });
     await waitFor(async () => expect(current().pages.data).toEqual(await commands.listPages()));
   });

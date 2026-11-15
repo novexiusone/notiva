@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FileText, MoreHorizontal, Plus, Table } from 'lucide-react';
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from 'lucide-react';
 import { useContext, useRef } from 'react';
 import type { NodeRendererProps } from 'react-arborist';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { PageIcon } from '@/features/pages/PageIcon';
 import { PageRowActionsContext } from '@/features/pages/pageRowActions';
 import type { PageNode } from '@/features/pages/tree';
 import { cn } from '@/lib/utils';
@@ -22,7 +23,6 @@ export function PageRow({ node, style, dragHandle }: NodeRendererProps<PageNode>
   const hasChildren = node.data.children.length > 0;
   // The children of a database are its rows, which it shows itself.
   const isDatabase = node.data.kind === 'database';
-  const Icon = isDatabase ? Table : FileText;
   const movedFocus = useRef(false);
   const isOpenPage = actions?.openPageId === node.id;
   // The indent comes from the tree; the rest lines the icon up with the sidebar items.
@@ -54,11 +54,10 @@ export function PageRow({ node, style, dragHandle }: NodeRendererProps<PageNode>
             <ChevronRight size={16} aria-hidden />
           )}
         </button>
-      ) : (
-        <span className="flex size-5 shrink-0 items-center justify-center">
-          <Icon size={16} aria-hidden />
-        </span>
-      )}
+      ) : null}
+      <span className="flex size-5 shrink-0 items-center justify-center">
+        <PageIcon page={node.data} size={16} />
+      </span>
 
       {node.isEditing ? (
         <input

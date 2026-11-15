@@ -77,6 +77,17 @@ test('content is saved without a save button and is back after a restart', async
   expect((await blockIds(page)).slice(0, 2)).toEqual(idsBefore.slice(0, 2));
 });
 
+test('saving content updates the last edited timestamp', async ({ page }) => {
+  await newPage(page, 'Journal');
+  const edited = page.locator('time');
+  const before = await edited.getAttribute('datetime');
+
+  await page.keyboard.type('New text');
+  await waitForSave(page, 'New text');
+
+  await expect.poll(() => edited.getAttribute('datetime')).not.toBe(before);
+});
+
 test('leaving a page right after typing does not lose the change', async ({ page }) => {
   await newPage(page, 'First');
   await page.keyboard.type('Typed and left at once');

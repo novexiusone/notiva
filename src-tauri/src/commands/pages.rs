@@ -36,6 +36,18 @@ pub async fn set_favorite(
 }
 
 #[tauri::command]
+pub async fn update_appearance(
+    storage: State<'_, Storage>,
+    id: String,
+    icon: Option<String>,
+    banner: Option<String>,
+) -> Result<Page, CommandError> {
+    Ok(storage
+        .update_appearance(&id, icon.as_deref(), banner.as_deref())
+        .await?)
+}
+
+#[tauri::command]
 pub async fn move_page(
     storage: State<'_, Storage>,
     id: String,

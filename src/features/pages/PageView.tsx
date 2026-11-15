@@ -1,11 +1,12 @@
 import { Navigate } from '@tanstack/react-router';
-import { Star } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DatabaseView } from '@/features/databases/DatabaseView';
 import { Editor, type EditorHandle } from '@/features/editor/Editor';
 import { Backlinks } from '@/features/links/Backlinks';
-import { usePages, useRenamePage, useSetFavorite } from '@/features/pages/api';
+import { PageHeader } from '@/features/pages/PageHeader';
+import { PageIcon } from '@/features/pages/PageIcon';
+import { usePages, useRenamePage } from '@/features/pages/api';
 import { rememberLastPage } from '@/lib/localState';
 import { cn } from '@/lib/utils';
 
@@ -15,8 +16,8 @@ export function PageView({ pageId }: { pageId: string }) {
   const { t } = useTranslation();
   const pages = usePages();
   const renamePage = useRenamePage();
-  const setFavorite = useSetFavorite();
   const editor = useRef<EditorHandle>(null);
+  const titleInput = useRef<HTMLInputElement>(null);
   const page = pages.data?.find((candidate) => candidate.id === pageId);
 
   useEffect(() => {
@@ -27,20 +28,9 @@ export function PageView({ pageId }: { pageId: string }) {
   // The page was deleted, or a remembered page no longer exists.
   if (!page) return <Navigate to="/" replace />;
 
-  const favouriteButton = (
-    <button
-      type="button"
-      aria-label={t(page.isFavorite ? 'pages.removeFavorite' : 'pages.addFavorite')}
-      aria-pressed={page.isFavorite}
-      className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/50 absolute top-4 right-4 flex size-8 items-center justify-center rounded-sm outline-none focus-visible:ring-2"
-      onClick={() => setFavorite(page.id, !page.isFavorite)}
-    >
-      <Star size={18} className={page.isFavorite ? 'fill-current' : undefined} aria-hidden />
-    </button>
-  );
-
   const title = (
     <input
+      ref={titleInput}
       // A fresh input per page, so focus and undo history do not carry over.
       key={page.id}
       autoFocus={page.title === ''}
@@ -58,24 +48,31 @@ export function PageView({ pageId }: { pageId: string }) {
     />
   );
 
-  // A database shows its rows where a page has its text. Only the title keeps
-  // the reading width; what is below it decides for itself.
-  if (page.kind === 'database') {
-    return (
-      <article className="relative pt-16 pb-32">
-        {favouriteButton}
-        <div className={column}>{title}</div>
-        <DatabaseView databaseId={page.id} />
-      </article>
-    );
-  }
-
   return (
-    <article className={cn(column, 'relative pt-16 pb-32')}>
-      {favouriteButton}
-      {title}
-      <Editor pageId={page.id} ref={editor} />
-      <Backlinks pageId={page.id} />
+    <article className="relative pb-32">
+      <PageHeader
+        page={page}
+        pages={pages.data ?? []}
+        onRename={() => {
+          titleInput.current?.focus();
+          titleInput.current?.select();
+        }}
+      />
+      {page.banner !== null ? (
+        <img src={page.banner} alt={t('pages.banner')} className="h-40 w-full object-cover" />
+      ) : null}
+      <div className={cn(column, page.banner === null ? 'pt-16' : 'pt-8')}>
+        {page.icon !== null ? <PageIcon page={page} size={40} className="mb-4" /> : null}
+        {title}
+      </div>
+      {page.kind === 'database' ? (
+        <DatabaseView databaseId={page.id} />
+      ) : (
+        <div className={column}>
+          <Editor pageId={page.id} ref={editor} />
+          <Backlinks pageId={page.id} />
+        </div>
+      )}
     </article>
   );
 }

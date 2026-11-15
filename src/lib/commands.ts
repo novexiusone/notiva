@@ -13,6 +13,9 @@ export type Page = {
   /** Set on the rows of a database, where it equals `parentId`. */
   databaseId: string | null;
   isFavorite: boolean;
+  icon: string | null;
+  banner: string | null;
+  updatedAt: string;
 };
 
 /** A reference to a page: enough to show it in a list and open it. */
@@ -150,6 +153,8 @@ export const commands = {
   createPage: (parentId: string | null) => invoke<Page>('create_page', { parentId }),
   renamePage: (id: string, title: string) => invoke<Page>('rename_page', { id, title }),
   setFavorite: (id: string, favorite: boolean) => invoke<Page>('set_favorite', { id, favorite }),
+  updateAppearance: (id: string, icon: string | null, banner: string | null) =>
+    invoke<Page>('update_appearance', { id, icon, banner }),
   movePage: (id: string, parentId: string | null, index: number) =>
     invoke<void>('move_page', { id, parentId, index }),
   deletePage: (id: string) => invoke<void>('delete_page', { id }),

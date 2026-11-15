@@ -91,6 +91,48 @@ export function useSetFavorite() {
   };
 }
 
+export function useUpdateAppearance() {
+  const queryClient = useQueryClient();
+  const setPages = useSetPages();
+
+  const mutation = useMutation({
+    mutationKey: ['update-appearance'],
+    scope: { id: 'update-appearance' },
+    mutationFn: ({
+      id,
+      icon,
+      banner,
+    }: {
+      id: string;
+      icon: string | null;
+      banner: string | null;
+    }) => commands.updateAppearance(id, icon, banner),
+    onSettled: () => {
+      if (queryClient.isMutating({ mutationKey: ['update-appearance'] }) <= 1) {
+        return queryClient.invalidateQueries({ queryKey: pagesKey });
+      }
+    },
+  });
+
+  const change = (id: string, changes: { icon?: string | null; banner?: string | null }) => {
+    const current = queryClient.getQueryData<Page[]>(pagesKey)?.find((page) => page.id === id);
+    if (!current) return;
+    const icon = changes.icon === undefined ? current.icon : changes.icon;
+    const banner = changes.banner === undefined ? current.banner : changes.banner;
+    const updatedAt = new Date().toISOString();
+    setPages((pages) =>
+      pages.map((page) => (page.id === id ? { ...page, icon, banner, updatedAt } : page)),
+    );
+    mutation.mutate({ id, icon, banner });
+  };
+
+  return {
+    change,
+    saveBanner: async (id: string, file: Blob) =>
+      change(id, { banner: await commands.saveImage(file) }),
+  };
+}
+
 export function useMovePage() {
   const queryClient = useQueryClient();
   const setPages = useSetPages();

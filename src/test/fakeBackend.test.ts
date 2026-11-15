@@ -82,6 +82,43 @@ describe('pages', () => {
   it('refuses to favourite an unknown page', async () => {
     await expect(commands.setFavorite('missing', true)).rejects.toMatchObject(notFound);
   });
+
+  it('sets and clears appearance and advances only the edit timestamp', async () => {
+    installFakeBackend({ persist: true });
+    const created = await commands.createPage(null);
+    expect(created).toMatchObject({ icon: null, banner: null });
+
+    const updated = await commands.updateAppearance(
+      created.id,
+      'book',
+      'notiva-image://localhost/cover.png',
+    );
+    expect(updated).toMatchObject({
+      icon: 'book',
+      banner: 'notiva-image://localhost/cover.png',
+    });
+    expect(updated.updatedAt >= created.updatedAt).toBe(true);
+
+    const favourite = await commands.setFavorite(created.id, true);
+    expect(favourite.updatedAt).toBe(updated.updatedAt);
+
+    installFakeBackend({ persist: true });
+    expect((await commands.listPages())[0]).toMatchObject({
+      icon: 'book',
+      banner: 'notiva-image://localhost/cover.png',
+    });
+
+    const cleared = await commands.updateAppearance(created.id, null, null);
+    expect(cleared).toMatchObject({ icon: null, banner: null });
+  });
+
+  it('refuses empty appearance values and unknown pages', async () => {
+    const created = await commands.createPage(null);
+
+    await expect(commands.updateAppearance(created.id, '', null)).rejects.toMatchObject(invalid);
+    await expect(commands.updateAppearance(created.id, null, '')).rejects.toMatchObject(invalid);
+    await expect(commands.updateAppearance('missing', null, null)).rejects.toMatchObject(notFound);
+  });
 });
 
 describe('databases', () => {

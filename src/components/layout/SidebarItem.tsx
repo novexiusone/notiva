@@ -1,9 +1,8 @@
-import type { LucideIcon } from 'lucide-react';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ElementType } from 'react';
 import { cn } from '@/lib/utils';
 
 type SidebarItemProps = ComponentProps<'button'> & {
-  icon: LucideIcon;
+  icon: ElementType;
   label: string;
   hint?: string;
 };

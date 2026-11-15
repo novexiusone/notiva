@@ -128,6 +128,9 @@ export function useCreateRow(databaseId: string) {
           kind: 'page',
           databaseId,
           isFavorite: false,
+          icon: null,
+          banner: null,
+          updatedAt: new Date().toISOString(),
         },
       ]);
     },
@@ -279,6 +282,7 @@ export function useSetCell(databaseId: string) {
       if (queryClient.isMutating({ mutationKey: setCellKey }) <= 1) {
         return Promise.all([
           queryClient.invalidateQueries({ queryKey: databaseKeys.rows(databaseId) }),
+          queryClient.invalidateQueries({ queryKey: pagesKey }),
           // A relation cell changes what the rows it names are linked from.
           queryClient.invalidateQueries({ queryKey: databaseKeys.allIncomingRelations }),
         ]);
