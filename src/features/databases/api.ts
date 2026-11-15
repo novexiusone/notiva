@@ -128,6 +128,9 @@ export function useCreateRow(databaseId: string) {
           kind: 'page',
           databaseId,
           isFavorite: false,
+          icon: null,
+          banner: null,
+          updatedAt: new Date().toISOString(),
         },
       ]);
     },
