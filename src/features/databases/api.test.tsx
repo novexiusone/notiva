@@ -268,6 +268,7 @@ describe('databases and rows as pages', () => {
       position: created.position,
       kind: 'page',
       databaseId: 'db',
+      isFavorite: false,
     });
     await waitFor(async () => expect(current().pages.data).toEqual(await commands.listPages()));
   });

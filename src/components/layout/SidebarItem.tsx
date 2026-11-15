@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ComponentProps } from 'react';
+import { cn } from '@/lib/utils';
 
 type SidebarItemProps = ComponentProps<'button'> & {
   icon: LucideIcon;
@@ -8,12 +9,15 @@ type SidebarItemProps = ComponentProps<'button'> & {
 };
 
 /** Takes every button prop, so it can also be the trigger of a menu. */
-export function SidebarItem({ icon: Icon, label, hint, ...props }: SidebarItemProps) {
+export function SidebarItem({ icon: Icon, label, hint, className, ...props }: SidebarItemProps) {
   return (
     <button
       type="button"
       {...props}
-      className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/50 flex h-7 w-full items-center gap-2 rounded-sm px-2 text-sm outline-none focus-visible:ring-2"
+      className={cn(
+        'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/50 flex h-7 w-full items-center gap-2 rounded-sm px-2 text-sm outline-none focus-visible:ring-2',
+        className,
+      )}
     >
       <Icon size={16} aria-hidden />
       <span className="truncate">{label}</span>

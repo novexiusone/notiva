@@ -67,6 +67,30 @@ export function useRenamePage() {
   };
 }
 
+export function useSetFavorite() {
+  const queryClient = useQueryClient();
+  const setPages = useSetPages();
+
+  const mutation = useMutation({
+    mutationKey: ['favorite-page'],
+    scope: { id: 'favorite-page' },
+    mutationFn: ({ id, favorite }: { id: string; favorite: boolean }) =>
+      commands.setFavorite(id, favorite),
+    onSettled: () => {
+      if (queryClient.isMutating({ mutationKey: ['favorite-page'] }) <= 1) {
+        return queryClient.invalidateQueries({ queryKey: pagesKey });
+      }
+    },
+  });
+
+  return (id: string, favorite: boolean) => {
+    setPages((pages) =>
+      pages.map((page) => (page.id === id ? { ...page, isFavorite: favorite } : page)),
+    );
+    mutation.mutate({ id, favorite });
+  };
+}
+
 export function useMovePage() {
   const queryClient = useQueryClient();
   const setPages = useSetPages();

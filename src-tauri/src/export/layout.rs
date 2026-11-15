@@ -165,6 +165,7 @@ mod tests {
             position,
             kind: crate::domain::PageKind::Page,
             database_id: None,
+            is_favorite: false,
         }
     }
 

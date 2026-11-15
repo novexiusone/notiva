@@ -1,10 +1,11 @@
 import { Navigate } from '@tanstack/react-router';
+import { Star } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DatabaseView } from '@/features/databases/DatabaseView';
 import { Editor, type EditorHandle } from '@/features/editor/Editor';
 import { Backlinks } from '@/features/links/Backlinks';
-import { usePages, useRenamePage } from '@/features/pages/api';
+import { usePages, useRenamePage, useSetFavorite } from '@/features/pages/api';
 import { rememberLastPage } from '@/lib/localState';
 import { cn } from '@/lib/utils';
 
@@ -14,6 +15,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const { t } = useTranslation();
   const pages = usePages();
   const renamePage = useRenamePage();
+  const setFavorite = useSetFavorite();
   const editor = useRef<EditorHandle>(null);
   const page = pages.data?.find((candidate) => candidate.id === pageId);
 
@@ -24,6 +26,18 @@ export function PageView({ pageId }: { pageId: string }) {
   if (pages.isPending) return null;
   // The page was deleted, or a remembered page no longer exists.
   if (!page) return <Navigate to="/" replace />;
+
+  const favouriteButton = (
+    <button
+      type="button"
+      aria-label={t(page.isFavorite ? 'pages.removeFavorite' : 'pages.addFavorite')}
+      aria-pressed={page.isFavorite}
+      className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/50 absolute top-4 right-4 flex size-8 items-center justify-center rounded-sm outline-none focus-visible:ring-2"
+      onClick={() => setFavorite(page.id, !page.isFavorite)}
+    >
+      <Star size={18} className={page.isFavorite ? 'fill-current' : undefined} aria-hidden />
+    </button>
+  );
 
   const title = (
     <input
@@ -48,7 +62,8 @@ export function PageView({ pageId }: { pageId: string }) {
   // the reading width; what is below it decides for itself.
   if (page.kind === 'database') {
     return (
-      <article className="pt-16 pb-32">
+      <article className="relative pt-16 pb-32">
+        {favouriteButton}
         <div className={column}>{title}</div>
         <DatabaseView databaseId={page.id} />
       </article>
@@ -56,7 +71,8 @@ export function PageView({ pageId }: { pageId: string }) {
   }
 
   return (
-    <article className={cn(column, 'pt-16 pb-32')}>
+    <article className={cn(column, 'relative pt-16 pb-32')}>
+      {favouriteButton}
       {title}
       <Editor pageId={page.id} ref={editor} />
       <Backlinks pageId={page.id} />

@@ -127,6 +127,7 @@ export function useCreateRow(databaseId: string) {
           position: row.position,
           kind: 'page',
           databaseId,
+          isFavorite: false,
         },
       ]);
     },
