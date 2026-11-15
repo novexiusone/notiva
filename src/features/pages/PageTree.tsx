@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { MoreHorizontal, Plus } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { adjustMoveIndex, Tree, type CursorProps, type TreeApi } from 'react-arborist';
 import { useTranslation } from 'react-i18next';
 import {
@@ -68,6 +68,15 @@ export function PageTree() {
 
   const list = useMemo(() => pages.data ?? [], [pages.data]);
   const nodes = useMemo(() => buildTree(list), [list]);
+
+  useEffect(() => {
+    let parentId = list.find((page) => page.id === openPageId)?.parentId;
+    while (parentId) {
+      tree.current?.open(parentId);
+      rememberOpenPage(parentId, true);
+      parentId = list.find((page) => page.id === parentId)?.parentId ?? null;
+    }
+  }, [list, openPageId]);
 
   const open = (id: string) => navigate({ to: '/page/$pageId', params: { pageId: id } });
 

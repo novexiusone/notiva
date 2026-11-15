@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SidebarItem } from '@/components/layout/SidebarItem';
+import { PageIcon } from '@/features/pages/PageIcon';
 import { usePages } from '@/features/pages/api';
 
 export function Favourites() {
@@ -25,7 +25,7 @@ export function Favourites() {
           {favourites.map((page) => (
             <SidebarItem
               key={page.id}
-              icon={Star}
+              icon={(props) => <PageIcon page={page} {...props} />}
               label={page.title || t('pages.untitled')}
               aria-current={openPageId === page.id ? 'page' : undefined}
               className={openPageId === page.id ? 'bg-accent text-foreground' : undefined}

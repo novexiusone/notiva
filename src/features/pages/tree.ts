@@ -1,6 +1,12 @@
 import type { Page } from '@/lib/commands';
 
-export type PageNode = { id: string; title: string; kind: Page['kind']; children: PageNode[] };
+export type PageNode = {
+  id: string;
+  title: string;
+  kind: Page['kind'];
+  icon: Page['icon'];
+  children: PageNode[];
+};
 
 function byPosition(a: Page, b: Page) {
   return a.position - b.position;
@@ -23,7 +29,7 @@ export function buildTree(pages: readonly Page[]): PageNode[] {
   const nodes = new Map<string, PageNode>(
     pages.map((page) => [
       page.id,
-      { id: page.id, title: page.title, kind: page.kind, children: [] },
+      { id: page.id, title: page.title, kind: page.kind, icon: page.icon, children: [] },
     ]),
   );
   const roots: PageNode[] = [];
