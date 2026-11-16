@@ -19,6 +19,8 @@ use std::time::{Duration, Instant};
 use surrealdb::types::Value;
 
 use super::Storage;
+use super::migrations::MIGRATIONS;
+use super::rows::props_text;
 use crate::domain::{Block, CellValue, PropertyType, SELECT_COLORS, SelectOption};
 
 const PAGES: usize = 10_000;
@@ -286,7 +288,8 @@ async fn create_property(
 /// inserts its rows and their blocks in batches. Each row is what
 /// `create_row`, `rename_page`, `set_cell` and `save_blocks` would have
 /// written: a page below the database with `database` set, a title, and
-/// every cell filled with a value of its property's type.
+/// every cell filled with a value of its property's type, and the search
+/// text `set_cell` computes from the cells.
 async fn seed_database(storage: &Storage) -> (String, Properties) {
     let database = storage.create_database(None).await.unwrap().page.id;
     storage.rename_page(&database, "Benchmark").await.unwrap();
@@ -317,6 +320,7 @@ async fn seed_database(storage: &Storage) -> (String, Properties) {
         .await
         .unwrap();
 
+    let written = storage.load_database(&database).await.unwrap().properties;
     for start in (0..ROWS).step_by(BATCH) {
         let end = (start + BATCH).min(ROWS);
         let mut statement = String::from(
@@ -330,25 +334,21 @@ async fn seed_database(storage: &Storage) -> (String, Properties) {
                 format!("{row}.25")
             };
             // Numbers are floats, as `set_cell` writes them.
+            let props = serde_json::json!({
+                properties.notes.as_str(): format!("Some notes on row {row}"),
+                properties.amount.as_str(): amount,
+                properties.pages.as_str(): row as f64,
+                properties.rating.as_str(): (row % 5) as f64 + 0.5,
+                properties.due.as_str(): format!("2026-{:02}-{:02}", row % 12 + 1, row % 28 + 1),
+                properties.status.as_str(): format!("status-{}", row % STATUS_OPTIONS),
+                properties.priority.as_str(): format!("priority-{}", row % PRIORITY_OPTIONS),
+            });
+            // The search text as `set_cell` computes it.
+            let text = props_text(&written, props.as_object().unwrap());
             write!(
                 statement,
                 "{{ id: page:r{row}, title: 'Row {row}', parent: $database, database: $database, \
-                 position: {row}.0, props: {{ \"{notes}\": 'Some notes on row {row}', \
-                 \"{amount_id}\": '{amount}', \"{pages}\": {row}.0, \"{rating}\": {rating_value}.5, \
-                 \"{due}\": '2026-{month:02}-{day:02}', \"{status}\": 'status-{status_value}', \
-                 \"{priority}\": 'priority-{priority_value}' }} }},",
-                notes = properties.notes,
-                amount_id = properties.amount,
-                pages = properties.pages,
-                rating = properties.rating,
-                rating_value = row % 5,
-                due = properties.due,
-                month = row % 12 + 1,
-                day = row % 28 + 1,
-                status = properties.status,
-                status_value = row % STATUS_OPTIONS,
-                priority = properties.priority,
-                priority_value = row % PRIORITY_OPTIONS,
+                 position: {row}.0, props: {props}, props_text: {text:?} }},"
             )
             .unwrap();
         }
@@ -380,6 +380,17 @@ async fn seed_database(storage: &Storage) -> (String, Properties) {
     }
 
     (database, properties)
+}
+
+/// Writes the search text of every seeded row, with the statement of the
+/// migration that fills it for existing rows. A test shows that it writes
+/// what `set_cell` writes.
+async fn fill_props_text(storage: &Storage) {
+    let fill = MIGRATIONS
+        .iter()
+        .find(|migration| migration.name == "fill_props_text")
+        .expect("the migration that fills props_text");
+    execute(storage, fill.sql.to_owned()).await;
 }
 
 /// A destructive change that runs once.
@@ -574,6 +585,18 @@ async fn benchmark() {
     let (database, properties) = seed_database(&storage).await;
     let seeding_database = started.elapsed();
     let size_with_database = mebibytes(&path);
+    // The seeded text is what the migration and `set_cell` write.
+    let filled: Option<String> = storage
+        .db
+        .query("SELECT VALUE props_text FROM ONLY page:r7")
+        .await
+        .unwrap()
+        .take(0)
+        .unwrap();
+    assert_eq!(
+        filled.as_deref(),
+        Some("Notes: Some notes on row 7\nAmount: 7.25\nStatus: status 3\nPriority: priority 1")
+    );
 
     // The seeded rows read back as rows with every cell filled.
     let rows = storage.list_rows(&database).await.unwrap();
@@ -593,6 +616,35 @@ async fn benchmark() {
         let started = Instant::now();
         let pages = storage.list_pages().await.unwrap();
         list_pages_with_rows.push((started.elapsed(), pages.len()));
+    }
+
+    // Property text: the raw query over the index, then what the app runs.
+    // Every row has a note, a status and a priority.
+    const PROPERTY_TERMS: &[&str] = &["notes", "status", "priority", "some", "row"];
+    let mut search_properties = Vec::new();
+    for _ in 0..SAMPLES {
+        let term = PROPERTY_TERMS[random.next(PROPERTY_TERMS.len())].to_string();
+        search_properties.push(
+            time(
+                &storage,
+                "SELECT id, title, search::highlight('<b>', '</b>', 0) AS excerpt, search::score(0) AS score \
+                 FROM page WHERE props_text @0@ $term ORDER BY score DESC LIMIT 20",
+                vec![("term", term)],
+            )
+            .await,
+        );
+    }
+    let mut search_with_properties = Vec::new();
+    for sample in 0..SAMPLES {
+        // A word of the ordinary pages, then a word of the row properties.
+        let query = if sample % 2 == 0 {
+            VOCABULARY[random.next(VOCABULARY.len())]
+        } else {
+            PROPERTY_TERMS[random.next(PROPERTY_TERMS.len())]
+        };
+        let started = Instant::now();
+        let hits = storage.search(query).await.unwrap();
+        search_with_properties.push((started.elapsed(), hits.len()));
     }
 
     let mut load_database = Vec::new();
@@ -656,6 +708,33 @@ async fn benchmark() {
     // delete the whole database.
     let mut changes = Vec::new();
 
+    // Renames leave the cells alone and write the search text of the rows
+    // they concern.
+    let mut renamed = options("status", STATUS_OPTIONS);
+    renamed[1].name = "renamed status".into();
+    let started = Instant::now();
+    storage
+        .update_property(&properties.status, None, Some(&renamed))
+        .await
+        .unwrap();
+    changes.push(Change {
+        name: "update_property, rename an option",
+        touched: format!("{} rows rewritten", ROWS / STATUS_OPTIONS),
+        duration: started.elapsed(),
+    });
+    let started = Instant::now();
+    storage
+        .update_property(&properties.priority, Some("Urgency"), None)
+        .await
+        .unwrap();
+    changes.push(Change {
+        name: "update_property, rename a select property",
+        touched: format!("{ROWS} rows rewritten"),
+        duration: started.elapsed(),
+    });
+    assert_eq!(storage.search("renamed").await.unwrap().len(), 20);
+    assert_eq!(storage.search("urgency").await.unwrap().len(), 20);
+
     let held = ROWS.div_ceil(STATUS_OPTIONS);
     let started = Instant::now();
     storage
@@ -702,6 +781,13 @@ async fn benchmark() {
     }));
     drop(rows);
 
+    // What migration 7 costs on a database of this size. It writes every row
+    // again, so it runs last and the size after deleting includes it.
+    let started = Instant::now();
+    fill_props_text(&storage).await;
+    let filling_props_text = started.elapsed();
+    let size_after_filling = mebibytes(&path);
+
     let started = Instant::now();
     storage.delete_page(&database).await.unwrap();
     changes.push(Change {
@@ -742,6 +828,11 @@ async fn benchmark() {
     println!(
         "Size on disk before / with / after deleting the database: {size_before_database:.1} / \
          {size_with_database:.1} / {size_after_database:.1} MiB"
+    );
+    println!(
+        "Filling props_text of every row again, as migration 7 does: {:.1} s, \
+         size on disk afterwards {size_after_filling:.1} MiB",
+        filling_props_text.as_secs_f64()
     );
     println!();
     let timings = [
@@ -845,6 +936,16 @@ async fn benchmark() {
             target: milliseconds(50),
             samples: create_row,
         },
+        Timings {
+            name: "Search property text, top 20",
+            target: milliseconds(200),
+            samples: search_properties,
+        },
+        Timings {
+            name: "Search through the repository (titles, content, properties)",
+            target: milliseconds(200),
+            samples: search_with_properties,
+        },
     ];
     timings[0].assert_rows(|rows| rows == BLOCKS_PER_PAGE);
     timings[1].assert_rows(|rows| rows > 0);
@@ -862,6 +963,8 @@ async fn benchmark() {
     // The pages, the edited page, the database and its rows.
     timings[13].assert_rows(|rows| rows == PAGES + 2 + ROWS);
     timings[14].assert_rows(|rows| rows == PROPERTIES);
+    timings[20].assert_rows(|rows| rows == 20);
+    timings[21].assert_rows(|rows| rows == 20);
 
     println!("| Query | Rows | Median | p95 | Max | Target | Result |");
     println!("| --- | --- | --- | --- | --- | --- | --- |");

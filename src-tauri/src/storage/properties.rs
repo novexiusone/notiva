@@ -7,7 +7,7 @@ use serde_json::Value;
 use surrealdb::types::SurrealValue;
 
 use super::databases::PropertyRow;
-use super::rows::{is_calendar_date, read_cell, stored};
+use super::rows::{Props, is_calendar_date, props_text, read_cell, stored};
 use super::{Storage, StorageError};
 use crate::domain::{
     CellValue, Page, PageKind, Property, PropertyType, SELECT_COLORS, SelectOption,
@@ -19,16 +19,24 @@ pub(super) const PROPERTY_FIELDS: &str = "record::id(id) AS id, \
      IF target = NONE { NONE } ELSE { record::id(target) } AS target_id";
 
 /// Writes many cells of the property `$key` in two statements, whatever the
-/// number of rows: every `{ id, value }` in `$cells` is set, every row id in
-/// `$emptied` loses the key. `UNSET props[$key]` does nothing in SurrealDB
-/// 4.0.1; setting the key to NONE removes it. A row deleted in the meantime
-/// is not written again.
+/// number of rows: every `{ id, value, text }` in `$cells` is set, every row
+/// in `$emptied` (`{ id, text }`) loses the key. `text` is the row's search
+/// text after the write. `UNSET props[$key]` does nothing in SurrealDB 4.0.1;
+/// setting the key to NONE removes it. A row deleted in the meantime is not
+/// written again.
 const WRITE_CELLS: &str = "FOR $cell IN $cells {
-         UPDATE type::record('page', $cell.id) SET props[$key] = $cell.value
-             WHERE id != NONE RETURN NONE;
+         UPDATE type::record('page', $cell.id) SET props[$key] = $cell.value,
+             props_text = $cell.text WHERE id != NONE RETURN NONE;
      };
      FOR $row IN $emptied {
-         UPDATE type::record('page', $row) SET props[$key] = NONE
+         UPDATE type::record('page', $row.id) SET props[$key] = NONE,
+             props_text = $row.text WHERE id != NONE RETURN NONE;
+     };";
+
+/// Writes the search text of every row in `$texts` (`{ id, text }`), for a
+/// change of a property's name or options that leaves the cells as they are.
+const WRITE_TEXTS: &str = "FOR $row IN $texts {
+         UPDATE type::record('page', $row.id) SET props_text = $row.text
              WHERE id != NONE RETURN NONE;
      };";
 
@@ -50,11 +58,19 @@ impl From<&SelectOption> for OptionWrite {
     }
 }
 
-/// A cell as a bulk write sets it.
+/// A cell as a bulk write sets it, with the row's search text after it.
 #[derive(SurrealValue)]
 struct CellWrite {
     id: String,
     value: Value,
+    text: String,
+}
+
+/// The search text of a row as a bulk write sets it.
+#[derive(SurrealValue)]
+struct TextWrite {
+    id: String,
+    text: String,
 }
 
 /// A view configuration as a bulk write sets it.
@@ -64,21 +80,58 @@ struct ViewWrite {
     config: Value,
 }
 
-/// What a conversion writes: cells with a new value and rows whose cell
-/// becomes empty.
+/// What a bulk change writes: cells with a new value and rows whose cell
+/// becomes empty, each with the row's search text after the change.
 #[derive(Default)]
 struct CellWrites {
     cells: Vec<CellWrite>,
-    emptied: Vec<String>,
+    emptied: Vec<TextWrite>,
 }
 
 impl CellWrites {
-    fn push(&mut self, id: String, value: CellValue) {
+    /// Writes `value` into the cell `key` of `row`, whose other cells are
+    /// `props`. `properties` are the properties of the database as they are
+    /// after the change.
+    fn push(
+        &mut self,
+        row: String,
+        mut props: Props,
+        key: &str,
+        value: CellValue,
+        properties: &[Property],
+    ) {
         match stored(value) {
-            Some(value) => self.cells.push(CellWrite { id, value }),
-            None => self.emptied.push(id),
+            Some(value) => {
+                props.insert(key.to_owned(), value.clone());
+                self.cells.push(CellWrite {
+                    text: props_text(properties, &props),
+                    id: row,
+                    value,
+                });
+            }
+            None => {
+                props.remove(key);
+                self.emptied.push(TextWrite {
+                    text: props_text(properties, &props),
+                    id: row,
+                });
+            }
         }
     }
+}
+
+/// The properties of a database with one of them as it is after a change.
+fn replace(properties: Vec<Property>, updated: Property) -> Vec<Property> {
+    properties
+        .into_iter()
+        .map(|property| {
+            if property.id == updated.id {
+                updated.clone()
+            } else {
+                property
+            }
+        })
+        .collect()
 }
 
 fn not_found(id: &str) -> StorageError {
@@ -297,21 +350,68 @@ impl Storage {
             check_options(options)?;
         }
 
+        // The rows whose search text changes: with a new name, every row
+        // that has a text or select value; with new options, the rows that
+        // hold an option that was renamed or left out.
+        let renamed = name.is_some_and(|name| name != property.name)
+            && matches!(property.kind, PropertyType::Text | PropertyType::Select);
+        let changed: HashSet<&str> = options.map_or_else(HashSet::new, |options| {
+            property
+                .options
+                .iter()
+                .filter(|old| {
+                    !options
+                        .iter()
+                        .any(|new| new.id == old.id && new.name == old.name)
+                })
+                .map(|old| old.id.as_str())
+                .collect()
+        });
+        let texts: Vec<TextWrite> = if renamed || !changed.is_empty() {
+            let (properties, rows) = self
+                .read_rows_with(&property.database_id, &property.id)
+                .await?;
+            let updated = Property {
+                name: name.map_or_else(|| property.name.clone(), str::to_owned),
+                options: options.map_or_else(|| property.options.clone(), <[_]>::to_vec),
+                ..property.clone()
+            };
+            let properties = replace(properties, updated);
+            rows.into_iter()
+                .filter(|(_, props)| {
+                    renamed
+                        || props[&property.id]
+                            .as_str()
+                            .is_some_and(|id| changed.contains(id))
+                })
+                .map(|(row, props)| TextWrite {
+                    text: props_text(&properties, &props),
+                    id: row,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
         let options: Option<Vec<OptionWrite>> =
             options.map(|options| options.iter().map(OptionWrite::from).collect());
         let row: Option<PropertyRow> = self
             .db
             .query(format!(
-                "UPDATE type::record('property', $id)
+                "BEGIN TRANSACTION;
+                 UPDATE type::record('property', $id)
                      SET name = $name ?? name, options = $options ?? options
-                     WHERE id != NONE RETURN {PROPERTY_FIELDS}"
+                     WHERE id != NONE RETURN {PROPERTY_FIELDS};
+                 {WRITE_TEXTS}
+                 COMMIT TRANSACTION;"
             ))
             .bind(("id", id.to_owned()))
             .bind(("name", name.map(str::to_owned)))
             .bind(("options", options))
+            .bind(("texts", texts))
             .await?
             .check()?
-            .take(0)?;
+            .take(1)?;
 
         row.ok_or_else(|| not_found(id))?.try_into()
     }
@@ -323,12 +423,17 @@ impl Storage {
     pub async fn delete_property(&self, id: &str) -> Result<(), StorageError> {
         let property = self.find_property(id).await?.ok_or_else(|| not_found(id))?;
 
-        let emptied: Vec<String> = self
-            .read_column(&property.database_id, &property.id)
-            .await?
+        let (properties, rows) = self
+            .read_rows_with(&property.database_id, &property.id)
+            .await?;
+        let properties: Vec<Property> = properties
             .into_iter()
-            .map(|(row, _)| row)
+            .filter(|other| other.id != property.id)
             .collect();
+        let mut writes = CellWrites::default();
+        for (row, props) in rows {
+            writes.push(row, props, &property.id, CellValue::Empty, &properties);
+        }
         let views: Vec<ViewWrite> = self
             .list_views(&property.database_id)
             .await?
@@ -355,8 +460,8 @@ impl Storage {
             ))
             .bind(("id", property.id.clone()))
             .bind(("key", property.id))
-            .bind(("cells", Vec::<CellWrite>::new()))
-            .bind(("emptied", emptied))
+            .bind(("cells", writes.cells))
+            .bind(("emptied", writes.emptied))
             .bind(("views", views))
             .await?
             .check()?;
@@ -383,13 +488,25 @@ impl Storage {
         }
 
         let held = Value::String(option_id.to_owned());
-        let emptied: Vec<String> = self
-            .read_column(&property.database_id, &property.id)
-            .await?
-            .into_iter()
-            .filter(|(_, value)| *value == held)
-            .map(|(row, _)| row)
-            .collect();
+        let (properties, rows) = self
+            .read_rows_with(&property.database_id, &property.id)
+            .await?;
+        let updated = Property {
+            options: property
+                .options
+                .iter()
+                .filter(|option| option.id != option_id)
+                .cloned()
+                .collect(),
+            ..property.clone()
+        };
+        let properties = replace(properties, updated);
+        let mut writes = CellWrites::default();
+        for (row, props) in rows {
+            if props[&property.id] == held {
+                writes.push(row, props, &property.id, CellValue::Empty, &properties);
+            }
+        }
 
         self.db
             .query(format!(
@@ -402,8 +519,8 @@ impl Storage {
             .bind(("id", property.id.clone()))
             .bind(("option", option_id.to_owned()))
             .bind(("key", property.id))
-            .bind(("cells", Vec::<CellWrite>::new()))
-            .bind(("emptied", emptied))
+            .bind(("cells", writes.cells))
+            .bind(("emptied", writes.emptied))
             .await?
             .check()?;
 
@@ -437,13 +554,31 @@ impl Storage {
         // The cells come in the manual order of the rows, so the options a
         // text creates come out in that order.
         let mut options = OptionsFromTexts::default();
+        let (properties, rows) = self
+            .read_rows_with(&property.database_id, &property.id)
+            .await?;
+        let converted: Vec<(String, Props, CellValue)> = rows
+            .into_iter()
+            .map(|(row, props)| {
+                let value = convert(
+                    read_cell(&property, &props[&property.id]),
+                    &property,
+                    kind,
+                    &mut options,
+                );
+                (row, props, value)
+            })
+            .collect();
+        // The search text needs the options the conversion created.
+        let updated = Property {
+            kind,
+            options: options.options.clone(),
+            ..property.clone()
+        };
+        let properties = replace(properties, updated);
         let mut writes = CellWrites::default();
-        for (row, value) in self
-            .read_column(&property.database_id, &property.id)
-            .await?
-        {
-            let value = convert(read_cell(&property, &value), &property, kind, &mut options);
-            writes.push(row, value);
+        for (row, props, value) in converted {
+            writes.push(row, props, &property.id, value, &properties);
         }
         let options: Vec<OptionWrite> = options.options.iter().map(OptionWrite::from).collect();
 
