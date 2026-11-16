@@ -480,7 +480,9 @@ export function installFakeBackend({
     const page = require(id);
     if (databaseLockOf(page) === 'all') refuse(id);
     const removed = new Set([id, ...descendantIds(pages, id)]);
-    const locked = pages.find((candidate) => removed.has(candidate.id) && candidate.lock !== 'none');
+    const locked = pages.find(
+      (candidate) => removed.has(candidate.id) && candidate.lock !== 'none',
+    );
     if (locked) refuse(locked.id);
   };
 

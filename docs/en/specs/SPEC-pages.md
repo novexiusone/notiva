@@ -79,14 +79,15 @@ type Page = {
 - `set_lock` changes only `lock`, not `updatedAt`. Every command that changes a locked page's title, content, appearance or position, deletes it, or changes what its lock level covers in a database, fails with `locked`. Rows are checked against their database's lock as well as their own. Pages written before the field exist read as `none`.
 - What each level blocks, as the backend enforces it (decided in #104; `own` is the page's lock, `database` the lock of the database a row belongs to):
 
-  | Command | Fails with `locked` when |
-  | ------- | ------------------------ |
-  | `rename_page`, `update_appearance`, `set_banner_position`, `move_page`, `save_blocks` | `own` is `content` or `all`, or `database` is `all` |
-  | `delete_page` | the page, or any page below it, is locked at any level, or the page is a row of a database locked `all` |
-  | `set_cell`, `set_cell_from_json` | `own` is `all` or `database` is `all` |
-  | `create_row`, `create_property`, `update_property`, `delete_property`, `delete_select_option`, `change_property_type`, `create_view`, `update_view`, `delete_view` | the database is locked `all` |
+  | Command                                                                                                                                                            | Fails with `locked` when                                                                                |
+  | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+  | `rename_page`, `update_appearance`, `set_banner_position`, `move_page`, `save_blocks`                                                                              | `own` is `content` or `all`, or `database` is `all`                                                     |
+  | `delete_page`                                                                                                                                                      | the page, or any page below it, is locked at any level, or the page is a row of a database locked `all` |
+  | `set_cell`, `set_cell_from_json`                                                                                                                                   | `own` is `all` or `database` is `all`                                                                   |
+  | `create_row`, `create_property`, `update_property`, `delete_property`, `delete_select_option`, `change_property_type`, `create_view`, `update_view`, `delete_view` | the database is locked `all`                                                                            |
 
   `set_lock` and `set_favorite` always work, so a locked page can be unlocked. Reading, opening, exporting, searching and `load_database` are never blocked. Creating a page or a database below a locked page does not change that page, so it is allowed. A page that is dropped into or out of a locked page can be moved; only moving the locked page itself is blocked. A save that changes nothing is still refused, so the editor must not autosave while locked. A row's own lock covers its title, text, icon and cover; its cells stay editable at `content`, as in a database locked at `content`. Deleting a page with a locked subpage is refused because the subpage would be deleted with it.
+
 - Errors reach the frontend as `{ kind: 'not_found' | 'invalid' | 'locked' | 'internal', message: string }`.
 
 ```bash
