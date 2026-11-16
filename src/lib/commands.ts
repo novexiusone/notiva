@@ -140,9 +140,23 @@ export type Database = { page: Page; properties: Property[]; views: View[] };
 /** The rows that point at a row through one relation property. */
 export type IncomingRelation = { property: Property; rows: PageRef[] };
 
+/** A file or a folder in the notes folder. */
+export type NoteEntry = {
+  name: string;
+  /** Relative to the notes folder, `/` separated. */
+  path: string;
+  kind: 'file' | 'folder';
+  /** Milliseconds since the epoch. */
+  modified: number;
+  size: number;
+};
+
+/** A Markdown file of the notes folder with the time it was last changed on disk. */
+export type Note = { path: string; content: string; modified: number };
+
 /** What a failed command rejects with. */
 export type CommandError = {
-  kind: 'not_found' | 'invalid' | 'internal';
+  kind: 'not_found' | 'invalid' | 'conflict' | 'internal';
   message: string;
 };
 
@@ -211,6 +225,25 @@ export const commands = {
     invoke<ExportSummary>('export_page', { pageId, directory }),
   /** Exports every page into a new folder inside `directory`. */
   exportAll: (directory: string) => invoke<ExportSummary>('export_all', { directory }),
+
+  /** The remembered notes folder, or `null` when none is chosen or it is gone. */
+  getNotesFolder: () => invoke<string | null>('get_notes_folder'),
+  /** Remembers a directory chosen with the folder dialog. */
+  setNotesFolder: (path: string) => invoke<string>('set_notes_folder', { path }),
+  /** Forgets the notes folder; no file is touched. */
+  clearNotesFolder: () => invoke<void>('clear_notes_folder'),
+  /** One level of the notes folder: folders first, then `.md` files. `''` is the folder itself. */
+  listNotes: (folder: string) => invoke<NoteEntry[]>('list_notes', { folder }),
+  readNote: (path: string) => invoke<Note>('read_note', { path }),
+  /** Creates an empty file; fails if it exists. */
+  createNote: (path: string) => invoke<Note>('create_note', { path }),
+  /** Fails with kind `conflict` when the file's modified time is not `expectedModified`; `null` skips the check. */
+  saveNote: (path: string, content: string, expectedModified: number | null) =>
+    invoke<Note>('save_note', { path, content, expectedModified }),
+  /** Renames inside the same folder; `name` ends with `.md`. */
+  renameNote: (path: string, name: string) => invoke<NoteEntry>('rename_note', { path, name }),
+  /** Deletes permanently; refuses unless `confirm` is true. */
+  deleteNote: (path: string, confirm: boolean) => invoke<void>('delete_note', { path, confirm }),
 
   /** Stores an image and resolves to the URL to put into the image block. */
   downloadImage: (url: string, destination: string) =>
