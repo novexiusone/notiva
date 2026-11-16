@@ -551,7 +551,7 @@ describe('the views of a database', () => {
     });
     await waitFor(async () => expect(await rowTitles()).toHaveLength(4));
 
-    const panel = await openMenu(user, /^Group/, 'Group by');
+    const panel = await openMenu(user, /^View settings/, 'View settings');
     await user.selectOptions(within(panel).getByRole('combobox', { name: 'Group by' }), 'Status');
     await user.keyboard('{Escape}');
 
@@ -564,7 +564,6 @@ describe('the views of a database', () => {
       'No Status',
       'Plan it',
     ]);
-    expect(screen.getByRole('button', { name: /^Group/ })).toHaveTextContent('Status');
     expect(await grid()).toHaveAttribute('aria-rowcount', '8');
     // The table keeps one Tab stop, on the first row below the first group's header.
     const tabStops = async () =>
@@ -595,12 +594,11 @@ describe('the views of a database', () => {
       expect(await headerNames()).toEqual(['Name', 'Notes', 'Hours', 'Due', 'Status', '']),
     );
 
-    const panel = await openMenu(user, /^Properties/, 'Shown properties');
+    const panel = await openMenu(user, /^View settings/, 'View settings');
     await user.click(within(panel).getByRole('checkbox', { name: 'Hours' }));
 
     expect(await headerNames()).toEqual(['Name', 'Notes', 'Due', 'Status', '']);
     expect(within(panel).getByRole('checkbox', { name: 'Hours' })).not.toBeChecked();
-    expect(screen.getByRole('button', { name: /^Properties/ })).toHaveTextContent('1 hidden');
     expect(within(panel).queryByRole('checkbox', { name: 'Name' })).toBeNull();
 
     await user.click(within(panel).getByRole('checkbox', { name: 'Hours' }));
@@ -751,7 +749,7 @@ describe('the views of a database', () => {
       'This kind of view cannot be shown in this version yet.',
     );
     expect(screen.queryByRole('grid')).toBeNull();
-    expect(screen.queryByRole('group', { name: 'View settings' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'View toolbar' })).toBeNull();
   });
 
   it('keeps a row added with "New" in sight although it does not pass the filters', async () => {

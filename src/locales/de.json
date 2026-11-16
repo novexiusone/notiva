@@ -163,8 +163,15 @@
       "unavailable": "Diese Art von Ansicht kann diese Version noch nicht zeigen."
     },
     "toolbar": {
-      "newRow": "Neue Zeile",
-      "label": "Einstellungen der Ansicht",
+      "newRowLabel": "Neue Zeile",
+      "newRow": "Neu",
+      "settings": "Ansichtseinstellungen",
+      "templates": "Vorlagen",
+      "noTemplates": "Noch keine Vorlagen",
+      "newTemplate": "Neue Vorlage",
+      "minimize": "Minimieren",
+      "expand": "Erweitern",
+      "label": "Ansichtsleiste",
       "filter": "Filter",
       "filters": "Filter",
       "addFilter": "Filter hinzufügen",

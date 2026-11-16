@@ -167,7 +167,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                 role="row"
                 aria-rowindex={1}
                 style={{ height: HEADER_HEIGHT }}
-                className="border-border flex border-y"
+                className="border-border flex border-b"
               >
                 {columns.map((column, columnIndex) =>
                   column.property ? (

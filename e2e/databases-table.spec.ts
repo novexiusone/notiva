@@ -242,7 +242,7 @@ test('the keyboard reaches the header and edits cells', async ({ page }) => {
   // From the last button of the view's toolbar, Tab goes through the header to
   // the first cell. WebKit, like Safari, reaches buttons only with Option-Tab.
   const tab = () => page.keyboard.press('Alt+Tab');
-  await page.getByRole('button', { name: 'New row' }).focus();
+  await page.getByRole('button', { name: 'Templates' }).focus();
   // The panel of the active view is a Tab stop of its own, as tab panels are.
   await tab();
   await expect(page.getByRole('tabpanel')).toBeFocused();

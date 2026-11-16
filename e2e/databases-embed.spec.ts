@@ -257,7 +257,7 @@ test('typing in cells, filters and view names changes no block and saves nothing
 
   // A filter value, in a popover opened from the block.
   await block
-    .getByRole('group', { name: 'View settings' })
+    .getByRole('group', { name: 'View toolbar' })
     .getByRole('button', { name: /^Filter/ })
     .click();
   const filters = page.getByRole('dialog', { name: 'Filters' });
@@ -535,7 +535,7 @@ test('tabs, toolbar and table look as on the database page', async ({ page }) =>
       [
         tab(scope, 'All'),
         tab(scope, 'All').locator('svg'),
-        scope.getByRole('group', { name: 'View settings' }).getByRole('button', { name: /^Sort/ }),
+        scope.getByRole('group', { name: 'View toolbar' }).getByRole('button', { name: /^Sort/ }),
         grid(scope).getByRole('columnheader').first(),
         bodyRows(scope).first().getByRole('gridcell').first(),
         scope.getByRole('button', { name: 'New', exact: true }),

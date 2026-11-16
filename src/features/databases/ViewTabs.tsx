@@ -58,7 +58,7 @@ export function ViewTabs({
   return (
     <Tabs value={activeId ?? ''} onValueChange={onSelect} className="gap-0">
       <div
-        className="border-border flex min-h-10 flex-wrap items-center gap-x-2 border-b"
+        className="flex min-h-10 flex-wrap items-center gap-x-2"
         style={{ paddingLeft: TABLE_INSET, paddingRight: TABLE_INSET }}
       >
         <div className="flex min-w-0 items-center gap-1">

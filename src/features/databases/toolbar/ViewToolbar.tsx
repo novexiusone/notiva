@@ -1,33 +1,53 @@
-import { Plus } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
 import { FilterMenu } from './FilterMenu';
-import { GroupMenu } from './GroupMenu';
-import { PropertiesMenu } from './PropertiesMenu';
+import { NewRowButton } from './NewRowButton';
+import { SettingsMenu } from './SettingsMenu';
 import { SortMenu } from './SortMenu';
 import type { ToolbarMenuProps } from './types';
 
-/** The settings of the active view. Grouping is offered where the view type has it. */
+const reveal =
+  'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 flex size-7 items-center justify-center rounded-md opacity-0 outline-none group-hover/toolbar:opacity-100 focus-visible:opacity-100 focus-visible:ring-2';
+
+/**
+ * The settings of the active view. Minimised, only the settings stay; the
+ * button that minimises and expands it shows while the pointer is over it.
+ */
 export function ViewToolbar({
   grouping,
   onNewRow,
   ...props
 }: ToolbarMenuProps & { grouping: boolean; onNewRow: () => void }) {
   const { t } = useTranslation();
+  const [minimized, setMinimized] = useState(false);
+  const Icon = minimized ? ChevronsLeft : ChevronsRight;
+  const label = t(minimized ? 'databases.toolbar.expand' : 'databases.toolbar.minimize');
+
   return (
     <div
       role="group"
       aria-label={t('databases.toolbar.label')}
-      className="flex items-center gap-0.5"
+      className="group/toolbar flex items-center gap-0.5"
     >
-      <FilterMenu {...props} />
-      <SortMenu {...props} />
-      {grouping ? <GroupMenu {...props} /> : null}
-      <PropertiesMenu {...props} />
-      <Button type="button" size="sm" className="ml-1" onClick={onNewRow}>
-        <Plus aria-hidden />
-        <span className="max-lg:sr-only">{t('databases.toolbar.newRow')}</span>
-      </Button>
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        aria-expanded={!minimized}
+        onClick={() => setMinimized(!minimized)}
+        className={reveal}
+      >
+        <Icon size={16} aria-hidden />
+      </button>
+      {minimized ? null : (
+        <>
+          <FilterMenu {...props} />
+          <SortMenu {...props} />
+        </>
+      )}
+      <SettingsMenu grouping={grouping} {...props} />
+      {minimized ? null : <NewRowButton onNewRow={onNewRow} />}
     </div>
   );
 }

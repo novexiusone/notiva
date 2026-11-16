@@ -163,8 +163,15 @@
       "unavailable": "This kind of view cannot be shown in this version yet."
     },
     "toolbar": {
-      "newRow": "New row",
-      "label": "View settings",
+      "newRowLabel": "New row",
+      "newRow": "New",
+      "settings": "View settings",
+      "templates": "Templates",
+      "noTemplates": "No templates yet",
+      "newTemplate": "New template",
+      "minimize": "Minimize",
+      "expand": "Expand",
+      "label": "View toolbar",
       "filter": "Filter",
       "filters": "Filters",
       "addFilter": "Add a filter",
