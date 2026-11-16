@@ -24,6 +24,14 @@ pub(super) const PROPERTY_FIELDS: &str = "record::id(id) AS id, \
 /// text after the write. `UNSET props[$key]` does nothing in SurrealDB 4.0.1;
 /// setting the key to NONE removes it. A row deleted in the meantime is not
 /// written again.
+/// Throws when a row that is about to be written is locked at `all`. Goes at
+/// the start of a transaction that uses [`WRITE_CELLS`].
+const GUARD_ROWS: &str = "FOR $written IN array::concat($cells, $emptied) {
+         IF (SELECT VALUE lock FROM ONLY type::record('page', $written.id)) = 'all' {
+             THROW 'notiva:locked';
+         };
+     };";
+
 const WRITE_CELLS: &str = "FOR $cell IN $cells {
          UPDATE type::record('page', $cell.id) SET props[$key] = $cell.value,
              props_text = $cell.text WHERE id != NONE RETURN NONE;
@@ -453,6 +461,7 @@ impl Storage {
         self.db
             .query(format!(
                 "BEGIN TRANSACTION;
+                 {GUARD_ROWS}
                  DELETE type::record('property', $id);
                  {WRITE_CELLS}
                  FOR $view IN $views {{
@@ -515,6 +524,7 @@ impl Storage {
         self.db
             .query(format!(
                 "BEGIN TRANSACTION;
+                 {GUARD_ROWS}
                  UPDATE type::record('property', $id) SET options = options[WHERE id != $option]
                      RETURN NONE;
                  {WRITE_CELLS}
@@ -593,6 +603,7 @@ impl Storage {
             .db
             .query(format!(
                 "BEGIN TRANSACTION;
+                 {GUARD_ROWS}
                  LET $property = type::record('property', $id);
                  IF (SELECT VALUE type FROM ONLY $property) != $from {{
                      THROW 'the property changed while its type was being changed';
@@ -611,7 +622,7 @@ impl Storage {
             .bind(("emptied", writes.emptied))
             .await?
             .check()?
-            .take(3)?;
+            .take(4)?;
 
         row.ok_or_else(|| not_found(id))?.try_into()
     }

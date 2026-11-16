@@ -9,7 +9,7 @@ mod databases;
 mod error;
 mod links;
 mod migrations;
-mod pages;
+pub(crate) mod pages;
 mod properties;
 mod rows;
 mod search;

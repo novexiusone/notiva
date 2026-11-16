@@ -187,7 +187,7 @@ mod tests {
                 "page": {
                     "id": "db", "title": "Books", "parentId": null, "position": 0.0,
                     "kind": "database", "databaseId": null, "isFavorite": false,
-                    "icon": null, "banner": null, "bannerPosition": 50, "updatedAt": "2026-11-15T00:00:00Z"
+                    "icon": null, "banner": null, "bannerPosition": 50, "lock": "none", "updatedAt": "2026-11-15T00:00:00Z"
                 },
                 "properties": [
                     {

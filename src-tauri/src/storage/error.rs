@@ -28,6 +28,12 @@ pub enum StorageError {
 
 impl From<surrealdb::Error> for StorageError {
     fn from(error: surrealdb::Error) -> Self {
-        Self::Database(error.to_string())
+        let message = error.to_string();
+        // A lock found inside a transaction is thrown with a marker.
+        if message.contains(crate::storage::pages::LOCKED_MARKER) {
+            Self::Locked("the page is locked".into())
+        } else {
+            Self::Database(message)
+        }
     }
 }

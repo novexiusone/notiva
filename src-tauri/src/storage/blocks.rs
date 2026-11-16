@@ -199,6 +199,7 @@ impl Storage {
         self.db
             .query(
                 "BEGIN TRANSACTION;
+                 {GUARD}
                  LET $page = type::record('page', $page_id);
                  FOR $block IN $writes {
                      LET $record = type::record('block', $block.id);
@@ -227,8 +228,10 @@ impl Storage {
                      DELETE type::record('block', $id);
                  };
                  UPDATE $page SET updated_at = time::now();
-                 COMMIT TRANSACTION;",
+                 COMMIT TRANSACTION;"
+                    .replace("{GUARD}", super::pages::guard_content_sql()),
             )
+            .bind(("id", page_id.to_owned()))
             .bind(("page_id", page_id.to_owned()))
             .bind(("writes", writes))
             .bind(("removed", removed))

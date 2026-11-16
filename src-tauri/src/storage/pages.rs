@@ -66,6 +66,34 @@ fn not_found(id: &str) -> StorageError {
     StorageError::NotFound(format!("page {id}"))
 }
 
+/// What a transaction throws when it finds a lock; [`StorageError`] turns it
+/// into `Locked`.
+pub(crate) const LOCKED_MARKER: &str = "notiva:locked";
+
+/// Statements for the start of a transaction that throw when the title, text,
+/// icon, cover or position of the page in `$id` may not change. The check is
+/// part of the transaction, so a lock set after the pre-check still counts.
+const GUARD_CONTENT: &str = "LET $guard = (SELECT lock, database.lock AS database_lock
+         FROM ONLY type::record('page', $id));
+     IF $guard != NONE AND ($guard.lock != NONE OR $guard.database_lock = 'all') {
+         THROW 'notiva:locked';
+     };";
+
+/// Like [`GUARD_CONTENT`] for the cells of the row in `$id`.
+const GUARD_CELLS: &str = "LET $guard = (SELECT lock, database.lock AS database_lock
+         FROM ONLY type::record('page', $id));
+     IF $guard != NONE AND ($guard.lock = 'all' OR $guard.database_lock = 'all') {
+         THROW 'notiva:locked';
+     };";
+
+pub(super) fn guard_content_sql() -> &'static str {
+    GUARD_CONTENT
+}
+
+pub(super) fn guard_cells_sql() -> &'static str {
+    GUARD_CELLS
+}
+
 fn locked(id: &str) -> StorageError {
     StorageError::Locked(format!("page {id} is locked"))
 }
@@ -141,14 +169,17 @@ impl Storage {
         let row: Option<PageRow> = self
             .db
             .query(format!(
-                "UPDATE type::record('page', $id) SET title = $title, updated_at = time::now()
-                     WHERE id != NONE RETURN {PAGE_FIELDS}"
+                "BEGIN TRANSACTION;
+                 {GUARD_CONTENT}
+                 UPDATE type::record('page', $id) SET title = $title, updated_at = time::now()
+                     WHERE id != NONE RETURN {PAGE_FIELDS};
+                 COMMIT TRANSACTION;"
             ))
             .bind(("id", id.to_owned()))
             .bind(("title", title.to_owned()))
             .await?
             .check()?
-            .take(0)?;
+            .take(3)?;
 
         row.map(Page::from).ok_or_else(|| not_found(id))
     }
@@ -185,17 +216,20 @@ impl Storage {
         let row: Option<PageRow> = self
             .db
             .query(format!(
-                "UPDATE type::record('page', $id)
+                "BEGIN TRANSACTION;
+                 {GUARD_CONTENT}
+                 UPDATE type::record('page', $id)
                      SET banner_position = IF banner = $banner {{ banner_position }} ELSE {{ 50 }},
                          icon = $icon, banner = $banner, updated_at = time::now()
-                     WHERE id != NONE RETURN {PAGE_FIELDS}"
+                     WHERE id != NONE RETURN {PAGE_FIELDS};
+                 COMMIT TRANSACTION;"
             ))
             .bind(("id", id.to_owned()))
             .bind(("icon", icon.map(str::to_owned)))
             .bind(("banner", banner.map(str::to_owned)))
             .await?
             .check()?
-            .take(0)?;
+            .take(3)?;
 
         row.map(Page::from).ok_or_else(|| not_found(id))
     }
@@ -217,15 +251,18 @@ impl Storage {
         let row: Option<PageRow> = self
             .db
             .query(format!(
-                "UPDATE type::record('page', $id)
+                "BEGIN TRANSACTION;
+                 {GUARD_CONTENT}
+                 UPDATE type::record('page', $id)
                      SET banner_position = $position, updated_at = time::now()
-                     WHERE id != NONE RETURN {PAGE_FIELDS}"
+                     WHERE id != NONE RETURN {PAGE_FIELDS};
+                 COMMIT TRANSACTION;"
             ))
             .bind(("id", id.to_owned()))
             .bind(("position", i64::from(position)))
             .await?
             .check()?
-            .take(0)?;
+            .take(3)?;
 
         row.map(Page::from).ok_or_else(|| not_found(id))
     }
@@ -285,6 +322,7 @@ impl Storage {
         self.db
             .query(format!(
                 "BEGIN TRANSACTION;
+                 {GUARD_CONTENT}
                  UPDATE type::record('page', $id) SET parent = {PARENT}, updated_at = time::now();
                  FOR $index IN 0..array::len($order) {{
                      UPDATE type::record('page', $order[$index]) SET position = <float> $index;
@@ -307,8 +345,19 @@ impl Storage {
         self.delete_database_rows(id, super::databases::ROW_CHUNK)
             .await?;
 
+        // The page's own lock is checked again inside the transaction. The
+        // locks of its subpages are only checked before (best effort).
         self.db
-            .query("DELETE type::record('page', $id)")
+            .query(
+                "BEGIN TRANSACTION;
+                 LET $guard = (SELECT lock, database.lock AS database_lock
+                     FROM ONLY type::record('page', $id));
+                 IF $guard != NONE AND ($guard.lock != NONE OR $guard.database_lock = 'all') {
+                     THROW 'notiva:locked';
+                 };
+                 DELETE type::record('page', $id);
+                 COMMIT TRANSACTION;",
+            )
             .bind(("id", id.to_owned()))
             .await?
             .check()?;

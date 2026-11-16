@@ -2,7 +2,7 @@
 
 use super::tests::run_with_pages;
 use super::*;
-use crate::domain::{CellValue, Page, PageLock, PropertyType, ViewConfig};
+use crate::domain::{Block, CellValue, Page, PageLock, PropertyType, SelectOption, ViewConfig};
 
 async fn storage() -> Storage {
     Storage::open_in_memory().await.unwrap()
@@ -27,6 +27,37 @@ async fn database(storage: &Storage) -> (Page, String) {
     )
     .await;
     (database, property.id)
+}
+
+fn paragraph(id: &str, text: &str) -> Block {
+    Block {
+        id: id.into(),
+        kind: "paragraph".into(),
+        props: Default::default(),
+        content: Some(serde_json::json!([{ "type": "text", "text": text, "styles": {} }])),
+        children: Vec::new(),
+    }
+}
+
+/// Everything a refused change must leave alone: every page with its title,
+/// icon, cover, position and lock, the blocks of `pages`, and the properties,
+/// views and rows (with their cells) of `database`.
+async fn snapshot(storage: &Storage, pages: &[&str], database: Option<&str>) -> String {
+    let mut blocks = Vec::new();
+    for page in pages {
+        blocks.push(storage.load_blocks(page).await.unwrap());
+    }
+    let database = match database {
+        Some(id) => Some((
+            storage.load_database(id).await.unwrap(),
+            storage.list_rows(id).await.unwrap(),
+        )),
+        None => None,
+    };
+    format!(
+        "{:?}",
+        (storage.list_pages().await.unwrap(), blocks, database)
+    )
 }
 
 async fn view_id(storage: &Storage, database: &str) -> String {
@@ -104,7 +135,13 @@ async fn a_locked_page_refuses_changes_to_its_content_at_both_levels() {
             .update_appearance(&page.id, None, Some("gallery:aurora"))
             .await
             .unwrap();
+        let block = format!("b-{}", page.id);
+        storage
+            .save_blocks(&page.id, &[paragraph(&block, "kept")])
+            .await
+            .unwrap();
         storage.set_lock(&page.id, lock).await.unwrap();
+        let before = snapshot(&storage, &[&page.id], None).await;
 
         assert!(is_locked(storage.rename_page(&page.id, "x").await));
         assert!(is_locked(
@@ -113,9 +150,14 @@ async fn a_locked_page_refuses_changes_to_its_content_at_both_levels() {
                 .await
         ));
         assert!(is_locked(storage.set_banner_position(&page.id, 10).await));
-        assert!(is_locked(storage.save_blocks(&page.id, &[]).await));
+        assert!(is_locked(
+            storage
+                .save_blocks(&page.id, &[paragraph(&block, "changed")])
+                .await
+        ));
         assert!(is_locked(storage.move_page(&page.id, None, 0).await));
         assert!(is_locked(storage.delete_page(&page.id).await));
+        assert_eq!(snapshot(&storage, &[&page.id], None).await, before);
 
         // Other pages, favouriting, reading and unlocking still work.
         storage.rename_page(&other.id, "fine").await.unwrap();
@@ -234,7 +276,12 @@ async fn a_database_locked_at_everything_refuses_every_change_but_reads() {
         .await
         .unwrap();
     let view = view_id(&storage, &database.id).await;
+    storage
+        .save_blocks("row_a", &[paragraph("r1", "kept")])
+        .await
+        .unwrap();
     storage.set_lock(&database.id, PageLock::All).await.unwrap();
+    let before = snapshot(&storage, &["row_a", "row_b"], Some(&database.id)).await;
 
     assert!(is_locked(storage.create_row(&database.id).await));
     assert!(is_locked(
@@ -275,6 +322,10 @@ async fn a_database_locked_at_everything_refuses_every_change_but_reads() {
     ));
     assert!(is_locked(storage.delete_view(&view).await));
     assert!(is_locked(storage.delete_page(&database.id).await));
+    assert_eq!(
+        snapshot(&storage, &["row_a", "row_b"], Some(&database.id)).await,
+        before
+    );
 
     // Reading and unlocking are not changes.
     let loaded = storage.load_database(&database.id).await.unwrap();
@@ -350,4 +401,75 @@ async fn unknown_pages_are_still_not_found_before_any_lock_applies() {
         storage.delete_view("missing").await,
         Err(StorageError::NotFound(_))
     ));
+}
+
+#[tokio::test]
+async fn a_row_locked_at_everything_survives_the_cascades_of_an_unlocked_database() {
+    let storage = storage().await;
+    let (database, text) = database(&storage).await;
+    let status = storage
+        .create_property(&database.id, "Status", PropertyType::Select, None)
+        .await
+        .unwrap();
+    let option = SelectOption {
+        id: "done".into(),
+        name: "Done".into(),
+        color: "green".into(),
+    };
+    storage
+        .update_property(&status.id, None, Some(&[option]))
+        .await
+        .unwrap();
+    for row in ["row_a", "row_b"] {
+        storage
+            .set_cell(row, &text, CellValue::Text("1".into()))
+            .await
+            .unwrap();
+        storage
+            .set_cell(row, &status.id, CellValue::Select("done".into()))
+            .await
+            .unwrap();
+    }
+    storage.set_lock("row_a", PageLock::All).await.unwrap();
+    let before = snapshot(&storage, &["row_a", "row_b"], Some(&database.id)).await;
+
+    assert!(is_locked(storage.delete_property(&text).await));
+    assert!(is_locked(
+        storage
+            .change_property_type(&text, PropertyType::Number)
+            .await
+    ));
+    assert!(is_locked(
+        storage.delete_select_option(&status.id, "done").await
+    ));
+    assert_eq!(
+        snapshot(&storage, &["row_a", "row_b"], Some(&database.id)).await,
+        before
+    );
+
+    // At content the row's cells are still covered by the cascades.
+    storage.set_lock("row_a", PageLock::Content).await.unwrap();
+    storage
+        .delete_select_option(&status.id, "done")
+        .await
+        .unwrap();
+    storage
+        .change_property_type(&text, PropertyType::Number)
+        .await
+        .unwrap();
+    storage.delete_property(&text).await.unwrap();
+}
+
+#[tokio::test]
+async fn moving_a_page_renumbers_locked_siblings_without_refusing() {
+    let storage = storage().await;
+    let first = storage.create_page(None).await.unwrap();
+    let locked = storage.create_page(None).await.unwrap();
+    storage.set_lock(&locked.id, PageLock::All).await.unwrap();
+
+    storage.move_page(&first.id, None, 1).await.unwrap();
+
+    let pages = storage.list_pages().await.unwrap();
+    assert_eq!(pages[0].id, locked.id);
+    assert_eq!(pages[0].lock, PageLock::All);
 }
