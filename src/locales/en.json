@@ -212,12 +212,18 @@
       "properties": "Properties",
       "empty": "Empty",
       "loadFailed": "The properties could not be loaded."
+    },
+    "embed": {
+      "label": "Database {{title}}",
+      "open": "Open as page",
+      "deleted": "Deleted database"
     }
   },
   "editor": {
     "saveFailed": "The last change could not be saved. It will be tried again with the next change.",
     "imageRefused": "Only PNG, JPEG, GIF and WebP images up to 20 MiB can be added.",
-    "imageFailed": "The image could not be stored."
+    "imageFailed": "The image could not be stored.",
+    "databaseFailed": "The database could not be created."
   },
   "slashMenu": {
     "filter": "Type to filter",
@@ -235,7 +241,8 @@
       "checkList": "To-do list",
       "quote": "Quote",
       "codeBlock": "Code",
-      "image": "Image"
+      "image": "Image",
+      "database": "Database"
     }
   },
   "links": {

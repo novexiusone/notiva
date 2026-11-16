@@ -4,6 +4,7 @@ import {
   defaultBlockSpecs,
   defaultInlineContentSpecs,
 } from '@blocknote/core';
+import { databaseBlock } from '@/features/databases/databaseBlockSpec';
 import { pageLink } from '@/features/links/pageLinkSpec';
 
 /**
@@ -20,6 +21,7 @@ export const schema = BlockNoteSchema.create({
     codeBlock: defaultBlockSpecs.codeBlock,
     quote: defaultBlockSpecs.quote,
     image: defaultBlockSpecs.image,
+    database: databaseBlock(),
   },
   inlineContentSpecs: {
     ...defaultInlineContentSpecs,

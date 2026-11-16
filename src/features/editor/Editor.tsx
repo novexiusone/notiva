@@ -2,12 +2,17 @@ import { de, en } from '@blocknote/core/locales';
 import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import '@blocknote/shadcn/style.css';
-import { useImperativeHandle, useState, type Ref } from 'react';
+import { useImperativeHandle, useMemo, useState, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useCreateDatabase } from '@/features/databases/api';
 import { useBlocks, useSaveBlocks } from '@/features/editor/api';
 import { schema } from '@/features/editor/schema';
 import { SlashMenu } from '@/features/editor/SlashMenu';
-import { getSlashMenuItems, type SlashMenuItem } from '@/features/editor/slashMenuItems';
+import {
+  getSlashMenuItems,
+  type SlashMenuActions,
+  type SlashMenuItem,
+} from '@/features/editor/slashMenuItems';
 import { SlashMenuQueryContext } from '@/features/editor/slashMenuQuery';
 import { useAutosave } from '@/features/editor/useAutosave';
 import { getPageLinkItems, type PageLinkItem } from '@/features/links/pageLinkItems';
@@ -29,28 +34,67 @@ export function Editor({ pageId, ref }: EditorProps) {
   return <LoadedEditor key={pageId} pageId={pageId} initialBlocks={blocks.data} ref={ref} />;
 }
 
+/** What inside an embedded database takes clicks of its own. */
+const CONTROLS =
+  'button, a, input, textarea, select, [role="tab"], [role="gridcell"], [role="columnheader"], [role="menuitem"]';
+
 function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlocks: Block[] }) {
   const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme();
   const autosave = useAutosave(useSaveBlocks(pageId));
   const [slashQuery, setSlashQuery] = useState('');
   const pages = usePages().data ?? [];
-  const [imageError, setImageError] = useState<string | null>(null);
+  // What went wrong with the last image or block that was to be added.
+  const [insertError, setInsertError] = useState<string | null>(null);
+  const { mutateAsync: createDatabase } = useCreateDatabase();
+  const slashActions = useMemo<SlashMenuActions>(
+    () => ({
+      createDatabase: async () => {
+        setInsertError(null);
+        return (await createDatabase(pageId)).page.id;
+      },
+      onFailure: () => setInsertError(t('editor.databaseFailed')),
+    }),
+    [createDatabase, pageId, t],
+  );
 
   const editor = useCreateBlockNote({
     schema,
     dictionary: i18n.language === 'de' ? de : en,
     // Used for the file picker as well as for dropped and pasted images.
     uploadFile: async (file) => {
-      setImageError(null);
+      setInsertError(null);
       try {
         return await commands.saveImage(file);
       } catch (error) {
         // The editor only reports that the upload failed; say why.
         const refused = (error as Partial<CommandError>).kind === 'invalid';
-        setImageError(t(refused ? 'editor.imageRefused' : 'editor.imageFailed'));
+        setInsertError(t(refused ? 'editor.imageRefused' : 'editor.imageFailed'));
         throw error;
       }
+    },
+    _tiptapOptions: {
+      editorProps: {
+        // Keys pressed inside an embedded database belong to the database. Without
+        // this, Backspace in a cell with the block selected removes the block.
+        handleDOMEvents: {
+          keydown: (_view, event) =>
+            event.target instanceof Element &&
+            event.target.closest('[data-database-block]') !== null,
+          // A click on a control of the block must not select the block or leave the
+          // editor holding the focus, or the next Backspace edits the document.
+          mousedown: (view, event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return false;
+            const block = target.closest<HTMLElement>('[data-database-block]');
+            if (!block || !target.closest(CONTROLS)) return false;
+            view.dom.blur();
+            window.getSelection()?.removeAllRanges();
+            block.focus({ preventScroll: true });
+            return true;
+          },
+        },
+      },
     },
     // The backend stores exactly what the editor produced, so this is the editor's own shape.
     initialContent: initialBlocks.length > 0 ? (initialBlocks as never) : undefined,
@@ -72,7 +116,7 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
             suggestionMenuComponent={SlashMenu}
             getItems={async (query) => {
               setSlashQuery(query);
-              return getSlashMenuItems(editor, t, query);
+              return getSlashMenuItems(editor, t, query, slashActions);
             }}
             onItemClick={(item) => item.onItemClick()}
           />
@@ -86,9 +130,9 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
           />
         </BlockNoteView>
       </SlashMenuQueryContext.Provider>
-      {imageError !== null ? (
+      {insertError !== null ? (
         <p role="alert" className="text-destructive mt-4 text-sm">
-          {imageError}
+          {insertError}
         </p>
       ) : null}
       {autosave.failed ? (

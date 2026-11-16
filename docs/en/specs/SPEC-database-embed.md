@@ -67,6 +67,8 @@ export const databaseBlock = createReactBlockSpec(
 - `DatabaseBlock` looks the database up in the page list and renders `DatabaseView` with it, or the "Deleted database" notice.
 - The block starts with BlockNote's default for `selectable`, because that needs two workarounds fewer. If clicking cells of the real table disturbs the editor's selection, #67 switches to `meta.selectable: false` with the click and the drop workaround from the spike. The spike tested both variants, but only with a text field, a popover and a sortable list, not with the table.
 - The guard against undo and redo leaking into the document is mounted once for the whole app, since the page title needs it too.
+- What the build settled: the block keeps BlockNote's default `selectable`, so a click on its title selects it like an image. A `mousedown` on a control of the block (button, link, field, tab, cell) is handled in ProseMirror's `handleDOMEvents`, which skips the editor, and moves the focus to the block's wrapper (`tabIndex=-1`). Key presses whose target is inside the block are skipped by the editor too. Without both, Backspace in a cell removed the block. The undo guard lets undo through when the focused element contains its target.
+- WebKit goes back a page on Backspace when nothing editable has the focus, which a click on a button inside the block leaves behind. One listener for the whole app stops that.
 - The block's wrapper resets BlockNote's style rule for paragraphs, headings and list items.
 - The active view of an embedded database is not kept in component state, because moving the block rebuilds the component.
 - The slash menu entry needs to create a database before it inserts. `getSlashMenuItems` gets the actions it needs from `Editor.tsx`, which knows the page.
@@ -75,7 +77,8 @@ export const databaseBlock = createReactBlockSpec(
 ## Project structure
 
 ```
-src/features/databases/databaseBlockSpec.tsx   → the block and `DatabaseBlock`
+src/features/databases/databaseBlockSpec.tsx   → the block spec
+src/features/databases/DatabaseBlock.tsx       → what the block shows
 src/features/editor/schema.ts                  → registers the block
 src/features/editor/slashMenuItems.ts          → the "Database" entry
 ```

@@ -253,3 +253,23 @@
 .bn-root.bn-container.bn-shadcn input[type='checkbox'] {
   accent-color: var(--foreground);
 }
+
+/*
+ * A database inside a page looks as on its own page. BlockNote's rules for
+ * text elements, links and icons in the editor are not in a layer, so they
+ * beat Tailwind's utilities; `revert-layer` takes them back inside the block.
+ */
+.bn-root.bn-container .database-block :is(p, h1, h2, h3, h4, h5, h6, li, a, svg) {
+  font-size: revert-layer;
+  margin: revert-layer;
+  padding: revert-layer;
+  min-width: revert-layer !important;
+  width: revert-layer;
+  height: revert-layer;
+  color: revert-layer;
+  text-decoration: revert-layer;
+}
+
+.bn-root.bn-container .database-block {
+  white-space: normal;
+}
