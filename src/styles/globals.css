@@ -18,6 +18,7 @@
   --background: #f2f2f2;
   --foreground: #1a1a1a;
   --destructive: #c4352b;
+  --favorite: oklch(0.7 0.16 80);
 
   --sidebar: color-mix(in oklab, var(--background), var(--foreground) 3%);
   --card: color-mix(in oklab, var(--background), white 40%);
@@ -117,6 +118,7 @@
     --background: #0f0f0f;
     --foreground: #ededed;
     --destructive: #e5534b;
+    --favorite: oklch(0.82 0.15 85);
 
     --card: color-mix(in oklab, var(--background), white 3%);
     --popover: color-mix(in oklab, var(--background), white 5%);
@@ -151,6 +153,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--foreground);
   --color-destructive: var(--destructive);
+  --color-favorite: var(--favorite);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
