@@ -1,6 +1,6 @@
 # Capability Map: Notiva MVP
 
-Notiva is a local-first Notion alternative for macOS: one user, no collaboration, no cloud requirement. This map is the index of all module specs. Every module gets its own spec (`SPEC-<module-id>.md`) in this folder before it is built.
+Notiva is a local-first Notion alternative for macOS, Windows and Linux: one user, no collaboration, no cloud requirement. This map is the index of all module specs. Every module gets its own spec (`SPEC-<module-id>.md`) in this folder before it is built.
 
 ## Modules
 
@@ -78,7 +78,8 @@ Packages built at the same time live in separate worktrees. Each runs its end-to
 - In the MVP the sidebar search field (Cmd+K) opens full-text search. Favourites and the quick switcher come later.
 - Images are stored as files in the app data directory; blocks only store the reference.
 - Undo/redo applies within one editor session.
-- MVP builds are unsigned.
+- Notiva runs on macOS, Windows and Linux (#140). Platform-specific behaviour (title bar, shortcuts, paths, packaging) is named in the spec of the module that owns it.
+- MVP builds are unsigned; signing for all three platforms is planned for 1.0 (#27).
 
 ### Boundaries
 

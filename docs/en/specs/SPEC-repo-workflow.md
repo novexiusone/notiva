@@ -40,7 +40,7 @@ Pull requests created with the `GITHUB_TOKEN` do not trigger workflows, so the r
 
 ### Release builds
 
-When a release is created, the `bundle` job builds the app on macOS and attaches the `.dmg` to the GitHub release. The build is unsigned (#27).
+When a release is created, the `bundle` job builds the app on macOS and attaches the `.dmg` to the GitHub release. Builds for Windows and Linux follow with #140. The build is unsigned (#27).
 
 ## Commands
 

@@ -89,7 +89,7 @@ Tests live next to the code they test (`Sidebar.test.tsx`, `#[cfg(test)]` module
 - Subtle borders instead of shadows, small radii, hardly any accent colour.
 - Lucide icons at 16 px in the sidebar and 20 px in toolbars, same stroke width everywhere. No emojis as icons.
 - Only text that is written can be selected: the editor, text fields and cells while they are edited. Labels, menus, buttons and the sidebar cannot, as in a native app.
-- The window uses the macOS overlay title bar so the sidebar reaches the top edge; the top of the sidebar is a drag region.
+- On macOS the window uses the overlay title bar so the sidebar reaches the top edge; the top of the sidebar is a drag region. Windows and Linux get their own title bar handling (#140); the top bar leaves no gap and never collides with the window controls.
 
 ## Code style
 
