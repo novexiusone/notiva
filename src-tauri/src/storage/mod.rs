@@ -18,6 +18,8 @@ mod views;
 #[cfg(test)]
 mod benchmark;
 #[cfg(test)]
+mod lock_tests;
+#[cfg(test)]
 mod tests;
 
 use std::path::Path;

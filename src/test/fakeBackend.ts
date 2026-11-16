@@ -9,6 +9,7 @@ import {
   type Database,
   type IncomingRelation,
   type Page,
+  type PageLock,
   type Property,
   type PropertyType,
   type Row,
@@ -66,6 +67,7 @@ function withPageFields(page: Page): Page {
     icon: page.icon ?? null,
     banner: page.banner ?? null,
     bannerPosition: page.bannerPosition ?? 50,
+    lock: page.lock ?? ('none' as const),
     updatedAt: page.updatedAt ?? '2026-01-01T00:00:00Z',
   };
 }
@@ -448,6 +450,40 @@ export function installFakeBackend({
     return page.databaseId === null ? fail('invalid', `page ${id} is not a row`) : page;
   };
 
+  const refuse = (id: string): never => fail('locked', `page ${id} is locked`);
+
+  /** The lock of the database a page is a row of, `none` for any other page. */
+  const databaseLockOf = (page: Page) =>
+    page.databaseId === null
+      ? 'none'
+      : (pages.find((candidate) => candidate.id === page.databaseId)?.lock ?? 'none');
+
+  /** Title, text, icon, cover and position: locked by the page or by `all` on its database. */
+  const guardContent = (id: string) => {
+    const page = require(id);
+    if (page.lock !== 'none' || databaseLockOf(page) === 'all') refuse(id);
+  };
+
+  /** The cells of a row: locked by `all` on the row or on its database. */
+  const guardCells = (id: string) => {
+    const page = require(id);
+    if (page.lock === 'all' || databaseLockOf(page) === 'all') refuse(id);
+  };
+
+  /** Properties, views and rows of a database: locked by `all`. */
+  const guardDatabase = (id: string) => {
+    if (require(id).lock === 'all') refuse(id);
+  };
+
+  /** A page goes with its subpages, so none of them may be locked. */
+  const guardDelete = (id: string) => {
+    const page = require(id);
+    if (databaseLockOf(page) === 'all') refuse(id);
+    const removed = new Set([id, ...descendantIds(pages, id)]);
+    const locked = pages.find((candidate) => removed.has(candidate.id) && candidate.lock !== 'none');
+    if (locked) refuse(locked.id);
+  };
+
   const requireProperty = (id: string) => {
     const property = databases.properties.find((candidate) => candidate.id === id);
     return property ?? fail('not_found', `property ${id} was not found`);
@@ -593,6 +629,7 @@ export function installFakeBackend({
           icon: null,
           banner: null,
           bannerPosition: 50,
+          lock: 'none',
           updatedAt: new Date().toISOString(),
         };
         save([...pages, page]);
@@ -600,11 +637,23 @@ export function installFakeBackend({
       }
 
       case 'rename_page': {
+        guardContent(args.id as string);
         const page = {
           ...require(args.id as string),
           title: args.title as string,
           updatedAt: new Date().toISOString(),
         };
+        save(pages.map((candidate) => (candidate.id === page.id ? page : candidate)));
+        return page;
+      }
+
+      case 'set_lock': {
+        const lock = args.lock as PageLock;
+        if (lock !== 'none' && lock !== 'content' && lock !== 'all') {
+          fail('invalid', `${String(lock)} is not a lock level`);
+        }
+        // The lock is not an edit: `updatedAt` stays.
+        const page = { ...require(args.id as string), lock };
         save(pages.map((candidate) => (candidate.id === page.id ? page : candidate)));
         return page;
       }
@@ -619,6 +668,7 @@ export function installFakeBackend({
         if (args.icon === '' || args.banner === '') {
           fail('invalid', 'an icon or banner must be a non-empty string or null');
         }
+        guardContent(args.id as string);
         const current = require(args.id as string);
         const banner = args.banner as string | null;
         const page = {
@@ -635,6 +685,7 @@ export function installFakeBackend({
 
       case 'set_banner_position': {
         const position = args.position as number;
+        guardContent(args.id as string);
         const current = require(args.id as string);
         if (!Number.isInteger(position) || position < 0 || position > 100) {
           fail('invalid', 'a cover position is between 0 and 100');
@@ -652,6 +703,7 @@ export function installFakeBackend({
       case 'move_page': {
         const id = args.id as string;
         const parentId = (args.parentId as string | null | undefined) ?? null;
+        guardContent(id);
         if (require(id).databaseId !== null) fail('invalid', 'a row cannot be moved');
         if (parentId !== null && require(parentId).kind === 'database') {
           fail('invalid', 'a page cannot be moved into a database');
@@ -665,7 +717,7 @@ export function installFakeBackend({
 
       case 'delete_page': {
         const id = args.id as string;
-        require(id);
+        guardDelete(id);
         const removed = new Set([id, ...descendantIds(pages, id)]);
         save(pages.filter((page) => !removed.has(page.id)));
         saveBlocks(
@@ -703,6 +755,7 @@ export function installFakeBackend({
           icon: null,
           banner: null,
           bannerPosition: 50,
+          lock: 'none',
           updatedAt: new Date().toISOString(),
         };
         const view: View = {
@@ -735,6 +788,7 @@ export function installFakeBackend({
 
       case 'create_property': {
         const database = requireDatabase(args.databaseId as string);
+        guardDatabase(database.id);
         const type = requirePropertyType(args.type);
         const targetId = (args.targetId as string | null | undefined) ?? null;
         if (type === 'relation') {
@@ -758,6 +812,7 @@ export function installFakeBackend({
 
       case 'update_property': {
         const property = requireProperty(args.id as string);
+        guardDatabase(property.databaseId);
         const name = (args.name as string | null | undefined) ?? null;
         const options = (args.options as SelectOption[] | null | undefined) ?? null;
         if (options !== null) {
@@ -787,12 +842,14 @@ export function installFakeBackend({
 
       case 'delete_property': {
         const property = requireProperty(args.id as string);
+        guardDatabase(property.databaseId);
         saveDatabases(dropProperties(databases, new Set([property.id])));
         return null;
       }
 
       case 'delete_select_option': {
         const property = requireProperty(args.propertyId as string);
+        guardDatabase(property.databaseId);
         const optionId = args.optionId as string;
         if (property.type !== 'select') fail('invalid', 'only a select has options');
         if (!property.options.some((option) => option.id === optionId)) {
@@ -807,6 +864,7 @@ export function installFakeBackend({
 
       case 'change_property_type': {
         const property = requireProperty(args.id as string);
+        guardDatabase(property.databaseId);
         const type = requirePropertyType(args.type);
         if (type === property.type) return property;
         if (property.type === 'relation') fail('invalid', 'a relation cannot change its type');
@@ -845,6 +903,7 @@ export function installFakeBackend({
         // Like the real command, the configuration is read before the database is looked up.
         const config = parseViewConfig(args.config);
         const database = requireDatabase(args.databaseId as string);
+        guardDatabase(database.id);
         const siblings = viewsOf(database.id);
         const view: View = {
           id: crypto.randomUUID(),
@@ -864,6 +923,7 @@ export function installFakeBackend({
         const config =
           args.config === undefined || args.config === null ? null : parseViewConfig(args.config);
         const view = requireView(args.id as string);
+        guardDatabase(view.databaseId);
         const updated: View = {
           ...view,
           name: name === null ? view.name : requireString(name, 'the name'),
@@ -880,6 +940,7 @@ export function installFakeBackend({
 
       case 'delete_view': {
         const view = requireView(args.id as string);
+        guardDatabase(view.databaseId);
         if (viewsOf(view.databaseId).length <= 1) {
           fail('invalid', 'the last view of a database cannot be deleted');
         }
@@ -895,6 +956,7 @@ export function installFakeBackend({
 
       case 'create_row': {
         const database = requireDatabase(args.databaseId as string);
+        guardDatabase(database.id);
         const page: Page = {
           id: crypto.randomUUID(),
           title: '',
@@ -907,6 +969,7 @@ export function installFakeBackend({
           icon: null,
           banner: null,
           bannerPosition: 50,
+          lock: 'none',
           updatedAt: new Date().toISOString(),
         };
         save([...pages, page]);
@@ -919,6 +982,7 @@ export function installFakeBackend({
         if (property.databaseId !== row.databaseId) {
           fail('invalid', 'the property does not belong to the database of the row');
         }
+        guardCells(row.id);
         const value = checkCell(property, args.value);
         saveDatabases({
           ...databases,
@@ -962,7 +1026,7 @@ export function installFakeBackend({
 
       case 'save_blocks': {
         const pageId = args.pageId as string;
-        require(pageId);
+        guardContent(pageId);
         saveBlocks({ ...blocks, [pageId]: structuredClone(args.blocks as Block[]) });
         save(
           pages.map((page) =>

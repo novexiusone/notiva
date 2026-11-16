@@ -1,7 +1,7 @@
 use tauri::State;
 
 use super::error::CommandError;
-use crate::domain::Page;
+use crate::domain::{Page, PageLock};
 use crate::storage::Storage;
 
 #[tauri::command]
@@ -69,4 +69,24 @@ pub async fn move_page(
 #[tauri::command]
 pub async fn delete_page(storage: State<'_, Storage>, id: String) -> Result<(), CommandError> {
     Ok(storage.delete_page(&id).await?)
+}
+
+#[tauri::command]
+pub async fn set_lock(
+    storage: State<'_, Storage>,
+    id: String,
+    lock: String,
+) -> Result<Page, CommandError> {
+    let lock = match lock.as_str() {
+        "none" => PageLock::None,
+        "content" => PageLock::Content,
+        "all" => PageLock::All,
+        other => {
+            return Err(CommandError {
+                kind: "invalid",
+                message: format!("{other} is not a lock level"),
+            });
+        }
+    };
+    Ok(storage.set_lock(&id, lock).await?)
 }

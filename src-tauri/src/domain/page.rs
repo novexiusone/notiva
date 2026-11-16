@@ -8,6 +8,39 @@ pub enum PageKind {
     Database,
 }
 
+/// How far a page is protected against changes. See `SPEC-pages.md`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PageLock {
+    #[default]
+    None,
+    /// Title, text, icon and cover are read-only; a database's rows, cells,
+    /// properties and views stay editable.
+    Content,
+    /// Also a database's rows, cells, properties and views.
+    All,
+}
+
+impl PageLock {
+    /// The lock as it is stored: `None` is stored as no value.
+    pub fn stored(self) -> Option<&'static str> {
+        match self {
+            Self::None => None,
+            Self::Content => Some("content"),
+            Self::All => Some("all"),
+        }
+    }
+
+    /// Reads a stored lock; no value and unknown values read as unlocked.
+    pub fn from_stored(value: Option<&str>) -> Self {
+        match value {
+            Some("content") => Self::Content,
+            Some("all") => Self::All,
+            _ => Self::None,
+        }
+    }
+}
+
 /// A page in the hierarchy. `position` orders the pages that share a parent.
 ///
 /// A database is a page of the kind [`PageKind::Database`], and its rows are
@@ -27,6 +60,7 @@ pub struct Page {
     pub banner: Option<String>,
     /// Where the cover image sits in the cover, from 0 (top) to 100 (bottom).
     pub banner_position: u8,
+    pub lock: PageLock,
     pub updated_at: String,
 }
 
@@ -56,6 +90,7 @@ mod tests {
             icon: Some("book".into()),
             banner: Some("notiva-image://localhost/cover.png".into()),
             banner_position: 30,
+            lock: PageLock::Content,
             updated_at: "2026-11-15T00:00:00Z".into(),
         };
         let database = Page {
@@ -69,6 +104,7 @@ mod tests {
             icon: None,
             banner: None,
             banner_position: 50,
+            lock: PageLock::None,
             updated_at: "2026-11-15T00:00:00Z".into(),
         };
 
@@ -78,7 +114,7 @@ mod tests {
                 "id": "row", "title": "Row", "parentId": "db", "position": 1.5,
                 "kind": "page", "databaseId": "db", "isFavorite": true,
                 "icon": "book", "banner": "notiva-image://localhost/cover.png",
-                "bannerPosition": 30,
+                "bannerPosition": 30, "lock": "content",
                 "updatedAt": "2026-11-15T00:00:00Z"
             })
         );
@@ -87,7 +123,7 @@ mod tests {
             json!({
                 "id": "db", "title": "", "parentId": null, "position": 0.0,
                 "kind": "database", "databaseId": null, "isFavorite": false,
-                "icon": null, "banner": null, "bannerPosition": 50, "updatedAt": "2026-11-15T00:00:00Z"
+                "icon": null, "banner": null, "bannerPosition": 50, "lock": "none", "updatedAt": "2026-11-15T00:00:00Z"
             })
         );
     }

@@ -66,6 +66,11 @@ pub(super) const MIGRATIONS: &[Migration] = &[
         name: "fill_props_text",
         sql: include_str!("migrations/0010_fill_props_text.surql"),
     },
+    Migration {
+        version: 11,
+        name: "page_lock",
+        sql: include_str!("migrations/0011_page_lock.surql"),
+    },
 ];
 
 const BOOTSTRAP: &str = "

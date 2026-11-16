@@ -301,6 +301,7 @@ impl Storage {
         target_id: Option<&str>,
     ) -> Result<Property, StorageError> {
         self.require_database(database_id).await?;
+        self.guard_database(database_id).await?;
         if kind == PropertyType::Relation {
             return Err(StorageError::Invalid(
                 "relation properties are not supported yet".into(),
@@ -343,6 +344,7 @@ impl Storage {
         options: Option<&[SelectOption]>,
     ) -> Result<Property, StorageError> {
         let property = self.find_property(id).await?.ok_or_else(|| not_found(id))?;
+        self.guard_database(&property.database_id).await?;
         if let Some(options) = options {
             if property.kind != PropertyType::Select {
                 return Err(StorageError::Invalid("only a select has options".into()));
@@ -422,6 +424,7 @@ impl Storage {
     /// `property_deleted` event.
     pub async fn delete_property(&self, id: &str) -> Result<(), StorageError> {
         let property = self.find_property(id).await?.ok_or_else(|| not_found(id))?;
+        self.guard_database(&property.database_id).await?;
 
         let (properties, rows) = self
             .read_rows_with(&property.database_id, &property.id)
@@ -480,6 +483,7 @@ impl Storage {
             .find_property(property_id)
             .await?
             .ok_or_else(|| not_found(property_id))?;
+        self.guard_database(&property.database_id).await?;
         if property.kind != PropertyType::Select {
             return Err(StorageError::Invalid("only a select has options".into()));
         }
@@ -537,6 +541,7 @@ impl Storage {
         kind: PropertyType,
     ) -> Result<Property, StorageError> {
         let property = self.find_property(id).await?.ok_or_else(|| not_found(id))?;
+        self.guard_database(&property.database_id).await?;
         if property.kind == kind {
             return Ok(property);
         }

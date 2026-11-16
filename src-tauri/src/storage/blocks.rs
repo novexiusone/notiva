@@ -122,7 +122,7 @@ impl Storage {
         page_id: &str,
         blocks: &[Block],
     ) -> Result<SaveSummary, StorageError> {
-        self.require_page(page_id).await?;
+        self.guard_content(page_id).await?;
 
         let mut incoming = Vec::new();
         flatten(blocks, None, &mut incoming);

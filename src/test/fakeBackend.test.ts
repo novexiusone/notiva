@@ -1121,3 +1121,83 @@ describe('views', () => {
     expect((await viewsOf(id)).map((entry) => entry.name)).toEqual(['Table', 'Pipeline']);
   });
 });
+
+describe('page locks', () => {
+  beforeEach(() => installFakeBackend());
+
+  const locked = { kind: 'locked' };
+
+  it('sets a lock without advancing the edit timestamp and refuses unknown levels', async () => {
+    const created = await commands.createPage(null);
+
+    const set = await commands.setLock(created.id, 'content');
+
+    expect(created.lock).toBe('none');
+    expect(set).toMatchObject({ lock: 'content', updatedAt: created.updatedAt });
+    await expect(commands.setLock('missing', 'all')).rejects.toMatchObject(notFound);
+    await expect(commands.setLock(created.id, 'x' as 'all')).rejects.toMatchObject(invalid);
+    expect((await commands.setLock(created.id, 'none')).lock).toBe('none');
+  });
+
+  it('refuses every change to the content of a locked page, but not favouriting or unlocking', async () => {
+    const created = await commands.createPage(null);
+    await commands.setLock(created.id, 'content');
+
+    await expect(commands.renamePage(created.id, 'x')).rejects.toMatchObject(locked);
+    await expect(commands.updateAppearance(created.id, '🚀', null)).rejects.toMatchObject(locked);
+    await expect(commands.setBannerPosition(created.id, 10)).rejects.toMatchObject(locked);
+    await expect(commands.saveBlocks(created.id, [])).rejects.toMatchObject(locked);
+    await expect(commands.movePage(created.id, null, 0)).rejects.toMatchObject(locked);
+    await expect(commands.deletePage(created.id)).rejects.toMatchObject(locked);
+    expect((await commands.setFavorite(created.id, true)).isFavorite).toBe(true);
+    await commands.setLock(created.id, 'none');
+    await expect(commands.renamePage(created.id, 'x')).resolves.toMatchObject({ title: 'x' });
+  });
+
+  it('refuses to delete a page with a locked subpage', async () => {
+    const parent = await commands.createPage(null);
+    const child = await commands.createPage(parent.id);
+    await commands.setLock(child.id, 'content');
+
+    await expect(commands.deletePage(parent.id)).rejects.toMatchObject(locked);
+  });
+
+  it('keeps a database locked at content editable and one locked at all read-only', async () => {
+    const { id, rows } = await databaseWithRows('A');
+    const property = await commands.createProperty(id, 'Text', 'text', null);
+    const view = (await commands.loadDatabase(id)).views[0]!;
+
+    await commands.setLock(id, 'content');
+    await expect(commands.renamePage(id, 'x')).rejects.toMatchObject(locked);
+    await commands.createRow(id);
+    await commands.setCell(rows[0]!.id, property.id, 'ok');
+    await commands.updateProperty(property.id, 'Renamed', null);
+    await commands.updateView(view.id, 'Renamed', null);
+
+    await commands.setLock(id, 'all');
+    await expect(commands.createRow(id)).rejects.toMatchObject(locked);
+    await expect(commands.setCell(rows[0]!.id, property.id, 'no')).rejects.toMatchObject(locked);
+    await expect(commands.renamePage(rows[0]!.id, 'x')).rejects.toMatchObject(locked);
+    await expect(commands.deletePage(rows[0]!.id)).rejects.toMatchObject(locked);
+    await expect(commands.createProperty(id, 'P', 'text', null)).rejects.toMatchObject(locked);
+    await expect(commands.updateProperty(property.id, 'x', null)).rejects.toMatchObject(locked);
+    await expect(commands.deleteProperty(property.id)).rejects.toMatchObject(locked);
+    await expect(commands.changePropertyType(property.id, 'number')).rejects.toMatchObject(locked);
+    await expect(commands.createView(id, 'V', view.config)).rejects.toMatchObject(locked);
+    await expect(commands.updateView(view.id, 'x', null)).rejects.toMatchObject(locked);
+    await expect(commands.deleteView(view.id)).rejects.toMatchObject(locked);
+    await expect(commands.loadDatabase(id)).resolves.toBeDefined();
+    expect(await commands.listRows(id)).toHaveLength(2);
+  });
+
+  it('locks the cells of a row locked at all and the content of a row locked at content', async () => {
+    const { id, rows } = await databaseWithRows('A');
+    const property = await commands.createProperty(id, 'Text', 'text', null);
+
+    await commands.setLock(rows[0]!.id, 'content');
+    await expect(commands.renamePage(rows[0]!.id, 'x')).rejects.toMatchObject(locked);
+    await commands.setCell(rows[0]!.id, property.id, 'still editable');
+    await commands.setLock(rows[0]!.id, 'all');
+    await expect(commands.setCell(rows[0]!.id, property.id, 'no')).rejects.toMatchObject(locked);
+  });
+});

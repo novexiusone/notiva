@@ -269,6 +269,7 @@ impl Storage {
     /// touching the others.
     pub async fn create_row(&self, database_id: &str) -> Result<Row, StorageError> {
         self.require_database(database_id).await?;
+        self.guard_database(database_id).await?;
 
         let record: Option<RowRecord> = self
             .db
@@ -416,6 +417,7 @@ impl Storage {
                 "the property does not belong to the database of the row".into(),
             ));
         }
+        self.guard_cells(row_id).await?;
         Ok(property)
     }
 }

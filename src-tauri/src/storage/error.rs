@@ -10,6 +10,10 @@ pub enum StorageError {
     #[error("{0}")]
     Invalid(String),
 
+    /// The change is refused because of a page lock.
+    #[error("{0}")]
+    Locked(String),
+
     #[error("database error: {0}")]
     Database(String),
 

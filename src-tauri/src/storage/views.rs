@@ -64,6 +64,7 @@ impl Storage {
         if !is_database {
             return Err(StorageError::NotFound(format!("database {database_id}")));
         }
+        self.guard_database(database_id).await?;
 
         self.insert_view(database_id, name, config).await
     }
@@ -76,6 +77,7 @@ impl Storage {
         name: Option<&str>,
         config: Option<&ViewConfig>,
     ) -> Result<View, StorageError> {
+        self.guard_view(id).await?;
         let row: Option<ViewRow> = self
             .db
             .query(format!(
@@ -95,6 +97,7 @@ impl Storage {
     /// Deletes a view. A database keeps at least one view, so its last view
     /// cannot be deleted.
     pub async fn delete_view(&self, id: &str) -> Result<(), StorageError> {
+        self.guard_view(id).await?;
         let mut response = self
             .db
             .query(
@@ -123,6 +126,23 @@ impl Storage {
             ))
         } else {
             Ok(())
+        }
+    }
+
+    /// Fails with `locked` when the database of the view is locked at `all`,
+    /// and with `not_found` for an unknown view.
+    async fn guard_view(&self, id: &str) -> Result<(), StorageError> {
+        let database: Option<String> = self
+            .db
+            .query("SELECT VALUE record::id(database) FROM ONLY type::record('view', $id)")
+            .bind(("id", id.to_owned()))
+            .await?
+            .check()?
+            .take(0)?;
+
+        match database {
+            Some(database_id) => self.guard_database(&database_id).await,
+            None => Err(not_found(id)),
         }
     }
 
