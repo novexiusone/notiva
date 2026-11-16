@@ -11,4 +11,5 @@ pub mod links;
 pub mod notes;
 pub mod pages;
 pub mod search;
+pub mod trash;
 pub mod views;

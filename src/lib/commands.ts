@@ -160,6 +160,35 @@ export type CommandError = {
   message: string;
 };
 
+/** A page in the trash. `id` is the id of the page, which is also its id in the trash. */
+export type TrashedPage = {
+  id: string;
+  title: string;
+  kind: 'page' | 'database';
+  icon: string | null;
+  /** Where the page was; it returns there if that still exists. */
+  parentId: string | null;
+  /** Set when the page was a row of a database. */
+  databaseId: string | null;
+  /** The page itself, its subpages and, for a database, its rows. */
+  pageCount: number;
+  deletedAt: string;
+};
+
+/** `retentionDays` is how long pages stay in the trash; `null` keeps them until deleted by hand. */
+export type TrashSettings = { retentionDays: number | null };
+
+/** One saved state of the blocks of a page. */
+export type PageVersion = {
+  id: string;
+  /** The title of the page when the version was taken. */
+  title: string;
+  blockCount: number;
+  /** The start of the text, to tell versions apart. */
+  preview: string;
+  createdAt: string;
+};
+
 /** The only place that calls into the Rust backend. */
 export const commands = {
   appInfo: () => invoke<AppInfo>('app_info'),
@@ -174,7 +203,28 @@ export const commands = {
     invoke<Page>('set_banner_position', { id, position }),
   movePage: (id: string, parentId: string | null, index: number) =>
     invoke<void>('move_page', { id, parentId, index }),
+  /** Moves the page with its subpages to the trash. */
   deletePage: (id: string) => invoke<void>('delete_page', { id }),
+
+  /** The trashed pages, the most recently deleted first. */
+  listTrash: () => invoke<TrashedPage[]>('list_trash'),
+  /** Brings a trashed page back to its old parent, or to the top level when that is gone. */
+  restorePage: (id: string) => invoke<Page>('restore_page', { id }),
+  deletePagePermanently: (id: string) => invoke<void>('delete_page_permanently', { id }),
+  /** Resolves to the number of pages that were deleted. */
+  emptyTrash: () => invoke<number>('empty_trash'),
+  getTrashSettings: () => invoke<TrashSettings>('get_trash_settings'),
+  /** `null` keeps trashed pages until they are deleted by hand. */
+  setTrashRetention: (days: number | null) =>
+    invoke<TrashSettings>('set_trash_retention', { days }),
+
+  /** The versions of a page, the newest first. */
+  listPageVersions: (pageId: string) => invoke<PageVersion[]>('list_page_versions', { pageId }),
+  loadPageVersion: (pageId: string, versionId: string) =>
+    invoke<PageVersion & { blocks: Block[] }>('load_page_version', { pageId, versionId }),
+  /** Replaces the blocks with those of the version, keeping the current ones as a version. */
+  restorePageVersion: (pageId: string, versionId: string) =>
+    invoke<Block[]>('restore_page_version', { pageId, versionId }),
 
   loadBlocks: (pageId: string) => invoke<Block[]>('load_blocks', { pageId }),
   saveBlocks: (pageId: string, blocks: Block[]) => invoke<void>('save_blocks', { pageId, blocks }),

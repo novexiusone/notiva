@@ -57,6 +57,12 @@ The spec is the contract between frontend and backend, which is why #55 does not
 
 Packages built at the same time live in separate worktrees. Each runs its end-to-end tests on a port of its own, `E2E_PORT=1441 just test-e2e`, so that no worktree tests against another one's server.
 
+## After the MVP: trash and history
+
+| Module id | Responsibility                                                                                            | Depends on                                | Spec                           |
+| --------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------ |
+| `trash`   | Soft delete with restore, retention and emptying; version history of a page's blocks (#25, backend first) | `pages`, `storage`, `editor`, `databases` | [SPEC-trash.md](SPEC-trash.md) |
+
 ## Applies to every module
 
 ### Architecture

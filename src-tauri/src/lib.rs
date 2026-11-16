@@ -94,6 +94,15 @@ pub fn run() {
             commands::notes::save_note,
             commands::notes::rename_note,
             commands::notes::delete_note,
+            commands::trash::list_trash,
+            commands::trash::restore_page,
+            commands::trash::delete_page_permanently,
+            commands::trash::empty_trash,
+            commands::trash::get_trash_settings,
+            commands::trash::set_trash_retention,
+            commands::trash::list_page_versions,
+            commands::trash::load_page_version,
+            commands::trash::restore_page_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -14,6 +14,8 @@ mod properties;
 mod relations;
 mod rows;
 mod search;
+mod trash;
+mod versions;
 mod views;
 
 #[cfg(test)]
@@ -55,6 +57,11 @@ impl Storage {
     async fn prepare(db: Surreal<Db>) -> Result<Self, StorageError> {
         db.use_ns(NAMESPACE).use_db(DATABASE).await?;
         migrations::run(&db, migrations::MIGRATIONS).await?;
-        Ok(Self { db })
+        let storage = Self { db };
+        // Housekeeping must never keep the app from starting: both only tidy
+        // the trash and are tried again at the next start.
+        let _ = storage.recover_trash().await;
+        let _ = storage.purge_expired_trash().await;
+        Ok(storage)
     }
 }
