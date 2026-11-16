@@ -1,4 +1,4 @@
-import { ListFilter, Plus, X } from 'lucide-react';
+import { GripVertical, ListFilter, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import {
   type ViewField,
 } from '@/features/databases/viewState';
 import type { FilterOperator, ViewFilter } from '@/lib/commands';
-import { EmptyNote, NativeSelect, ToolbarButton } from './parts';
+import { Select, PanelHeader, ToolbarButton } from './parts';
 import type { ToolbarMenuProps } from './types';
 
 /** Operators that test whether there is a value at all, so they take none. */
@@ -50,10 +50,10 @@ function FilterValue({
   switch (field.property.type) {
     case 'select':
       return (
-        <NativeSelect
+        <Select
           label={label}
           value={typeof filter.value === 'string' ? filter.value : ''}
-          onChange={(event) => onChange(event.target.value || null)}
+          onValueChange={(next) => onChange(next || null)}
           className="flex-1"
         >
           <option value="">{t('databases.toolbar.chooseOption')}</option>
@@ -62,7 +62,7 @@ function FilterValue({
               {option.name}
             </option>
           ))}
-        </NativeSelect>
+        </Select>
       );
     case 'date':
       return (
@@ -107,23 +107,183 @@ function FilterValue({
   }
 }
 
-/**
- * Conditions a row has to meet, all of them: add, change and remove. A new
- * condition is on the title and lets every row pass until it has a value.
- */
-export function FilterMenu({ config, properties, onChange }: ToolbarMenuProps) {
+/** What the filters of a view are: the list of conditions, and the choice of a property for a new one. */
+export function FilterPanel({
+  config,
+  properties,
+  onChange,
+  onBack,
+  onClose,
+}: ToolbarMenuProps & { onBack?: () => void; onClose: () => void }) {
   const { t } = useTranslation();
   const operatorLabel = useOperatorLabel();
   const fields = viewFields(properties, t('databases.table.titleColumn'));
   const filters = readFilters(config, properties);
-  const label = t('databases.toolbar.filters');
+  const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState('');
 
   const write = (next: ViewFilter[]) => onChange(withFilters(config, properties, next));
   const replace = (index: number, filter: ViewFilter) =>
     write(filters.map((current, at) => (at === index ? filter : current)));
+  const stopAdding = () => {
+    setAdding(false);
+    setSearch('');
+  };
+  const offered = fields.filter((field) =>
+    field.property.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+  );
 
   return (
-    <Popover>
+    <>
+      {adding ? (
+        <>
+          <PanelHeader
+            title={t('databases.toolbar.addFilterTitle')}
+            onBack={stopAdding}
+            onClose={onClose}
+          />
+          <Input
+            autoFocus
+            aria-label={t('databases.toolbar.filterBy')}
+            placeholder={t('databases.toolbar.filterBy')}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="h-7 px-2"
+          />
+          <ul aria-label={t('databases.toolbar.property')} className="flex flex-col">
+            {offered.map((field) => {
+              const Icon = field.definition.icon;
+              return (
+                <li key={field.id}>
+                  <button
+                    type="button"
+                    className="hover:bg-accent focus-visible:bg-accent flex h-7 w-full items-center gap-2 rounded-sm px-2 text-sm outline-none"
+                    onClick={() => {
+                      write([
+                        ...filters,
+                        {
+                          propertyId: field.id,
+                          operator: field.definition.operators[0]!,
+                          value: null,
+                        },
+                      ]);
+                      stopAdding();
+                    }}
+                  >
+                    <Icon size={16} aria-hidden className="text-muted-foreground" />
+                    <span className="truncate">{field.property.name}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : (
+        <>
+          <PanelHeader title={t('databases.toolbar.filters')} onBack={onBack} onClose={onClose} />
+          {filters.length === 0 ? null : (
+            <ul className="flex flex-col gap-2">
+              {filters.map((filter, index) => {
+                const field = fields.find((candidate) => candidate.id === filter.propertyId)!;
+                const Icon = field.definition.icon;
+                return (
+                  <li
+                    // A new editor when the property or the kind of value changes.
+                    key={`${index}-${filter.propertyId}`}
+                    role="group"
+                    aria-label={`${t('databases.toolbar.filter')} ${index + 1}`}
+                    className="flex flex-col gap-1"
+                  >
+                    <div className="flex items-center gap-1">
+                      <GripVertical size={14} aria-hidden className="text-muted-foreground/50" />
+                      <Icon size={16} aria-hidden className="text-muted-foreground" />
+                      <Select
+                        label={t('databases.toolbar.property')}
+                        value={filter.propertyId}
+                        onValueChange={(id) => {
+                          const next = fields.find((candidate) => candidate.id === id);
+                          if (next) {
+                            replace(index, {
+                              propertyId: next.id,
+                              operator: next.definition.operators[0]!,
+                              value: null,
+                            });
+                          }
+                        }}
+                      >
+                        {fields.map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {candidate.property.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    <div className="border-border ml-5 flex flex-col gap-1.5 rounded-md border p-1.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <Select
+                          label={t('databases.toolbar.operator')}
+                          value={filter.operator}
+                          onValueChange={(next) => {
+                            const operator = next as FilterOperator;
+                            replace(index, {
+                              ...filter,
+                              operator,
+                              value: valueless.includes(operator) ? null : filter.value,
+                            });
+                          }}
+                        >
+                          {field.definition.operators.map((operator) => (
+                            <option key={operator} value={operator}>
+                              {operatorLabel(operator, field)}
+                            </option>
+                          ))}
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label={t('databases.toolbar.removeFilter')}
+                          onClick={() => write(filters.filter((_, at) => at !== index))}
+                        >
+                          <Trash2 aria-hidden />
+                        </Button>
+                      </div>
+                      {valueless.includes(filter.operator) ? null : (
+                        <FilterValue
+                          field={field}
+                          filter={filter}
+                          onChange={(value) => replace(index, { ...filter, value })}
+                        />
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="self-start"
+            onClick={() => setAdding(true)}
+          >
+            <Plus aria-hidden />
+            {t('databases.toolbar.addFilter')}
+          </Button>
+        </>
+      )}
+    </>
+  );
+}
+
+/** The filters of a view, from the toolbar. */
+export function FilterMenu(props: ToolbarMenuProps) {
+  const { t } = useTranslation();
+  const filters = readFilters(props.config, props.properties);
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <ToolbarButton
           icon={ListFilter}
@@ -131,100 +291,12 @@ export function FilterMenu({ config, properties, onChange }: ToolbarMenuProps) {
           badge={filters.length > 0 ? filters.length : undefined}
         />
       </PopoverTrigger>
-      <PopoverContent align="end" aria-label={label} className="w-[min(36rem,calc(100vw-2rem))]">
-        {filters.length === 0 ? (
-          <EmptyNote>{t('databases.toolbar.noFilters')}</EmptyNote>
-        ) : (
-          <ul className="flex flex-col gap-1.5">
-            {filters.map((filter, index) => {
-              const field = fields.find((candidate) => candidate.id === filter.propertyId)!;
-              return (
-                <li
-                  // A new editor when the property or the kind of value changes.
-                  key={`${index}-${filter.propertyId}`}
-                  role="group"
-                  aria-label={`${t('databases.toolbar.filter')} ${index + 1}`}
-                  className="flex items-center gap-1.5"
-                >
-                  <NativeSelect
-                    label={t('databases.toolbar.property')}
-                    value={filter.propertyId}
-                    onChange={(event) => {
-                      const next = fields.find((candidate) => candidate.id === event.target.value);
-                      if (next) {
-                        replace(index, {
-                          propertyId: next.id,
-                          operator: next.definition.operators[0]!,
-                          value: null,
-                        });
-                      }
-                    }}
-                    className="w-32"
-                  >
-                    {fields.map((candidate) => (
-                      <option key={candidate.id} value={candidate.id}>
-                        {candidate.property.name}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                  <NativeSelect
-                    label={t('databases.toolbar.operator')}
-                    value={filter.operator}
-                    onChange={(event) => {
-                      const operator = event.target.value as FilterOperator;
-                      replace(index, {
-                        ...filter,
-                        operator,
-                        value: valueless.includes(operator) ? null : filter.value,
-                      });
-                    }}
-                    className="w-32"
-                  >
-                    {field.definition.operators.map((operator) => (
-                      <option key={operator} value={operator}>
-                        {operatorLabel(operator, field)}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                  {valueless.includes(filter.operator) ? (
-                    <span className="flex-1" />
-                  ) : (
-                    <FilterValue
-                      field={field}
-                      filter={filter}
-                      onChange={(value) => replace(index, { ...filter, value })}
-                    />
-                  )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t('databases.toolbar.removeFilter')}
-                    onClick={() => write(filters.filter((_, at) => at !== index))}
-                  >
-                    <X aria-hidden />
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="self-start"
-          onClick={() => {
-            const [title] = fields;
-            write([
-              ...filters,
-              { propertyId: title!.id, operator: title!.definition.operators[0]!, value: null },
-            ]);
-          }}
-        >
-          <Plus aria-hidden />
-          {t('databases.toolbar.addFilter')}
-        </Button>
+      <PopoverContent
+        align="end"
+        aria-label={t('databases.toolbar.filters')}
+        className="w-80 gap-2 p-2"
+      >
+        <FilterPanel {...props} onClose={() => setOpen(false)} />
       </PopoverContent>
     </Popover>
   );

@@ -257,11 +257,12 @@ test('typing in cells, filters and view names changes no block and saves nothing
 
   // A filter value, in a popover opened from the block.
   await block
-    .getByRole('group', { name: 'View settings' })
+    .getByRole('group', { name: 'View toolbar' })
     .getByRole('button', { name: /^Filter/ })
     .click();
   const filters = page.getByRole('dialog', { name: 'Filters' });
   await filters.getByRole('button', { name: 'Add a filter' }).click();
+  await filters.getByRole('button', { name: 'Name', exact: true }).click();
   await filters
     .getByRole('group', { name: 'Filter 1' })
     .getByRole('textbox', { name: 'Value' })
@@ -271,12 +272,16 @@ test('typing in cells, filters and view names changes no block and saves nothing
   await page.keyboard.press('Escape');
 
   // A view's name.
-  await block.getByRole('button', { name: 'Actions for “All”' }).click();
-  await page.getByRole('menuitem', { name: 'Rename' }).click();
-  const viewName = block.getByRole('textbox', { name: 'View name' });
-  await expect(viewName).toBeFocused();
-  await page.keyboard.type('Mine');
+  await block
+    .getByRole('group', { name: 'View toolbar' })
+    .getByRole('button', { name: /^View settings/ })
+    .click();
+  const viewName = page
+    .getByRole('dialog', { name: 'View settings' })
+    .getByRole('textbox', { name: 'View name' });
+  await viewName.fill('Mine');
   await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
   await expect(tab(block, 'Mine')).toBeVisible();
 
   await page.waitForTimeout(AUTOSAVE);
@@ -535,7 +540,7 @@ test('tabs, toolbar and table look as on the database page', async ({ page }) =>
       [
         tab(scope, 'All'),
         tab(scope, 'All').locator('svg'),
-        scope.getByRole('group', { name: 'View settings' }).getByRole('button', { name: /^Sort/ }),
+        scope.getByRole('group', { name: 'View toolbar' }).getByRole('button', { name: /^Sort/ }),
         grid(scope).getByRole('columnheader').first(),
         bodyRows(scope).first().getByRole('gridcell').first(),
         scope.getByRole('button', { name: 'New', exact: true }),
@@ -562,8 +567,10 @@ test('tabs, toolbar and table look as on the database page', async ({ page }) =>
   await expect(title(page)).toHaveValue('Tasks');
   const onPage = await probe(page.getByRole('main'));
 
-  // Widths of things that fill the space differ; the tab, icons and buttons do not.
+  // Widths of things that fill the space differ; the tab and the icons do not.
   const fixed = (values: string[]) =>
-    values.map((value, index) => (index === 4 ? value.split(' ').slice(0, 5).join(' ') : value));
+    values.map((value, index) =>
+      index === 4 || index === 5 ? value.split(' ').slice(0, 5).join(' ') : value,
+    );
   expect(fixed(inBlock)).toEqual(fixed(onPage));
 });

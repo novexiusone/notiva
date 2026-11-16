@@ -61,7 +61,12 @@ export const GroupRow = memo(function GroupRow({
       role="row"
       aria-rowindex={rowIndex + 2}
       aria-label={label}
-      style={{ width, height: ROW_HEIGHT, transform: `translateY(${top}px)` }}
+      style={{
+        width: '100%',
+        minWidth: width,
+        height: ROW_HEIGHT,
+        transform: `translateY(${top}px)`,
+      }}
       className="border-border bg-muted/30 absolute top-0 left-0 flex border-b"
     >
       <div role="gridcell" aria-colspan={columnCount} className="sticky left-0 flex min-w-0">

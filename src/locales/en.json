@@ -15,6 +15,7 @@
     "empty": "Your pages will appear here."
   },
   "pages": {
+    "fullWidth": "Full width",
     "untitled": "Untitled",
     "new": "New page",
     "addSubpage": "Add a subpage",
@@ -113,9 +114,18 @@
       "noOptions": "No options yet"
     },
     "table": {
+      "selectRow": "Select {{title}}",
+      "selectAll": "Select all rows",
+      "selection": "Selected rows",
+      "selected": "{{count}} selected",
+      "deleteSelected": "Delete selected rows",
+      "deleteSelectedTitle_one": "Delete {{count}} row?",
+      "deleteSelectedTitle_other": "Delete {{count}} rows?",
+      "deleteSelectedDescription": "The rows and everything in them are deleted.",
       "rows": "Rows",
       "titleColumn": "Name",
       "noRows": "No rows yet",
+      "rowsShown": "{{shown}} of {{total}} rows",
       "newRow": "New",
       "loadFailed": "The rows could not be loaded.",
       "open": "Open",
@@ -144,6 +154,8 @@
       "noMatches": "No rows match the filters"
     },
     "views": {
+      "icon": "Choose an icon",
+      "iconPicker": "View icon",
       "label": "Views",
       "add": "Add a view",
       "chooseType": "Type",
@@ -162,7 +174,21 @@
       "unavailable": "This kind of view cannot be shown in this version yet."
     },
     "toolbar": {
-      "label": "View settings",
+      "close": "Close",
+      "addSortTitle": "New sort",
+      "sortBy": "Sort by…",
+      "layout": "Layout",
+      "propertyVisibility": "Property visibility",
+      "deleteView": "Delete view",
+      "back": "Back",
+      "addFilterTitle": "Add filter",
+      "filterBy": "Filter by…",
+      "newRowLabel": "New row",
+      "newRow": "New",
+      "settings": "View settings",
+      "minimize": "Minimize",
+      "expand": "Expand",
+      "label": "View toolbar",
       "filter": "Filter",
       "filters": "Filters",
       "addFilter": "Add a filter",

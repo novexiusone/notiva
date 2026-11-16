@@ -1,13 +1,15 @@
 import { useNavigate } from '@tanstack/react-router';
 import { formatDistanceToNow } from 'date-fns';
 import { de as dateFnsDe, enUS as dateFnsEn } from 'date-fns/locale';
-import { Download, MoreHorizontal, Star, Trash2 } from 'lucide-react';
+import { Download, MoreHorizontal, MoveHorizontal, Star, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { setFullWidth, useFullWidth } from '@/features/pages/fullWidth';
 import { useTranslation } from 'react-i18next';
 import { TopBar } from '@/components/layout/TopBar';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuCheckboxItem,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -44,6 +46,7 @@ export function PageHeader({
   const [afterClose, setAfterClose] = useState<(() => void) | null>(null);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const fullWidth = useFullWidth(page.id);
 
   const edited = new Date(page.updatedAt);
   const relativeTime = formatDistanceToNow(edited, {
@@ -98,6 +101,13 @@ export function PageHeader({
                 onChooseIcon={later(onChooseIcon)}
                 onChooseBanner={later(onChooseBanner)}
               />
+              <DropdownMenuCheckboxItem
+                checked={fullWidth}
+                onCheckedChange={(checked) => setFullWidth(page.id, checked === true)}
+              >
+                <MoveHorizontal aria-hidden />
+                {t('pages.fullWidth')}
+              </DropdownMenuCheckboxItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={later(() => setExporting(true))}>
                 <Download aria-hidden />

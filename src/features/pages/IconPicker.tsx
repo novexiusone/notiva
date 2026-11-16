@@ -74,9 +74,18 @@ const cell =
   'hover:bg-accent focus-visible:ring-ring/50 flex size-8 items-center justify-center rounded-sm outline-none focus-visible:ring-2';
 
 /** Mounted while the popover is open, so every opening starts with a fresh filter. */
-function PickerContent({ page, onClose }: { page: Page; onClose: () => void }) {
+export function IconPickerPanel({
+  current,
+  onChoose,
+  onClose,
+}: {
+  /** The icon that is set now, if any. */
+  current: string | null;
+  /** `null` removes the icon. */
+  onChoose: (icon: string | null) => void;
+  onClose: () => void;
+}) {
   const { t, i18n } = useTranslation();
-  const { change } = useUpdateAppearance();
   const [filter, setFilter] = useState('');
   const [tab, setTab] = useState('emoji');
   const emoji = useEmoji(i18n.language);
@@ -84,7 +93,7 @@ function PickerContent({ page, onClose }: { page: Page; onClose: () => void }) {
   const query = filter.trim().toLowerCase();
 
   const choose = (icon: string | null) => {
-    change(page.id, { icon });
+    onChoose(icon);
     onClose();
   };
 
@@ -113,7 +122,7 @@ function PickerContent({ page, onClose }: { page: Page; onClose: () => void }) {
           <TabsTrigger value="emoji">{t('pages.picker.emoji')}</TabsTrigger>
           <TabsTrigger value="icons">{t('pages.picker.icons')}</TabsTrigger>
         </TabsList>
-        {page.icon !== null ? (
+        {current !== null ? (
           <button
             type="button"
             className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 rounded-sm px-1 text-sm outline-none focus-visible:ring-2"
@@ -221,7 +230,7 @@ function PickerContent({ page, onClose }: { page: Page; onClose: () => void }) {
                   type="button"
                   title={iconLabel(name)}
                   aria-label={iconLabel(name)}
-                  className={cn(cell, page.icon === name && 'bg-accent')}
+                  className={cn(cell, current === name && 'bg-accent')}
                   onClick={() => choose(name)}
                 >
                   <Icon size={18} aria-hidden />
@@ -256,6 +265,7 @@ export function IconPicker({
   children: ReactNode;
 }) {
   const { t } = useTranslation();
+  const { change } = useUpdateAppearance();
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -265,7 +275,11 @@ export function IconPicker({
         className="w-[22rem] gap-0 p-0"
         aria-label={t('pages.iconPicker')}
       >
-        <PickerContent page={page} onClose={() => onOpenChange(false)} />
+        <IconPickerPanel
+          current={page.icon}
+          onChoose={(icon) => change(page.id, { icon })}
+          onClose={() => onOpenChange(false)}
+        />
       </PopoverContent>
     </Popover>
   );

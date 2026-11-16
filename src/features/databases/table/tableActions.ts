@@ -12,6 +12,8 @@ export type TableActions = {
   renameRow: (rowId: string, title: string) => void;
   /** Asks first, then deletes the row. */
   deleteRow: (rowId: string) => void;
+  /** Adds the row to the selection, or takes it out. */
+  toggleRow: (rowId: string) => void;
   /** Makes the cell `rows` rows and `columns` columns away the active one. */
   move: (rowIndex: number, columnIndex: number, rows: number, columns: number) => void;
 };

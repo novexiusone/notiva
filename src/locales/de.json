@@ -15,6 +15,7 @@
     "empty": "Hier erscheinen deine Seiten."
   },
   "pages": {
+    "fullWidth": "Volle Breite",
     "untitled": "Ohne Titel",
     "new": "Neue Seite",
     "addSubpage": "Unterseite hinzufügen",
@@ -113,9 +114,18 @@
       "noOptions": "Noch keine Optionen"
     },
     "table": {
+      "selectRow": "{{title}} auswählen",
+      "selectAll": "Alle Zeilen auswählen",
+      "selection": "Ausgewählte Zeilen",
+      "selected": "{{count}} ausgewählt",
+      "deleteSelected": "Ausgewählte Zeilen löschen",
+      "deleteSelectedTitle_one": "{{count}} Zeile löschen?",
+      "deleteSelectedTitle_other": "{{count}} Zeilen löschen?",
+      "deleteSelectedDescription": "Die Zeilen und alles in ihnen werden gelöscht.",
       "rows": "Zeilen",
       "titleColumn": "Name",
       "noRows": "Noch keine Zeilen",
+      "rowsShown": "{{shown}} von {{total}} Zeilen",
       "newRow": "Neu",
       "loadFailed": "Die Zeilen konnten nicht geladen werden.",
       "open": "Öffnen",
@@ -144,6 +154,8 @@
       "noMatches": "Keine Zeile erfüllt die Filter"
     },
     "views": {
+      "icon": "Icon wählen",
+      "iconPicker": "Ansichts-Icon",
       "label": "Ansichten",
       "add": "Ansicht hinzufügen",
       "chooseType": "Typ",
@@ -162,7 +174,21 @@
       "unavailable": "Diese Art von Ansicht kann diese Version noch nicht zeigen."
     },
     "toolbar": {
-      "label": "Einstellungen der Ansicht",
+      "close": "Schließen",
+      "addSortTitle": "Neue Sortierung",
+      "sortBy": "Sortieren nach…",
+      "layout": "Layout",
+      "propertyVisibility": "Sichtbarkeit der Properties",
+      "deleteView": "Ansicht löschen",
+      "back": "Zurück",
+      "addFilterTitle": "Filter hinzufügen",
+      "filterBy": "Filtern nach…",
+      "newRowLabel": "Neue Zeile",
+      "newRow": "Neu",
+      "settings": "Ansichtseinstellungen",
+      "minimize": "Minimieren",
+      "expand": "Erweitern",
+      "label": "Ansichtsleiste",
       "filter": "Filter",
       "filters": "Filter",
       "addFilter": "Filter hinzufügen",
