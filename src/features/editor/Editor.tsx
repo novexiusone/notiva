@@ -2,7 +2,7 @@ import { de, en } from '@blocknote/core/locales';
 import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import '@blocknote/shadcn/style.css';
-import { useImperativeHandle, useMemo, useState, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useMemo, useState, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
 import { useCreateDatabase } from '@/features/databases/api';
@@ -110,6 +110,28 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
   });
 
   useImperativeHandle(ref, () => ({ focus: () => editor.focus() }), [editor]);
+
+  // A block that was selected through its handle stays selected until the
+  // selection moves; a click anywhere else on the page ends it too.
+  useEffect(() => {
+    const clearBlockSelection = (event: PointerEvent) => {
+      const view = editor._tiptapEditor.view;
+      const { selection } = view.state;
+      // Only a selected node (a block) has a `node`; a text selection has none.
+      if (!('node' in selection)) return;
+      if (event.target instanceof Node && view.dom.contains(event.target)) return;
+      // Popovers and menus are not "elsewhere": they belong to the selected block.
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[data-radix-popper-content-wrapper]')
+      )
+        return;
+      editor._tiptapEditor.commands.setTextSelection(selection.to);
+      view.dom.blur();
+    };
+    document.addEventListener('pointerdown', clearBlockSelection);
+    return () => document.removeEventListener('pointerdown', clearBlockSelection);
+  }, [editor]);
 
   return (
     <>

@@ -194,6 +194,18 @@
   body {
     @apply bg-background text-foreground antialiased;
     overscroll-behavior: none;
+    /* Like a native app: only what a person writes can be selected. */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Text that is typed: the editor, text fields and editable cells. */
+  input,
+  textarea,
+  [contenteditable='true'],
+  [contenteditable='true'] * {
+    -webkit-user-select: text;
+    user-select: text;
   }
 }
 
@@ -275,4 +287,25 @@
 
 .bn-root.bn-container .database-block {
   white-space: normal;
+}
+
+/*
+ * A selected database block (after a click on its handle) is a soft surface
+ * with room around it, not an outline. The surface reaches 8px beyond the
+ * block, so nothing moves.
+ */
+.bn-root.bn-container .ProseMirror-selectednode > .bn-block-content[data-content-type='database'],
+.bn-root.bn-container .bn-block-content[data-content-type='database'].ProseMirror-selectednode {
+  outline: none;
+  border-radius: var(--radius-lg);
+  background: var(--accent);
+  box-shadow: 0 0 0 8px var(--accent);
+}
+
+.bn-root.bn-container
+  .ProseMirror-selectednode
+  > .bn-block-content[data-content-type='database']
+  > *,
+.bn-root.bn-container .bn-block-content[data-content-type='database'].ProseMirror-selectednode > * {
+  outline: none;
 }

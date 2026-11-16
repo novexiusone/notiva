@@ -574,3 +574,18 @@ test('tabs, toolbar and table look as on the database page', async ({ page }) =>
     );
   expect(fixed(inBlock)).toEqual(fixed(onPage));
 });
+
+test('rows of an inline database can be selected, with their boxes inside the block', async ({
+  page,
+}) => {
+  await seed(page);
+  const block = embedded(page);
+  const box = block.getByRole('checkbox', { name: /^Select (?!all)/ }).first();
+  await box.check();
+  await expect(block.getByRole('toolbar', { name: 'Selected rows' })).toContainText('1 selected');
+
+  // The box is not cut off by the block's edge.
+  const inside = (await box.boundingBox())!;
+  const edge = (await block.boundingBox())!;
+  expect(inside.x).toBeGreaterThanOrEqual(edge.x);
+});

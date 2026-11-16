@@ -8,12 +8,13 @@ import { usePages } from '@/features/pages/api';
 import { cn } from '@/lib/utils';
 
 /**
- * Inside the block the table starts at the edge of the text column instead of
- * lining up with a page title, and it is only so tall before it scrolls
+ * Inside the block the table starts a little in from the edge of the text
+ * column instead of lining up with a page title, and it is only so tall before it scrolls
  * itself, so that a long database does not make the page endless.
  */
 const embeddedLayout = {
-  '--table-inset': '0px',
+  // Room for the row checkboxes left of the table; the title lines up with the tabs.
+  '--table-inset': '1.75rem',
   '--table-max-height': EMBEDDED_TABLE_MAX_HEIGHT,
 } as CSSProperties;
 
@@ -57,7 +58,7 @@ export function DatabaseBlock({ databaseId }: { databaseId: string }) {
       tabIndex={-1}
       className="database-block flex w-full min-w-0 flex-col gap-1 py-1 outline-none"
     >
-      <div className="flex h-8 min-w-0 items-center gap-1">
+      <div className="flex h-8 min-w-0 items-center gap-1 pl-7">
         <span className="min-w-0 truncate text-lg font-semibold">{title}</span>
         <Link
           to="/page/$pageId"
