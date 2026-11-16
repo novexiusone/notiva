@@ -292,7 +292,8 @@ fn check_options(options: &[SelectOption]) -> Result<(), StorageError> {
 
 impl Storage {
     /// Adds a property after the last one of the database. Only a relation
-    /// has a target, and relations are delivered with #61.
+    /// has a target, and a relation needs one: a database, which may be the
+    /// database the property is added to.
     pub async fn create_property(
         &self,
         database_id: &str,
@@ -301,15 +302,21 @@ impl Storage {
         target_id: Option<&str>,
     ) -> Result<Property, StorageError> {
         self.require_database(database_id).await?;
-        if kind == PropertyType::Relation {
-            return Err(StorageError::Invalid(
-                "relation properties are not supported yet".into(),
-            ));
-        }
-        if target_id.is_some() {
-            return Err(StorageError::Invalid(
-                "only a relation has a target database".into(),
-            ));
+        match (kind, target_id) {
+            (PropertyType::Relation, Some(target)) => {
+                self.require_database(target).await?;
+            }
+            (PropertyType::Relation, None) => {
+                return Err(StorageError::Invalid(
+                    "a relation needs a target database".into(),
+                ));
+            }
+            (_, Some(_)) => {
+                return Err(StorageError::Invalid(
+                    "only a relation has a target database".into(),
+                ));
+            }
+            (_, None) => {}
         }
 
         let row: Option<PropertyRow> = self
@@ -319,9 +326,11 @@ impl Storage {
                  LET $last = (SELECT VALUE position FROM property WHERE database = $database
                      ORDER BY position DESC LIMIT 1)[0];
                  CREATE property SET database = $database, name = $name, type = $type,
-                     position = ($last ?? -1.0) + 1.0, options = []
+                     position = ($last ?? -1.0) + 1.0, options = [],
+                     target = IF $target_id != NONE {{ type::record('page', $target_id) }}
                      RETURN {PROPERTY_FIELDS};"
             ))
+            .bind(("target_id", target_id.map(str::to_owned)))
             .bind(("database_id", database_id.to_owned()))
             .bind(("name", name.to_owned()))
             .bind(("type", type_name(kind)))
@@ -780,22 +789,47 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn relation_properties_are_refused_until_relations_arrive() {
+    async fn a_relation_needs_a_target_that_is_a_database() {
+        let storage = storage().await;
+        let id = database(&storage).await;
+        let page = storage.create_page(None).await.unwrap().id;
+
+        let error = storage
+            .create_property(&id, "Link", PropertyType::Relation, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(error, StorageError::Invalid(_)), "{error}");
+        for target in [page.as_str(), "missing"] {
+            let error = storage
+                .create_property(&id, "Link", PropertyType::Relation, Some(target))
+                .await
+                .unwrap_err();
+            assert!(matches!(error, StorageError::NotFound(_)), "{error}");
+        }
+        assert_eq!(count_properties(&storage).await, 0);
+    }
+
+    #[tokio::test]
+    async fn a_relation_points_at_another_database_or_at_its_own() {
         let storage = storage().await;
         let id = database(&storage).await;
         let target = database(&storage).await;
 
-        for target in [Some(target.as_str()), None] {
-            let error = storage
-                .create_property(&id, "Link", PropertyType::Relation, target)
-                .await
-                .unwrap_err();
-            assert!(
-                matches!(&error, StorageError::Invalid(message) if message.contains("relation")),
-                "{error}"
-            );
-        }
-        assert_eq!(count_properties(&storage).await, 0);
+        let other = storage
+            .create_property(&id, "Other", PropertyType::Relation, Some(&target))
+            .await
+            .unwrap();
+        let own = storage
+            .create_property(&id, "Own", PropertyType::Relation, Some(&id))
+            .await
+            .unwrap();
+
+        assert_eq!(other.target_id.as_deref(), Some(target.as_str()));
+        assert_eq!(own.target_id.as_deref(), Some(id.as_str()));
+        assert_eq!(
+            storage.load_database(&id).await.unwrap().properties,
+            [other, own]
+        );
     }
 
     #[tokio::test]

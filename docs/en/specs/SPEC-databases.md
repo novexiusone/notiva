@@ -89,7 +89,13 @@ Column widths, column order by dragging and hiding columns belong to a view and 
 - A relation property points at one target database, chosen when the property is created. The target can be the database itself.
 - A cell holds any number of rows of the target, in the order they were added.
 - The relation has one direction. The page of a row lists the rows that point at it ("Linked from"), grouped by property.
-- Deleting a row removes it from every cell that held it. Deleting the target database deletes the relation properties that point at it.
+- Deleting a row removes it from every cell that held it. Deleting the target database deletes the relation properties that point at it. Deleting a relation property deletes its edges. These follow the existing delete rules: whatever removes a row or a database for good removes the edges with it.
+- A two-way relation (a mirrored property in the target database) is not part of this version. It would be a second relation property that the repository keeps in step, and it can be added without changing the stored model.
+- A cell may hold the row it sits in when the target is its own database.
+- Filter, sort and group on a relation run in the frontend (see `SPEC-database-views.md`) on the cell's row ids: "contains" and "does not contain" compare a row id, "is empty" and "is not empty" test for no row. A relation cannot be sorted or grouped by the backend; the table may order by the number of linked rows.
+- Search does not look into relation cells. A row's `props_text` only holds its own values, so a rename of a linked row would have to rewrite every row that points at it; that is not worth it. Linked rows are found through their own titles.
+- Export writes the titles of the linked rows, separated by `, `.
+- The views of other databases may still mention a relation property that went away with its target database. The backend leaves those entries alone and readers skip them, like any other missed clean-up. The fake backend removes them; the difference is not visible, because readers skip them.
 
 ### Changing and deleting properties
 
@@ -175,7 +181,9 @@ Details the fake backend settled first (#55); the real backend follows them:
 - **`change_property_type`** to the type the property already has changes nothing, also for a relation; this is checked before a relation is refused. Text becomes a number when Rust's `f64` parses the trimmed text to a finite number, and a date when the trimmed text is a real calendar date. Text to select skips empty text, compares the texts exactly without trimming, and creates the options in row order. A number becomes the text JavaScript's `String(number)` writes. A select whose option is gone or has an empty name becomes empty. Leaving select clears the options. Stored views are left as they are.
 - **`delete_property` and `change_property_type`** read the cells first and then write everything in one transaction. They do not change `updated_at` of the rows. A cell written between the read and the write can keep a value of the old type; readers treat such a value as empty.
 - **`delete_page`** on a database, or on a page with databases anywhere below it, is not one transaction: the rows go first, in chunks. If it stops half-way, the database is still there with fewer rows.
-- **`list_incoming_relations`** orders its groups by the property's position and leaves out groups without rows.
+- **`list_incoming_relations`** orders its groups by the property's position and leaves out groups without rows. Within a group the rows are in the manual order of their database.
+- **A relation cell** is read from the edges, never from `props`; a stored `props` entry of a relation property reads as empty. `set_cell` replaces the whole list in one transaction and gives the edges the positions 0, 1, 2… in the order of the list. It does not touch `props_text`.
+- **`create_property`** with a relation whose target is not a database is `not_found`; a target in another place of the page tree is fine.
 - **`create_row`** gives the row the highest position plus one.
 
 ## Data model (schema version 5)
