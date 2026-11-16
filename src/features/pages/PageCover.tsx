@@ -8,6 +8,7 @@ import { CoverPicker } from '@/features/pages/CoverPicker';
 import { galleryBackground, isGalleryCover } from '@/features/pages/covers';
 import { useUpdateAppearance } from '@/features/pages/api';
 import { commands, type Page } from '@/lib/commands';
+import { displayImageUrl } from '@/lib/imageUrl';
 import { cn } from '@/lib/utils';
 
 const clamp = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
@@ -104,7 +105,7 @@ export function PageCover({
     <div ref={cover} className="group/cover relative h-70 w-full overflow-hidden">
       {isImage ? (
         <img
-          src={banner}
+          src={displayImageUrl(banner)}
           alt={t('pages.banner')}
           draggable={false}
           className="h-full w-full object-cover"

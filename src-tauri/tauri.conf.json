@@ -26,14 +26,19 @@
       "csp": {
         "default-src": "'self'",
         "connect-src": "ipc: http://ipc.localhost",
-        "img-src": "'self' notiva-image: blob: data:",
+        "img-src": "'self' notiva-image: http://notiva-image.localhost blob: data:",
         "style-src": "'self' 'unsafe-inline'"
       }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns"]
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }

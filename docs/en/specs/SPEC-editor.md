@@ -14,12 +14,12 @@ It is delivered in three steps, one pull request each:
 
 ## Tech stack
 
-| Area          | Choice                                                                         |
-| ------------- | ------------------------------------------------------------------------------ |
-| Editor        | `@blocknote/core`, `@blocknote/react`                                          |
-| Editor UI     | `@blocknote/shadcn`, so menus and toolbars use the app's theme variables       |
-| Localisation  | BlockNote's own dictionaries for `en` and `de`                                 |
-| Image display | The app's own `notiva-image` URL scheme, which serves the image directory only |
+| Area          | Choice                                                                                                                                                                 |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Editor        | `@blocknote/core`, `@blocknote/react`                                                                                                                                  |
+| Editor UI     | `@blocknote/shadcn`, so menus and toolbars use the app's theme variables                                                                                               |
+| Localisation  | BlockNote's own dictionaries for `en` and `de`                                                                                                                         |
+| Image display | The app's own `notiva-image` URL scheme, which serves the image directory only (WebView2 on Windows loads it as `http://notiva-image.localhost/<name>`, see app-shell) |
 
 ## Behaviour
 

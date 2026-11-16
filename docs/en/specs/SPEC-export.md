@@ -33,7 +33,7 @@ Notiva export/
 
 - A page becomes `<title>.md`. Its subpages go into a folder with the same name next to it.
 - A database is laid out like a page, and its rows like its subpages: the database becomes `<title>.md`, its rows go into the folder `<title>/`, and pages below a row go into a folder named after the row. This holds wherever the database is: at the top, below a page or below a row.
-- File names are the page titles with characters that are not allowed in file names replaced. An untitled page is called "Untitled". Pages with the same name under the same parent get a number.
+- File names are the page titles with characters that are not allowed in file names replaced. A name is valid on macOS, Windows and Linux: no reserved characters, no trailing dot or space, and no name that Windows reserves for devices (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`, with or without an extension); such a name gets an underscore appended. An untitled page is called "Untitled". Pages with the same name under the same parent get a number.
 - Pages keep their order only through their names; Markdown files have no order. The rows of a database keep their manual order in the database's table.
 
 ### Markdown

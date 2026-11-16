@@ -39,9 +39,29 @@ pub fn file_name(title: &str) -> String {
 
     if trimmed.is_empty() {
         "Untitled".into()
+    } else if is_reserved_on_windows(&trimmed) {
+        // The underscore goes behind the device name: "con_.txt", not "con.txt_".
+        match trimmed.split_once('.') {
+            Some((stem, rest)) => format!("{stem}_.{rest}"),
+            None => format!("{trimmed}_"),
+        }
     } else {
         trimmed
     }
+}
+
+/// Windows refuses a file called after a device, with any extension: `CON`,
+/// `con.md` and `COM1.txt` cannot be created there.
+fn is_reserved_on_windows(name: &str) -> bool {
+    const DEVICES: [&str; 4] = ["CON", "PRN", "AUX", "NUL"];
+    let stem = name.split('.').next().unwrap_or(name).trim_end();
+    let stem = stem.to_ascii_uppercase();
+
+    DEVICES.contains(&stem.as_str())
+        || ["COM", "LPT"].iter().any(|prefix| {
+            stem.strip_prefix(prefix)
+                .is_some_and(|number| matches!(number.as_bytes(), [b'1'..=b'9']))
+        })
 }
 
 /// Lays out `roots` and everything below them. Names are unique among
@@ -218,6 +238,58 @@ mod tests {
         assert_eq!(file_name(" . "), "Untitled");
         assert_eq!(file_name(&"x".repeat(300)).chars().count(), 100);
         assert_eq!(file_name("../../etc/passwd"), "-..-etc-passwd");
+    }
+
+    #[test]
+    fn names_that_windows_reserves_for_devices_are_changed() {
+        for title in [
+            "CON",
+            "con",
+            "Nul",
+            "aux",
+            "PRN",
+            "COM1",
+            "lpt9",
+            "con.txt",
+            "NUL.tar.gz",
+        ] {
+            let name = file_name(title);
+            assert_ne!(name, title, "{title}");
+            assert!(name.starts_with(&title[..3]), "{name}");
+            assert!(!is_reserved_on_windows(&format!("{name}.md")), "{title}");
+        }
+        assert_eq!(file_name("con.txt"), "con_.txt");
+        assert_eq!(file_name("CON"), "CON_");
+        for title in [
+            "Console", "COM0", "COM10", "LPT", "Not CON", "Untitled", "com 1",
+        ] {
+            assert_eq!(file_name(title), title, "{title}");
+        }
+    }
+
+    #[test]
+    fn every_file_name_is_valid_on_every_platform() {
+        let titles = [
+            "a/b\\c:d*e?f\"g<h>i|j",
+            "trailing dot.",
+            "trailing space ",
+            "tab\tand\u{7f}control",
+            "CON",
+            "emoji 😀 and ümlauts",
+            &"é".repeat(300),
+        ];
+        for title in titles {
+            let name = file_name(title);
+            assert!(!name.is_empty(), "{title:?}");
+            assert!(!name.ends_with(['.', ' ']), "{name:?}");
+            assert!(!name.starts_with(['.', ' ']), "{name:?}");
+            assert!(
+                !name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']),
+                "{name:?}"
+            );
+            assert!(!name.chars().any(char::is_control), "{name:?}");
+            assert!(!is_reserved_on_windows(&name), "{name:?}");
+        }
     }
 
     #[test]
