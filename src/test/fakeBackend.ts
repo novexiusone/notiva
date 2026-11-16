@@ -916,9 +916,13 @@ export function installFakeBackend({
       case 'list_page_versions': {
         const pageId = args.pageId as string;
         require(pageId);
-        return (versions[pageId] ?? []).map(
-          ({ blocks: _blocks, ...version }): PageVersion => version,
-        );
+        return (versions[pageId] ?? []).map((version): PageVersion => ({
+          id: version.id,
+          title: version.title,
+          blockCount: version.blockCount,
+          preview: version.preview,
+          createdAt: version.createdAt,
+        }));
       }
 
       case 'load_page_version': {

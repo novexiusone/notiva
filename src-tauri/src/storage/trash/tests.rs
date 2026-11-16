@@ -71,7 +71,7 @@ async fn a_trashed_page_leaves_every_read_path() {
 
     storage.trash_page(&gone.id).await.unwrap();
 
-    assert_eq!(ids(&storage).await, [keep.id.clone()]);
+    assert_eq!(ids(&storage).await, std::slice::from_ref(&keep.id));
     assert!(storage.search("zebra").await.unwrap().is_empty());
     assert!(storage.find_page(&child.id).await.unwrap().is_none());
     assert!(storage.load_blocks(&gone.id).await.is_err());

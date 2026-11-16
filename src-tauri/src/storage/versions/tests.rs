@@ -18,14 +18,14 @@ async fn storage_with_page() -> (Storage, String) {
     (storage, page.id)
 }
 
-/// Makes the versions of a page look `age` old, so that the next save is due.
+/// Moves the versions of a page `age` back in time, so that the next save is due.
 async fn age_versions(storage: &Storage, page_id: &str, age: &str) {
     storage
         .db
         .query(format!(
             // The field is read-only in the app; a test has to backdate it.
             "DEFINE FIELD OVERWRITE created_at ON page_version TYPE datetime DEFAULT time::now();
-             UPDATE page_version SET created_at = time::now() - {age}
+             UPDATE page_version SET created_at = created_at - {age}
                  WHERE page = type::record('page', $id)"
         ))
         .bind(("id", page_id.to_owned()))
