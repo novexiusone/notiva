@@ -67,6 +67,16 @@ fn sniff(bytes: &[u8]) -> Option<&'static Format> {
     FORMATS.iter().find(|format| format.extension == extension)
 }
 
+/// Whether `name` has the shape of a file name this store gives out.
+pub fn is_image_name(name: &str) -> bool {
+    let Some((stem, extension)) = name.split_once('.') else {
+        return false;
+    };
+    stem.len() == 32
+        && stem.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && FORMATS.iter().any(|format| format.extension == extension)
+}
+
 pub struct ImageStore {
     directory: PathBuf,
 }
