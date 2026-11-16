@@ -57,6 +57,18 @@
       "filter": "Filter…",
       "random": "Random emoji",
       "none": "Nothing found",
+      "iconGroups": {
+        "general": "General",
+        "files": "Files & writing",
+        "work": "Work & money",
+        "people": "People",
+        "nature": "Nature",
+        "food": "Food",
+        "travel": "Travel & places",
+        "tech": "Tech & devices",
+        "arrows": "Arrows & shapes",
+        "symbols": "Symbols & status"
+      },
       "groups": {
         "smileys": "Smileys & emotion",
         "people": "People & body",

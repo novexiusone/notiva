@@ -1,15 +1,21 @@
 import {
   Apple,
+  ArrowRight,
+  Briefcase,
   Flag,
+  FileText,
   Hash,
+  Laptop,
   Lightbulb,
   Leaf,
   Plane,
   Search,
   Shuffle,
   Smile,
+  Star,
   Trophy,
   Users,
+  Utensils,
   type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -17,7 +23,13 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ICON_NAMES, iconLabel, lucideIcon } from '@/features/pages/pageIcons';
+import {
+  ICON_CATEGORIES,
+  ICON_SET,
+  iconLabel,
+  lucideIcon,
+  type IconCategory,
+} from '@/features/pages/pageIcons';
 import { useUpdateAppearance } from '@/features/pages/api';
 import type { Page } from '@/lib/commands';
 import { cn } from '@/lib/utils';
@@ -47,6 +59,20 @@ const GROUP_KEYS: Record<number, string> = {
   7: 'objects',
   8: 'symbols',
   9: 'flags',
+};
+
+/** The button of each icon category in the bar below the Icons tab. */
+const CATEGORY_ICONS: Record<IconCategory, LucideIcon> = {
+  general: Star,
+  files: FileText,
+  work: Briefcase,
+  people: Users,
+  nature: Leaf,
+  food: Utensils,
+  travel: Plane,
+  tech: Laptop,
+  arrows: ArrowRight,
+  symbols: Hash,
 };
 
 /** Emoji are large; they are only loaded when the picker is first opened. */
@@ -90,6 +116,7 @@ export function IconPickerPanel({
   const [tab, setTab] = useState('emoji');
   const emoji = useEmoji(i18n.language);
   const scroller = useRef<HTMLDivElement>(null);
+  const iconScroller = useRef<HTMLDivElement>(null);
   const query = filter.trim().toLowerCase();
 
   const choose = (icon: string | null) => {
@@ -110,8 +137,12 @@ export function IconPickerPanel({
   );
 
   const iconQuery = query.replace(/[\s-]/g, '');
-  const icons = useMemo(
-    () => ICON_NAMES.filter((name) => name.toLowerCase().includes(iconQuery)),
+  const categories = useMemo(
+    () =>
+      ICON_CATEGORIES.map((category) => ({
+        category,
+        names: ICON_SET[category].filter((name) => name.toLowerCase().includes(iconQuery)),
+      })).filter(({ names }) => names.length > 0),
     [iconQuery],
   );
 
@@ -219,30 +250,59 @@ export function IconPickerPanel({
       </TabsContent>
 
       <TabsContent value="icons" className="m-0">
-        <div className="h-72 overflow-y-auto px-2 pb-2">
-          <div className="grid grid-cols-10">
-            {icons.map((name) => {
-              const Icon = lucideIcon(name);
-              if (!Icon) return null;
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  title={iconLabel(name)}
-                  aria-label={iconLabel(name)}
-                  className={cn(cell, current === name && 'bg-accent')}
-                  onClick={() => choose(name)}
-                >
-                  <Icon size={18} aria-hidden />
-                </button>
-              );
-            })}
-          </div>
-          {icons.length === 0 ? (
+        <div ref={iconScroller} className="h-64 overflow-y-auto px-2 pb-2">
+          {categories.map(({ category, names }) => (
+            <section key={category} data-icon-group={category}>
+              <h3 className="text-muted-foreground px-1 pt-2 pb-1 text-xs font-medium">
+                {t(`pages.picker.iconGroups.${category}`)}
+              </h3>
+              <div className="grid grid-cols-10">
+                {names.map((name) => {
+                  const Icon = lucideIcon(name);
+                  if (!Icon) return null;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      title={iconLabel(name)}
+                      aria-label={iconLabel(name)}
+                      className={cn(cell, current === name && 'bg-accent')}
+                      onClick={() => choose(name)}
+                    >
+                      <Icon size={18} aria-hidden />
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+          {categories.length === 0 ? (
             <p className="text-muted-foreground p-4 text-center text-sm">
               {t('pages.picker.none')}
             </p>
           ) : null}
+        </div>
+        <div className="text-muted-foreground flex justify-between border-t px-2 py-1">
+          {ICON_CATEGORIES.map((category) => {
+            const Icon = CATEGORY_ICONS[category];
+            return (
+              <button
+                key={category}
+                type="button"
+                aria-label={t(`pages.picker.iconGroups.${category}`)}
+                title={t(`pages.picker.iconGroups.${category}`)}
+                className={cn(cell, 'size-7')}
+                onClick={() => {
+                  setFilter('');
+                  iconScroller.current
+                    ?.querySelector(`[data-icon-group="${category}"]`)
+                    ?.scrollIntoView?.({ block: 'start' });
+                }}
+              >
+                <Icon size={16} aria-hidden />
+              </button>
+            );
+          })}
         </div>
       </TabsContent>
     </Tabs>

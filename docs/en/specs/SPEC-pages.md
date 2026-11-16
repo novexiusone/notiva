@@ -8,15 +8,15 @@ A page's content is the `editor` module's job; a database's table belongs to `da
 
 ## Tech stack
 
-| Area              | Choice                                                                                                                                                    |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tree              | react-arborist (virtualised, drag and drop, inline rename)                                                                                                |
-| Routing           | TanStack Router, code-based routes, hash history                                                                                                          |
-| Menus and dialogs | shadcn/ui `dropdown-menu` and `alert-dialog`                                                                                                              |
-| Icons and covers  | Emoji (emojibase data) and the whole Lucide set; local images through the existing `save_image` command, plus a built-in gallery of colours and gradients |
-| Panels            | shadcn/ui `popover` for the icon picker, a `dialog`-based sheet for export                                                                                |
-| Data fetching     | TanStack Query on top of the page commands                                                                                                                |
-| End-to-end tests  | Playwright against the frontend with an in-memory fake backend                                                                                            |
+| Area              | Choice                                                                                                                                                                                                   |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tree              | react-arborist (virtualised, drag and drop, inline rename)                                                                                                                                               |
+| Routing           | TanStack Router, code-based routes, hash history                                                                                                                                                         |
+| Menus and dialogs | shadcn/ui `dropdown-menu` and `alert-dialog`                                                                                                                                                             |
+| Icons and covers  | Emoji (emojibase data) and a curated selection of Lucide icons (any Lucide icon still renders); local images through the existing `save_image` command, plus a built-in gallery of colours and gradients |
+| Panels            | shadcn/ui `popover` for the icon picker, a `dialog`-based sheet for export                                                                                                                               |
+| Data fetching     | TanStack Query on top of the page commands                                                                                                                                                               |
+| End-to-end tests  | Playwright against the frontend with an in-memory fake backend                                                                                                                                           |
 
 ## Behaviour
 
@@ -28,7 +28,7 @@ A page's content is the `editor` module's job; a database's table belongs to `da
 - **Delete.** "Delete" in the row or page menu asks for confirmation and names the number of subpages that go with it. Deleting removes the page and its subpages, including any favourite shortcuts. If the open page is among them, the app goes back to home.
 - **Favourites.** "Favourites" sits above "Private" and links directly to every favourited page in page-tree order. A favourite still appears in Private. The star in the open page's header toggles the state, which survives a restart. A favourite's star is yellow (the `favorite` colour token, tuned for light and dark) and not filled; otherwise it is the neutral outline. The section and its empty hint take little space when there are no favourites.
 - **Appearance.** A page can have one icon and one cover (called `banner` in the data). An icon is an emoji (stored as the character) or the name of a Lucide icon (stored as its component name, for example `Rocket`; the older names `book`, `checklist`, `document`, `idea`, `heart`, `folder`, `star` and `target` still work). A cover is either a local PNG, JPEG, GIF or WebP image of at most 20 MiB, or an entry of the built-in gallery (stored as `gallery:<id>`). The icon appears above the title, in the sidebar and in the path. The cover spans the top of the page and is 280 px tall. Either can be removed independently; changing appearance does not change the document.
-- **Icon picker.** Clicking the icon, or "Add icon", opens a popover with the tabs "Emoji" and "Icons", a filter field, a button that picks a random emoji and "Remove". Emoji are grouped by category with a category bar; the Icons tab offers every Lucide icon, found by name. There is no upload tab.
+- **Icon picker.** Clicking the icon, or "Add icon", opens a popover with the tabs "Emoji" and "Icons", a filter field, a button that picks a random emoji and "Remove". Emoji are grouped by category with a category bar; the Icons tab offers about 370 curated Lucide icons in the categories General, Files and writing, Work and money, People, Nature, Food, Travel and places, Tech and devices, Arrows and shapes, and Symbols and status, each with a header and a category bar like the emoji tab, the most common icons first. The filter matches icon names within that set. Pages that store any other Lucide icon keep rendering it. There is no upload tab.
 - **Cover controls.** While the pointer is over the top right area of a cover (about 260 by 80 px) or focus is inside the controls, three compact controls sit at its top right, fading in and out over 150 ms (instantly with reduced motion): "Change", "Reposition" and "Download". "Change" opens the cover picker. "Reposition" lets an image be dragged up and down inside the cover; "Save position" stores it and "Cancel" drops it. "Download" asks where to save and writes the image there. Gallery covers cannot be repositioned or downloaded.
 - **Cover picker.** "Add cover" (above the title and in the menu) and "Change" open a popover with the tabs "Gallery" and "Upload" and "Remove" at its right. "Gallery" shows the section "Color & Gradient". "Upload" chooses an image file. Covers from a link (#108) and from Unsplash (#109) are not part of this module yet. It works with the keyboard and takes its colours from the app's tokens.
 - **Add icon and cover.** Moving the pointer over the area above the title shows "Add icon" and "Add cover" for whichever the page does not have yet. They also show while the area has keyboard focus.
@@ -153,7 +153,7 @@ Components get their data from the hooks in `api.ts`, never from `commands` dire
 - [ ] The icon picker offers emoji and Lucide icons and both persist (#102)
 - [ ] The cover has Change, Reposition and Download; the position survives a restart (#106)
 - [ ] The cover picker offers the gallery and upload (#107)
-- [ ] Every Lucide icon can be chosen (#110)
+- [ ] Every Lucide icon can be chosen (#110), superseded by the curated, categorised set (#127)
 - [ ] A page can be locked at "content" or "everything", enforced by the backend (#104)
 
 ## Open questions
