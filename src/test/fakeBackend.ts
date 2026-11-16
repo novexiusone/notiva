@@ -441,7 +441,14 @@ export function installFakeBackend({
   let backupStatus: BackupStatus = { running: false, lastSuccessAt: null, lastError: null };
   type FakeBackup = BackupInfo & { passphrase: string | null };
   const backups: FakeBackup[] = [];
-  const publicBackup = ({ passphrase: _passphrase, ...info }: FakeBackup): BackupInfo => info;
+  const publicBackup = (backup: FakeBackup): BackupInfo => ({
+    name: backup.name,
+    path: backup.path,
+    sizeBytes: backup.sizeBytes,
+    createdAt: backup.createdAt,
+    encrypted: backup.encrypted,
+    kind: backup.kind,
+  });
   const openBackup = (path: unknown, passphrase: unknown) => {
     const backup = backups.find((entry) => entry.path === path);
     if (!backup) fail('not_found', 'the backup file was not found');
