@@ -88,6 +88,7 @@ Tests live next to the code they test (`Sidebar.test.tsx`, `#[cfg(test)]` module
 - Main area: content column with a narrow reading width (max 720 px), large title.
 - Subtle borders instead of shadows, small radii, hardly any accent colour.
 - Lucide icons at 16 px in the sidebar and 20 px in toolbars, same stroke width everywhere. No emojis as icons.
+- Only text that is written can be selected: the editor, text fields and cells while they are edited. Labels, menus, buttons and the sidebar cannot, as in a native app.
 - The window uses the macOS overlay title bar so the sidebar reaches the top edge; the top of the sidebar is a drag region.
 
 ## Code style

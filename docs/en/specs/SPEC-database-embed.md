@@ -46,6 +46,8 @@ Not tested: the real Tauri web view, selecting across the block with the keyboar
 
 - **Insert.** "Database" in the slash menu, in the group "Basic blocks", with a Lucide icon and no Markdown shortcut. Choosing it creates a database below the current page and then inserts the block, so the document never holds a reference to nothing.
 - **Show.** The block shows the database's title, its view tabs and the active view, as wide as the text column, scrolling sideways when the table is wider. A control opens the database as a full page.
+- **Select rows.** The checkboxes and the selection bar work as on the database's own page. The table starts 28 px in from the text column to leave room for the boxes.
+- **Select the block.** A click on the block's handle selects it with a soft surface and 8 px of room around it, without an outline. A click anywhere outside the block ends the selection.
 - **Sidebar.** The database appears in the tree below the page that contains it, like any database.
 - **Edit.** Everything that works on the database's own page works in the block.
 - **Deleted database.** The block stays and reads "Deleted database", greyed out, like a link to a deleted page.
