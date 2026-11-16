@@ -25,7 +25,9 @@ Nothing outside the chosen folder is ever read, written, listed or renamed. A pa
 2. Every name must be a valid file name on every platform: at most 255 bytes, none of `\ / : * ? " < > |`, no trailing dot or space, and not a name reserved on Windows (`CON`, `NUL`, `COM1`, and so on, with or without extension).
 3. The notes folder and the part of the path that exists are canonicalised; the result must lie inside the canonical notes folder. This catches symbolic links, junctions and case tricks.
 4. A file that is written, renamed or deleted must not itself be a symbolic link, even one that points inside the folder.
-5. Files that are written or created must end with `.md`; the stem must not be empty.
+5. Files that are written or created must end with `.md`; the stem must not be empty. A file that is read must end with `.md` both in the requested name and after links are resolved.
+
+Accepted limits for a desktop app with one user: the path is checked and then used, so a folder swapped for a symbolic link in between could still be followed (check-then-use race on the parent directory); and in `save_note` the check of `expectedModified` and the rename are two steps, so a change in that instant is not detected. A rename never replaces an existing file; where hard links are unavailable it re-checks right before the rename. `set_notes_folder` refuses a file system root and the user's home folder itself.
 
 ## Commands
 

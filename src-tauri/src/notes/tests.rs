@@ -368,3 +368,47 @@ mod safety {
         assert_eq!(read(&link, "a.md").unwrap().content, "a");
     }
 }
+
+#[test]
+fn a_case_only_rename_never_replaces_another_file() {
+    let dir = folder();
+    fs::write(dir.path().join("a.md"), "lower").unwrap();
+    fs::write(dir.path().join("probe.md"), "").unwrap();
+    let insensitive = dir.path().join("PROBE.md").exists();
+    if insensitive {
+        // The file system cannot hold both names; renaming only the case works.
+        rename(dir.path(), "a.md", "A.md").unwrap();
+        return;
+    }
+
+    fs::write(dir.path().join("A.md"), "upper").unwrap();
+    assert!(matches!(
+        rename(dir.path(), "a.md", "A.md"),
+        Err(NotesError::Exists)
+    ));
+    assert_eq!(
+        fs::read_to_string(dir.path().join("A.md")).unwrap(),
+        "upper"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("a.md")).unwrap(),
+        "lower"
+    );
+}
+
+#[test]
+fn refuses_a_root_and_the_home_folder_as_notes_folder() {
+    let dir = folder();
+    let root = dir.path().ancestors().last().unwrap();
+    assert!(is_invalid(check_folder(root)));
+
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+    if let Some(home) = home.filter(|home| Path::new(home).is_dir()) {
+        assert!(is_invalid(check_folder(Path::new(&home))));
+    }
+}
+
+#[test]
+fn a_reserved_console_name_is_refused() {
+    assert!(is_invalid(create(folder().path(), "CONIN$.md")));
+}

@@ -46,6 +46,9 @@ pub enum NotesError {
     #[error("deleting a note needs a confirmation")]
     NotConfirmed,
 
+    #[error("could not save the app settings: {0}")]
+    Settings(std::io::Error),
+
     #[error("could not access the notes folder: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -196,6 +199,11 @@ pub fn read(root: &Path, relative: &str) -> Result<Note, NotesError> {
             "only files ending in .md are supported".into(),
         ));
     }
+    if !path::is_markdown_name(&file_name(&target)) {
+        return Err(NotesError::Invalid(
+            "only files ending in .md are supported".into(),
+        ));
+    }
     let metadata = file_metadata(&target, relative)?;
     if metadata.len() > MAX_BYTES {
         return Err(NotesError::TooLarge);
@@ -269,6 +277,42 @@ pub fn save(
     })
 }
 
+/// Whether both paths are the very same file.
+fn same_file(a: &Path, b: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if let (Ok(a), Ok(b)) = (std::fs::symlink_metadata(a), std::fs::symlink_metadata(b)) {
+            return a.dev() == b.dev() && a.ino() == b.ino();
+        }
+        false
+    }
+    #[cfg(not(unix))]
+    {
+        matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
+    }
+}
+
+/// Moves `source` to a name that does not exist, and fails instead of
+/// replacing a file that appears in the meantime: a hard link refuses an
+/// existing target atomically. Where links are not supported, it checks again
+/// right before the rename.
+fn rename_without_replacing(source: &Path, target: &Path) -> Result<(), NotesError> {
+    match std::fs::hard_link(source, target) {
+        Ok(()) => {
+            std::fs::remove_file(source)?;
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Err(NotesError::Exists),
+        Err(_) => {
+            if std::fs::symlink_metadata(target).is_ok() {
+                return Err(NotesError::Exists);
+            }
+            Ok(std::fs::rename(source, target)?)
+        }
+    }
+}
+
 /// Renames a file inside its own folder.
 pub fn rename(root: &Path, relative: &str, name: &str) -> Result<NoteEntry, NotesError> {
     path::validate_name(name)?;
@@ -281,12 +325,16 @@ pub fn rename(root: &Path, relative: &str, name: &str) -> Result<NoteEntry, Note
     file_metadata(&source, relative)?;
 
     let target = source.with_file_name(name);
-    // A change of case only is the same file on case-insensitive systems.
-    if !file_name(&source).eq_ignore_ascii_case(name) && std::fs::symlink_metadata(&target).is_ok()
-    {
-        return Err(NotesError::Exists);
+    if std::fs::symlink_metadata(&target).is_ok() {
+        // Only the same file may keep its place: a change of case on a
+        // case-insensitive file system. Never compare names for this.
+        if !same_file(&source, &target) {
+            return Err(NotesError::Exists);
+        }
+        std::fs::rename(&source, &target)?;
+    } else {
+        rename_without_replacing(&source, &target)?;
     }
-    std::fs::rename(&source, &target)?;
 
     let metadata = file_metadata(&target, relative)?;
     Ok(NoteEntry {
@@ -324,5 +372,17 @@ pub fn check_folder(folder: &Path) -> Result<(), NotesError> {
         return Err(NotesError::Invalid("this is not a folder".into()));
     }
     std::fs::read_dir(folder)?;
+
+    let canonical = folder.canonicalize()?;
+    let home = ["HOME", "USERPROFILE"]
+        .iter()
+        .filter_map(|key| std::env::var_os(key))
+        .filter_map(|home| Path::new(&home).canonicalize().ok())
+        .any(|home| home == canonical);
+    if canonical.parent().is_none() || home {
+        return Err(NotesError::Invalid(
+            "choose a folder of its own, not a drive root or the home folder".into(),
+        ));
+    }
     Ok(())
 }

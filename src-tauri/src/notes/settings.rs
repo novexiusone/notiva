@@ -62,9 +62,9 @@ impl NotesSettings {
         let text = serde_json::to_string_pretty(&document).expect("settings serialise");
 
         if let Some(parent) = self.file.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).map_err(NotesError::Settings)?;
         }
-        super::write_atomic(&self.file, text.as_bytes())?;
+        super::write_atomic(&self.file, text.as_bytes()).map_err(NotesError::Settings)?;
         *current = folder;
         Ok(())
     }

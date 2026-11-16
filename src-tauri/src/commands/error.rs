@@ -63,7 +63,7 @@ impl From<NotesError> for CommandError {
         let kind = match error {
             NotesError::NoFolder | NotesError::NotFound(_) => "not_found",
             NotesError::Conflict => "conflict",
-            NotesError::Io(_) => "internal",
+            NotesError::Io(_) | NotesError::Settings(_) => "internal",
             _ => "invalid",
         };
 
