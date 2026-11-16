@@ -127,12 +127,12 @@ test('icon, banner and page actions work from the page menu and survive a reload
   await expect(banner).toBeVisible();
 
   // The cover is repositioned and downloaded from its controls.
-  await banner.hover();
+  await main.getByTestId('cover-controls-zone').hover();
   await main.getByRole('button', { name: 'Reposition' }).click();
   await page.keyboard.press('ArrowDown');
   await main.getByRole('button', { name: 'Save position' }).click();
   await page.reload();
-  await banner.hover();
+  await main.getByTestId('cover-controls-zone').hover();
   await main.getByRole('button', { name: 'Reposition' }).click();
   await expect(main.getByRole('slider', { name: 'Cover position' })).toHaveAttribute(
     'aria-valuenow',
@@ -214,7 +214,7 @@ test('a cover is chosen from the gallery and changed again', async ({ page }) =>
   await page.reload();
   await expect(cover).toBeVisible();
 
-  await cover.hover();
+  await main.getByTestId('cover-controls-zone').hover();
   await main.getByRole('button', { name: 'Change' }).click();
   await page.getByRole('button', { name: 'Harbor' }).click();
   await expect(cover).toHaveCSS('background-image', /linear-gradient/);

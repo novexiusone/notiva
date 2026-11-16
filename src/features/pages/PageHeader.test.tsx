@@ -25,6 +25,19 @@ describe('page header', () => {
     expect(precedes(favourite, actions)).toBe(true);
   });
 
+  it('colours the star of a favourite yellow without filling it', async () => {
+    renderApp({
+      pages: [{ ...page('a', 'Alpha'), isFavorite: true }, page('b', 'Beta')],
+      path: '/page/a',
+    });
+    const main = await screen.findByRole('main');
+    const star = (
+      await within(main).findByRole('button', { name: 'Remove from favourites' })
+    ).querySelector('svg');
+    expect(star).toHaveClass('text-favorite');
+    expect(star).not.toHaveClass('fill-current');
+  });
+
   it('lists the parents as links and the open page as the current item', async () => {
     renderApp({
       pages: [{ ...page('a', 'Alpha') }, { ...page('b', 'Beta'), parentId: 'a' }],
@@ -136,6 +149,21 @@ describe('the cover', () => {
     for (const name of ['Change', 'Reposition', 'Download']) {
       expect(within(toolbar).getByRole('button', { name })).toBeInTheDocument();
     }
+  });
+
+  it('shows its controls only in the top right corner and fades them', async () => {
+    renderApp({ pages: withCover(IMAGE), path: '/page/a' });
+    const toolbar = await screen.findByRole('toolbar', { name: 'Cover' });
+    const zone = screen.getByTestId('cover-controls-zone');
+
+    expect(zone).toContainElement(toolbar);
+    expect(toolbar.parentElement).toHaveClass(
+      'opacity-0',
+      'duration-150',
+      'motion-reduce:transition-none',
+    );
+    expect(toolbar.parentElement).toHaveClass('group-hover/zone:opacity-100');
+    expect(toolbar.parentElement).toHaveClass('group-focus-within/zone:opacity-100');
   });
 
   it('can only be changed when it is from the gallery', async () => {

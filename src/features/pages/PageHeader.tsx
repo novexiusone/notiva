@@ -78,7 +78,7 @@ export function PageHeader({
             className={barButton}
             onClick={() => setFavorite(page.id, !page.isFavorite)}
           >
-            <Star size={18} className={page.isFavorite ? 'fill-current' : undefined} aria-hidden />
+            <Star size={18} className={page.isFavorite ? 'text-favorite' : undefined} aria-hidden />
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

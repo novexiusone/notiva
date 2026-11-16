@@ -13,9 +13,9 @@ import { cn } from '@/lib/utils';
 const clamp = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
 
 const bar =
-  'bg-popover/90 text-popover-foreground flex items-center overflow-hidden rounded-md text-sm shadow-md ring-1 ring-foreground/10 backdrop-blur-sm';
+  'bg-popover/90 text-popover-foreground flex items-center overflow-hidden rounded-md text-xs shadow-sm ring-1 ring-foreground/10 backdrop-blur-sm';
 const barButton =
-  'hover:bg-accent focus-visible:ring-ring/50 h-8 px-3 outline-none focus-visible:ring-2 focus-visible:ring-inset';
+  'hover:bg-accent focus-visible:ring-ring/50 h-6 px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset';
 
 /** The extension a downloaded cover gets: the one of its file, or the one of its media type. */
 function extensionOf(url: string): string {
@@ -101,7 +101,7 @@ export function PageCover({
   const repositioning = draft !== null;
 
   return (
-    <div ref={cover} className="group/cover relative h-40 w-full overflow-hidden">
+    <div ref={cover} className="group/cover relative h-70 w-full overflow-hidden">
       {isImage ? (
         <img
           src={banner}
@@ -140,62 +140,75 @@ export function PageCover({
         />
       ) : null}
 
+      {/* Only the top right corner of the cover reveals the controls. */}
       <div
+        data-testid="cover-controls-zone"
         className={cn(
-          'absolute top-3 right-4 flex items-center gap-2 transition-opacity',
-          repositioning || pickerOpen
-            ? 'opacity-100'
-            : 'opacity-0 group-focus-within/cover:opacity-100 group-hover/cover:opacity-100',
+          'group/zone absolute top-0 right-0 flex h-20 w-65 items-start justify-end gap-2 pt-3 pr-4',
+          repositioning && 'pointer-events-none',
         )}
       >
-        {repositioning ? (
-          <>
-            <span className={cn(bar, 'text-muted-foreground h-8 px-3')}>
-              {t('pages.cover.repositionHint')}
-            </span>
-            <Button size="sm" variant="secondary" onClick={() => finish(false)}>
-              {t('pages.cover.cancel')}
-            </Button>
-            <Button size="sm" onClick={() => finish(true)}>
-              {t('pages.cover.savePosition')}
-            </Button>
-          </>
-        ) : (
-          <div role="toolbar" aria-label={t('pages.cover.controls')} className={bar}>
-            <CoverPicker
-              page={page}
-              open={pickerOpen}
-              onOpenChange={onPickerOpenChange}
-              onUpload={onUpload}
-            >
-              <button type="button" className={barButton} onClick={() => onPickerOpenChange(true)}>
-                {t('pages.cover.change')}
-              </button>
-            </CoverPicker>
-            {isImage ? (
-              <>
-                <span aria-hidden className="bg-border h-4 w-px" />
+        <div
+          className={cn(
+            'pointer-events-auto flex items-center gap-1.5 transition-opacity duration-150 motion-reduce:transition-none',
+            repositioning || pickerOpen
+              ? 'opacity-100'
+              : 'opacity-0 group-focus-within/zone:opacity-100 group-hover/zone:opacity-100',
+          )}
+        >
+          {repositioning ? (
+            <>
+              <span className={cn(bar, 'text-muted-foreground flex h-6 items-center px-2')}>
+                {t('pages.cover.repositionHint')}
+              </span>
+              <Button size="xs" variant="secondary" onClick={() => finish(false)}>
+                {t('pages.cover.cancel')}
+              </Button>
+              <Button size="xs" onClick={() => finish(true)}>
+                {t('pages.cover.savePosition')}
+              </Button>
+            </>
+          ) : (
+            <div role="toolbar" aria-label={t('pages.cover.controls')} className={bar}>
+              <CoverPicker
+                page={page}
+                open={pickerOpen}
+                onOpenChange={onPickerOpenChange}
+                onUpload={onUpload}
+              >
                 <button
                   type="button"
                   className={barButton}
-                  onClick={() => setDraft(page.bannerPosition)}
+                  onClick={() => onPickerOpenChange(true)}
                 >
-                  {t('pages.cover.reposition')}
+                  {t('pages.cover.change')}
                 </button>
-                <span aria-hidden className="bg-border h-4 w-px" />
-                <button
-                  type="button"
-                  aria-label={t('pages.cover.download')}
-                  title={t('pages.cover.download')}
-                  className={barButton}
-                  onClick={() => void download()}
-                >
-                  <Download size={16} aria-hidden />
-                </button>
-              </>
-            ) : null}
-          </div>
-        )}
+              </CoverPicker>
+              {isImage ? (
+                <>
+                  <span aria-hidden className="bg-border h-3 w-px" />
+                  <button
+                    type="button"
+                    className={barButton}
+                    onClick={() => setDraft(page.bannerPosition)}
+                  >
+                    {t('pages.cover.reposition')}
+                  </button>
+                  <span aria-hidden className="bg-border h-3 w-px" />
+                  <button
+                    type="button"
+                    aria-label={t('pages.cover.download')}
+                    title={t('pages.cover.download')}
+                    className={cn(barButton, 'px-1.5')}
+                    onClick={() => void download()}
+                  >
+                    <Download size={14} aria-hidden />
+                  </button>
+                </>
+              ) : null}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
