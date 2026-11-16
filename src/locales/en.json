@@ -15,6 +15,7 @@
     "empty": "Your pages will appear here."
   },
   "pages": {
+    "fullWidth": "Full width",
     "untitled": "Untitled",
     "new": "New page",
     "addSubpage": "Add a subpage",
@@ -163,12 +164,12 @@
       "unavailable": "This kind of view cannot be shown in this version yet."
     },
     "toolbar": {
+      "back": "Back",
+      "addFilterTitle": "Add filter",
+      "filterBy": "Filter by…",
       "newRowLabel": "New row",
       "newRow": "New",
       "settings": "View settings",
-      "templates": "Templates",
-      "noTemplates": "No templates yet",
-      "newTemplate": "New template",
       "minimize": "Minimize",
       "expand": "Expand",
       "label": "View toolbar",

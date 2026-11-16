@@ -15,6 +15,7 @@
     "empty": "Hier erscheinen deine Seiten."
   },
   "pages": {
+    "fullWidth": "Volle Breite",
     "untitled": "Ohne Titel",
     "new": "Neue Seite",
     "addSubpage": "Unterseite hinzufügen",
@@ -163,12 +164,12 @@
       "unavailable": "Diese Art von Ansicht kann diese Version noch nicht zeigen."
     },
     "toolbar": {
+      "back": "Zurück",
+      "addFilterTitle": "Filter hinzufügen",
+      "filterBy": "Filtern nach…",
       "newRowLabel": "Neue Zeile",
       "newRow": "Neu",
       "settings": "Ansichtseinstellungen",
-      "templates": "Vorlagen",
-      "noTemplates": "Noch keine Vorlagen",
-      "newTemplate": "Neue Vorlage",
       "minimize": "Minimieren",
       "expand": "Erweitern",
       "label": "Ansichtsleiste",

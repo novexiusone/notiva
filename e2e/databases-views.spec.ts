@@ -120,6 +120,7 @@ test('two views keep different filters, sorts and groupings across a reload', as
   await toolbarButton(page, /^Filter/).click();
   const filters = page.getByRole('dialog', { name: 'Filters' });
   await filters.getByRole('button', { name: 'Add a filter' }).click();
+  await filters.getByRole('button', { name: 'Name', exact: true }).click();
   const condition = filters.getByRole('group', { name: 'Filter 1' });
   await condition.getByRole('combobox', { name: 'Property' }).selectOption('Hours');
   await condition.getByRole('combobox', { name: 'Condition' }).selectOption('greaterThan');
@@ -221,6 +222,7 @@ test('a database of 3,000 rows filters and groups with only the visible rows ren
   await toolbarButton(page, /^Filter/).click();
   const filters = page.getByRole('dialog', { name: 'Filters' });
   await filters.getByRole('button', { name: 'Add a filter' }).click();
+  await filters.getByRole('button', { name: 'Name', exact: true }).click();
   const condition = filters.getByRole('group', { name: 'Filter 1' });
   await condition.getByRole('combobox', { name: 'Property' }).selectOption('Hours');
   await condition.getByRole('textbox', { name: 'Value' }).fill('9');

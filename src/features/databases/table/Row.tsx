@@ -35,7 +35,12 @@ export const TableRow = memo(function TableRow({
       role="row"
       aria-rowindex={rowIndex + 2}
       aria-label={row.title || t('pages.untitled')}
-      style={{ width, height: ROW_HEIGHT, transform: `translateY(${top}px)` }}
+      style={{
+        width: '100%',
+        minWidth: width,
+        height: ROW_HEIGHT,
+        transform: `translateY(${top}px)`,
+      }}
       className="group border-border hover:bg-accent/40 absolute top-0 left-0 flex border-b"
     >
       {columns.map((column, columnIndex) => {

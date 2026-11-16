@@ -152,21 +152,26 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
         className="overscroll-x-contain"
       >
         <div
-          className="w-max min-w-full pb-4"
-          style={{ paddingLeft: TABLE_INSET, paddingRight: TABLE_INSET }}
+          className="pb-4"
+          // Fills the area; only more columns than fit make it scroll.
+          style={{
+            paddingLeft: TABLE_INSET,
+            paddingRight: TABLE_INSET,
+            minWidth: `calc(${width}px + 2 * ${TABLE_INSET})`,
+          }}
         >
           <div
             role="grid"
             aria-label={database.page.title || t('pages.untitled')}
             aria-rowcount={items.length + 1}
             aria-colcount={columns.length}
-            style={{ width }}
+            style={{ minWidth: width }}
           >
             <div role="rowgroup" className="bg-background sticky top-0 z-10">
               <div
                 role="row"
                 aria-rowindex={1}
-                style={{ height: HEADER_HEIGHT }}
+                style={{ height: HEADER_HEIGHT, minWidth: width }}
                 className="border-border flex border-b"
               >
                 {columns.map((column, columnIndex) =>
@@ -228,19 +233,39 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
             </div>
           </div>
           {items.length === 0 ? (
-            <p className="text-muted-foreground flex h-8 items-center px-2 text-sm opacity-70">
+            <p className="sr-only">
               {rows.length === 0 ? t('databases.table.noRows') : t('databases.table.noMatches')}
             </p>
           ) : null}
           <button
             type="button"
             onClick={addRow}
-            style={{ width }}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 flex h-8 items-center gap-2 rounded-sm px-2 text-sm outline-none focus-visible:ring-2"
+            style={{ minWidth: width }}
+            className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 border-border flex h-8 w-full items-center gap-2 border-b px-2 text-sm outline-none focus-visible:ring-2"
           >
             <Plus size={16} aria-hidden />
             {t('databases.table.newRow')}
           </button>
+          {rows.length === 0 ? (
+            // What a database without rows looks like: the lines of a table waiting to be filled.
+            <div aria-hidden style={{ minWidth: width }}>
+              {[0, 1].map((line) => (
+                <div
+                  key={line}
+                  style={{ height: ROW_HEIGHT }}
+                  className="border-border flex border-b"
+                >
+                  {columns.map((column) => (
+                    <div
+                      key={column.id}
+                      style={{ width: columnWidth(column) }}
+                      className="border-border h-full shrink-0 border-r"
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : null}
           {rows.length > 0 ? (
             <p className="text-muted-foreground px-2 pt-2 text-xs tabular-nums">
               {rowsShown === rows.length

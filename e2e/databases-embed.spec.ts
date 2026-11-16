@@ -262,6 +262,7 @@ test('typing in cells, filters and view names changes no block and saves nothing
     .click();
   const filters = page.getByRole('dialog', { name: 'Filters' });
   await filters.getByRole('button', { name: 'Add a filter' }).click();
+  await filters.getByRole('button', { name: 'Name', exact: true }).click();
   await filters
     .getByRole('group', { name: 'Filter 1' })
     .getByRole('textbox', { name: 'Value' })
@@ -562,8 +563,10 @@ test('tabs, toolbar and table look as on the database page', async ({ page }) =>
   await expect(title(page)).toHaveValue('Tasks');
   const onPage = await probe(page.getByRole('main'));
 
-  // Widths of things that fill the space differ; the tab, icons and buttons do not.
+  // Widths of things that fill the space differ; the tab and the icons do not.
   const fixed = (values: string[]) =>
-    values.map((value, index) => (index === 4 ? value.split(' ').slice(0, 5).join(' ') : value));
+    values.map((value, index) =>
+      index === 4 || index === 5 ? value.split(' ').slice(0, 5).join(' ') : value,
+    );
   expect(fixed(inBlock)).toEqual(fixed(onPage));
 });

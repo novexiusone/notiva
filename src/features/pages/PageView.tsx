@@ -1,5 +1,5 @@
 import { Navigate } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DatabaseView } from '@/features/databases/DatabaseView';
 import { DatabaseLink, RowProperties } from '@/features/databases/RowProperties';
@@ -10,10 +10,12 @@ import { AppearanceRow } from '@/features/pages/PageAppearance';
 import { PageCover } from '@/features/pages/PageCover';
 import { usePages, useRenamePage } from '@/features/pages/api';
 import { useBannerChooser } from '@/features/pages/useBannerChooser';
+import { useFullWidth } from '@/features/pages/fullWidth';
 import { rememberLastPage } from '@/lib/localState';
 import { cn } from '@/lib/utils';
 
-const column = 'mx-auto w-full max-w-[720px] px-12';
+const readingColumn = 'mx-auto w-full max-w-[720px] px-12';
+const wideColumn = 'w-full px-12';
 
 export function PageView({ pageId }: { pageId: string }) {
   const { t } = useTranslation();
@@ -25,6 +27,8 @@ export function PageView({ pageId }: { pageId: string }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const banner = useBannerChooser(pageId);
+  const fullWidth = useFullWidth(pageId);
+  const column = fullWidth ? wideColumn : readingColumn;
 
   useEffect(() => {
     if (page) rememberLastPage(page.id);
@@ -58,7 +62,11 @@ export function PageView({ pageId }: { pageId: string }) {
   const { databaseId } = page;
 
   return (
-    <article className="relative pb-32">
+    <article
+      className="relative pb-32"
+      // A database lines up with the title; the default centres it on the reading column.
+      style={fullWidth ? ({ '--table-inset': '2.5rem' } as CSSProperties) : undefined}
+    >
       <PageHeader
         page={page}
         pages={pages.data ?? []}

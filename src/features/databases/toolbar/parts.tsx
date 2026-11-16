@@ -19,21 +19,20 @@ export function ToolbarButton({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
+      size="icon-sm"
       data-active={active || undefined}
       className={cn(
-        'text-muted-foreground data-[active]:text-primary data-[state=open]:bg-accent',
+        'text-muted-foreground data-[active]:text-primary relative data-[state=open]:bg-accent',
         className,
       )}
       {...props}
     >
       <Icon aria-hidden />
-      {/* Icon only; the name is for screen readers. */}
+      {/* Icon only; the name and what is set are for screen readers. */}
       <span className="sr-only">{label}</span>
+      {active ? <span className="sr-only">{badge}</span> : null}
       {active ? (
-        <span className="bg-primary/10 text-primary rounded-sm px-1 text-xs tabular-nums">
-          {badge}
-        </span>
+        <span aria-hidden className="bg-primary absolute top-1 right-1 size-1.5 rounded-full" />
       ) : null}
     </Button>
   );

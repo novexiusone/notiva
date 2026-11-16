@@ -483,6 +483,7 @@ describe('the views of a database', () => {
 
     const panel = await openMenu(user, /^Filter/, 'Filters');
     await user.click(within(panel).getByRole('button', { name: 'Add a filter' }));
+    await user.click(within(panel).getByRole('button', { name: 'Name' }));
     // The line of a condition is drawn anew when its property changes.
     const condition = () => within(panel).getByRole('group', { name: 'Filter 1' });
     await user.selectOptions(
