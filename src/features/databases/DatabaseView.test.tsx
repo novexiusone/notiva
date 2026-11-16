@@ -447,6 +447,17 @@ describe('the views of a database', () => {
     return screen.findByRole('dialog', { name: panel });
   }
 
+  /** Opens a drop-down of a panel and picks one of its entries. */
+  async function choose(
+    user: ReturnType<typeof renderApp>['user'],
+    scope: HTMLElement,
+    name: string,
+    option: string,
+  ) {
+    await user.click(within(scope).getByRole('button', { name }));
+    await user.click(await screen.findByRole('menuitemradio', { name: option }));
+  }
+
   /** Opens the settings of the view and the screen of one of its rows. */
   async function openSettings(user: ReturnType<typeof renderApp>['user'], row?: RegExp) {
     const panel = await openMenu(user, /^View settings/, 'View settings');
@@ -497,34 +508,22 @@ describe('the views of a database', () => {
     await user.click(within(panel).getByRole('button', { name: 'Name' }));
     // The line of a condition is drawn anew when its property changes.
     const condition = () => within(panel).getByRole('group', { name: 'Filter 1' });
-    await user.selectOptions(
-      within(condition()).getByRole('combobox', { name: 'Property' }),
-      'Hours',
-    );
-    await user.selectOptions(
-      within(condition()).getByRole('combobox', { name: 'Condition' }),
-      'greaterThan',
-    );
+    await choose(user, condition(), 'Property', 'Hours');
+    await choose(user, condition(), 'Condition', '>');
     await user.type(within(condition()).getByRole('textbox', { name: 'Value' }), '2.5');
 
     expect(await rowTitles()).toEqual(['Write spec', 'Build it']);
     expect(screen.getByRole('button', { name: /^Filter/ })).toHaveTextContent('Filter1');
 
     // A condition that tests for a value needs none.
-    await user.selectOptions(
-      within(condition()).getByRole('combobox', { name: 'Condition' }),
-      'is empty',
-    );
+    await choose(user, condition(), 'Condition', 'is empty');
     expect(within(condition()).queryByRole('textbox', { name: 'Value' })).toBeNull();
     expect(await rowTitles()).toEqual([]);
     expect(screen.getByText('No rows match the filters')).toBeInTheDocument();
 
     // A select is filtered by one of its options.
-    await user.selectOptions(
-      within(condition()).getByRole('combobox', { name: 'Property' }),
-      'Status',
-    );
-    await user.selectOptions(within(condition()).getByRole('combobox', { name: 'Value' }), 'Todo');
+    await choose(user, condition(), 'Property', 'Status');
+    await choose(user, condition(), 'Value', 'Todo');
     expect(await rowTitles()).toEqual(['Build it', 'Test it']);
 
     await user.click(within(condition()).getByRole('button', { name: 'Remove filter' }));
@@ -546,10 +545,7 @@ describe('the views of a database', () => {
     const second = () => within(panel).getByRole('group', { name: 'Sort 2' });
     expect(await rowTitles()).toEqual(['Test it', 'Build it', 'Write spec']);
 
-    await user.selectOptions(
-      within(second()).getByRole('combobox', { name: 'Direction' }),
-      'Descending',
-    );
+    await choose(user, second(), 'Direction', 'Descending');
     expect(await rowTitles()).toEqual(['Build it', 'Test it', 'Write spec']);
 
     await user.click(within(first()).getByRole('button', { name: 'Remove sort' }));
@@ -564,7 +560,7 @@ describe('the views of a database', () => {
     await waitFor(async () => expect(await rowTitles()).toHaveLength(4));
 
     const panel = await openSettings(user, /^Group/);
-    await user.selectOptions(within(panel).getByRole('combobox', { name: 'Group by' }), 'Status');
+    await choose(user, panel, 'Group by', 'Status');
     await user.keyboard('{Escape}');
 
     expect(await rowTitles()).toEqual([
@@ -665,7 +661,7 @@ describe('the views of a database', () => {
         sorts: [{ propertyId: 'title', direction: 'asc' }],
       });
 
-      await user.selectOptions(within(panel).getByRole('combobox', { name: 'Direction' }), 'desc');
+      await choose(user, panel, 'Direction', 'Descending');
       await user.keyboard('{Escape}');
       await settle();
       expect(updateView).toHaveBeenCalledTimes(1);

@@ -12,7 +12,7 @@ import {
   type ViewField,
 } from '@/features/databases/viewState';
 import type { FilterOperator, ViewFilter } from '@/lib/commands';
-import { NativeSelect, PanelHeader, ToolbarButton } from './parts';
+import { Select, PanelHeader, ToolbarButton } from './parts';
 import type { ToolbarMenuProps } from './types';
 
 /** Operators that test whether there is a value at all, so they take none. */
@@ -50,10 +50,10 @@ function FilterValue({
   switch (field.property.type) {
     case 'select':
       return (
-        <NativeSelect
+        <Select
           label={label}
           value={typeof filter.value === 'string' ? filter.value : ''}
-          onChange={(event) => onChange(event.target.value || null)}
+          onValueChange={(next) => onChange(next || null)}
           className="flex-1"
         >
           <option value="">{t('databases.toolbar.chooseOption')}</option>
@@ -62,7 +62,7 @@ function FilterValue({
               {option.name}
             </option>
           ))}
-        </NativeSelect>
+        </Select>
       );
     case 'date':
       return (
@@ -197,13 +197,11 @@ export function FilterPanel({
                     <div className="flex items-center gap-1">
                       <GripVertical size={14} aria-hidden className="text-muted-foreground/50" />
                       <Icon size={16} aria-hidden className="text-muted-foreground" />
-                      <NativeSelect
+                      <Select
                         label={t('databases.toolbar.property')}
                         value={filter.propertyId}
-                        onChange={(event) => {
-                          const next = fields.find(
-                            (candidate) => candidate.id === event.target.value,
-                          );
+                        onValueChange={(id) => {
+                          const next = fields.find((candidate) => candidate.id === id);
                           if (next) {
                             replace(index, {
                               propertyId: next.id,
@@ -212,36 +210,34 @@ export function FilterPanel({
                             });
                           }
                         }}
-                        className="border-0 bg-transparent"
                       >
                         {fields.map((candidate) => (
                           <option key={candidate.id} value={candidate.id}>
                             {candidate.property.name}
                           </option>
                         ))}
-                      </NativeSelect>
+                      </Select>
                     </div>
                     <div className="border-border ml-5 flex flex-col gap-1.5 rounded-md border p-1.5">
                       <div className="flex items-center justify-between gap-1">
-                        <NativeSelect
+                        <Select
                           label={t('databases.toolbar.operator')}
                           value={filter.operator}
-                          onChange={(event) => {
-                            const operator = event.target.value as FilterOperator;
+                          onValueChange={(next) => {
+                            const operator = next as FilterOperator;
                             replace(index, {
                               ...filter,
                               operator,
                               value: valueless.includes(operator) ? null : filter.value,
                             });
                           }}
-                          className="border-0 bg-transparent"
                         >
                           {field.definition.operators.map((operator) => (
                             <option key={operator} value={operator}>
                               {operatorLabel(operator, field)}
                             </option>
                           ))}
-                        </NativeSelect>
+                        </Select>
                         <Button
                           type="button"
                           variant="ghost"

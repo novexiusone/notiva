@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { readSorts, viewFields, withSorts } from '@/features/databases/viewState';
 import type { ViewSort } from '@/lib/commands';
-import { NativeSelect, PanelHeader, ToolbarButton } from './parts';
+import { Select, PanelHeader, ToolbarButton } from './parts';
 import type { ToolbarMenuProps } from './types';
 
 /**
@@ -96,13 +96,10 @@ export function SortPanel({
                 <div className="flex items-center gap-1">
                   <GripVertical size={14} aria-hidden className="text-muted-foreground/50" />
                   <Icon size={16} aria-hidden className="text-muted-foreground" />
-                  <NativeSelect
+                  <Select
                     label={t('databases.toolbar.property')}
                     value={sort.propertyId}
-                    onChange={(event) =>
-                      replace(index, { ...sort, propertyId: event.target.value })
-                    }
-                    className="border-0 bg-transparent"
+                    onValueChange={(propertyId) => replace(index, { ...sort, propertyId })}
                   >
                     {fields
                       .filter(
@@ -114,23 +111,19 @@ export function SortPanel({
                           {candidate.property.name}
                         </option>
                       ))}
-                  </NativeSelect>
+                  </Select>
                 </div>
                 <div className="border-border ml-5 flex items-center justify-between gap-1 rounded-md border p-1.5">
-                  <NativeSelect
+                  <Select
                     label={t('databases.toolbar.direction')}
                     value={sort.direction}
-                    onChange={(event) =>
-                      replace(index, {
-                        ...sort,
-                        direction: event.target.value as ViewSort['direction'],
-                      })
+                    onValueChange={(direction) =>
+                      replace(index, { ...sort, direction: direction as ViewSort['direction'] })
                     }
-                    className="border-0 bg-transparent"
                   >
                     <option value="asc">{t('databases.toolbar.ascending')}</option>
                     <option value="desc">{t('databases.toolbar.descending')}</option>
-                  </NativeSelect>
+                  </Select>
                   <Button
                     type="button"
                     variant="ghost"

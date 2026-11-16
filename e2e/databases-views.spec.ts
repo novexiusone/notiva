@@ -1,9 +1,15 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const grid = (page: Page) => page.getByRole('grid');
 const tab = (page: Page, name: string) =>
   page.getByRole('tablist', { name: 'Views' }).getByRole('tab', { name, exact: true });
 const headers = (page: Page) => grid(page).getByRole('columnheader');
+/** Opens a drop-down of a panel and picks one of its entries. */
+async function choose(page: Page, scope: Locator, name: string, option: string) {
+  await scope.getByRole('button', { name, exact: true }).click();
+  await page.getByRole('menuitemradio', { name: option, exact: true }).click();
+}
+
 const toolbarButton = (page: Page, name: RegExp) =>
   page.getByRole('group', { name: 'View toolbar' }).getByRole('button', { name });
 
@@ -122,15 +128,15 @@ test('two views keep different filters, sorts and groupings across a reload', as
   await filters.getByRole('button', { name: 'Add a filter' }).click();
   await filters.getByRole('button', { name: 'Name', exact: true }).click();
   const condition = filters.getByRole('group', { name: 'Filter 1' });
-  await condition.getByRole('combobox', { name: 'Property' }).selectOption('Hours');
-  await condition.getByRole('combobox', { name: 'Condition' }).selectOption('greaterThan');
+  await choose(page, condition, 'Property', 'Hours');
+  await choose(page, condition, 'Condition', '>');
   await condition.getByRole('textbox', { name: 'Value' }).fill('2');
   await page.keyboard.press('Escape');
   await toolbarButton(page, /^Sort/).click();
   const sorts = page.getByRole('dialog', { name: 'Sorts' });
   await sorts.getByRole('button', { name: 'Add a sort' }).click();
   await sorts.getByRole('button', { name: 'Hours', exact: true }).click();
-  await sorts.getByRole('combobox', { name: 'Direction' }).selectOption('desc');
+  await choose(page, sorts, 'Direction', 'Descending');
   await page.keyboard.press('Escape');
   await expect.poll(() => lineNames(page)).toEqual(['Build it', 'Write spec']);
 
@@ -144,10 +150,7 @@ test('two views keep different filters, sorts and groupings across a reload', as
     .getByRole('dialog', { name: 'View settings' })
     .getByRole('button', { name: /^Group/ })
     .click();
-  await page
-    .getByRole('dialog', { name: 'View settings' })
-    .getByRole('combobox', { name: 'Group by' })
-    .selectOption('Status');
+  await choose(page, page.getByRole('dialog', { name: 'View settings' }), 'Group by', 'Status');
   await page.keyboard.press('Escape');
   await expect
     .poll(() => lineNames(page))
@@ -219,10 +222,7 @@ test('a database of 3,000 rows filters and groups with only the visible rows ren
     .getByRole('dialog', { name: 'View settings' })
     .getByRole('button', { name: /^Group/ })
     .click();
-  await page
-    .getByRole('dialog', { name: 'View settings' })
-    .getByRole('combobox', { name: 'Group by' })
-    .selectOption('Status');
+  await choose(page, page.getByRole('dialog', { name: 'View settings' }), 'Group by', 'Status');
   await page.keyboard.press('Escape');
   await expect(grid(page)).toHaveAttribute('aria-rowcount', '3004');
   await expect(grid(page).getByRole('row', { name: 'Todo', exact: true })).toBeVisible();
@@ -233,7 +233,7 @@ test('a database of 3,000 rows filters and groups with only the visible rows ren
   await filters.getByRole('button', { name: 'Add a filter' }).click();
   await filters.getByRole('button', { name: 'Name', exact: true }).click();
   const condition = filters.getByRole('group', { name: 'Filter 1' });
-  await condition.getByRole('combobox', { name: 'Property' }).selectOption('Hours');
+  await choose(page, condition, 'Property', 'Hours');
   await condition.getByRole('textbox', { name: 'Value' }).fill('9');
   await page.keyboard.press('Escape');
   // Every tenth row has nine hours: 300 rows in three groups.

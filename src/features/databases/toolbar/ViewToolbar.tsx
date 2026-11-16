@@ -1,6 +1,7 @@
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { FilterMenu } from './FilterMenu';
 import { NewRowButton } from './NewRowButton';
@@ -60,16 +61,20 @@ export function ViewToolbar({
       // The padding makes the area that shows the minimize button reach a little past the toolbar.
       className="group/toolbar -my-2 -ml-10 flex items-center gap-0.5 py-2 pl-10"
     >
-      <button
-        type="button"
-        aria-label={label}
-        title={label}
-        aria-expanded={!minimized}
-        onClick={() => setMinimized(!minimized)}
-        className={reveal}
-      >
-        <Icon size={16} aria-hidden />
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={label}
+            aria-expanded={!minimized}
+            onClick={() => setMinimized(!minimized)}
+            className={reveal}
+          >
+            <Icon size={16} aria-hidden />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
       <Collapsible hidden={minimized}>
         <FilterMenu {...props} />
         <SortMenu {...props} />
