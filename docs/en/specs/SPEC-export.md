@@ -66,12 +66,12 @@ Each row becomes a file like a page: its title, then a list of its properties wi
 
 Values are written as text:
 
-| Type     | Value                                                                        |
-| -------- | ---------------------------------------------------------------------------- |
-| text     | the text                                                                     |
-| number   | the number as a change of type to text writes it (`1.5`, `1000000`, `1e+21`) |
-| date     | `yyyy-MM-dd`                                                                 |
-| select   | the name of the option; empty when the option no longer exists               |
+| Type     | Value                                                                              |
+| -------- | ---------------------------------------------------------------------------------- |
+| text     | the text                                                                           |
+| number   | the number as a change of type to text writes it (`1.5`, `1000000`, `1e+21`)       |
+| date     | `yyyy-MM-dd`                                                                       |
+| select   | the name of the option; empty when the option no longer exists                     |
 | relation | the titles of the linked rows, separated by `, `; `Untitled` for a row without one |
 
 A value that does not fit its property, such as an option that was deleted, is empty, and so is every value of a property type without a rule in this table. Such a value never stops the export.
