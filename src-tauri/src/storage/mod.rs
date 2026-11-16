@@ -4,6 +4,7 @@
 //! uses plain domain types and [`StorageError`], so the rest of the backend
 //! does not depend on the database.
 
+mod backup;
 mod blocks;
 mod databases;
 mod error;
@@ -25,6 +26,7 @@ use std::path::Path;
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, SurrealKv};
 
+pub use backup::restore_snapshot;
 pub use error::StorageError;
 pub(crate) use properties::number_as_text;
 

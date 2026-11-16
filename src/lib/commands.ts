@@ -140,9 +140,61 @@ export type Database = { page: Page; properties: Property[]; views: View[] };
 /** The rows that point at a row through one relation property. */
 export type IncomingRelation = { property: Property; rows: PageRef[] };
 
+/** How often scheduled backups are made; `manual` turns the schedule off. */
+export type BackupInterval = 'manual' | 'hourly' | 'daily' | 'weekly';
+
+export type BackupSettings = {
+  interval: BackupInterval;
+  /** How many scheduled backups are kept, 1 to 365. */
+  keepLast: number;
+  /** An absolute folder; `null` is the `backups` folder inside the app data. */
+  folder: string | null;
+};
+
+/** `pre_restore` backups are made of the current data right before a restore. */
+export type BackupKind = 'manual' | 'auto' | 'pre_restore';
+
+/** A backup file in the backup folder. */
+export type BackupInfo = {
+  name: string;
+  path: string;
+  sizeBytes: number;
+  /** RFC 3339, UTC. */
+  createdAt: string;
+  encrypted: boolean;
+  kind: BackupKind;
+};
+
+/** What a backup says about itself. `restorable` is false for a newer schema. */
+export type BackupSummary = {
+  appVersion: string;
+  schemaVersion: number;
+  createdAt: string;
+  images: number;
+  restorable: boolean;
+};
+
+/** A restore is applied when the app starts the next time. */
+export type RestoreOutcome = { restartRequired: boolean; safetyBackup: string };
+
+export type BackupStatus = {
+  running: boolean;
+  lastSuccessAt: string | null;
+  /** The last failure, until a backup succeeds again. */
+  lastError: string | null;
+};
+
 /** What a failed command rejects with. */
 export type CommandError = {
-  kind: 'not_found' | 'invalid' | 'internal';
+  kind:
+    | 'not_found'
+    | 'invalid'
+    | 'internal'
+    | 'passphrase_required'
+    | 'wrong_passphrase'
+    | 'corrupt'
+    | 'schema_too_new'
+    | 'unsupported';
   message: string;
 };
 
@@ -211,6 +263,28 @@ export const commands = {
     invoke<ExportSummary>('export_page', { pageId, directory }),
   /** Exports every page into a new folder inside `directory`. */
   exportAll: (directory: string) => invoke<ExportSummary>('export_all', { directory }),
+
+  getBackupSettings: () => invoke<BackupSettings>('get_backup_settings'),
+  setBackupSettings: (settings: BackupSettings) =>
+    invoke<BackupSettings>('set_backup_settings', { settings }),
+  /** A manual backup in the backup folder; a passphrase encrypts it. */
+  createBackup: (passphrase: string | null) => invoke<BackupInfo>('create_backup', { passphrase }),
+  /** The backups in the backup folder, newest first. */
+  listBackups: () => invoke<BackupInfo[]>('list_backups'),
+  /** Rejects with `passphrase_required` or `wrong_passphrase` for an encrypted backup. */
+  inspectBackup: (path: string, passphrase: string | null) =>
+    invoke<BackupSummary>('inspect_backup', { path, passphrase }),
+  /**
+   * Checks the backup, backs up the current data and prepares the swap. The
+   * data is replaced when the app restarts; see `restartApp`.
+   */
+  restoreBackup: (path: string, passphrase: string | null) =>
+    invoke<RestoreOutcome>('restore_backup', { path, passphrase }),
+  /** Restores into a new, empty folder and leaves the app's data alone. */
+  restoreBackupToFolder: (path: string, passphrase: string | null, directory: string) =>
+    invoke<void>('restore_backup_to_folder', { path, passphrase, directory }),
+  backupStatus: () => invoke<BackupStatus>('backup_status'),
+  restartApp: () => invoke<void>('restart_app'),
 
   /** Stores an image and resolves to the URL to put into the image block. */
   downloadImage: (url: string, destination: string) =>
