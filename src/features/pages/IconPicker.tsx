@@ -18,6 +18,7 @@ import {
   Utensils,
   type LucideIcon,
 } from 'lucide-react';
+import { flushSync } from 'react-dom';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
@@ -237,7 +238,7 @@ export function IconPickerPanel({
               )}
               className={cn(cell, 'size-7')}
               onClick={() => {
-                setFilter('');
+                flushSync(() => setFilter(''));
                 scroller.current
                   ?.querySelector(`[data-group="${group}"]`)
                   ?.scrollIntoView?.({ block: 'start' });
@@ -293,7 +294,8 @@ export function IconPickerPanel({
                 title={t(`pages.picker.iconGroups.${category}`)}
                 className={cn(cell, 'size-7')}
                 onClick={() => {
-                  setFilter('');
+                  // Render the unfiltered sections first, or the target may not exist yet.
+                  flushSync(() => setFilter(''));
                   iconScroller.current
                     ?.querySelector(`[data-icon-group="${category}"]`)
                     ?.scrollIntoView?.({ block: 'start' });

@@ -21,19 +21,6 @@ export const iconName = (stored: string): string => LEGACY[stored] ?? stored;
 /** The Lucide icon a stored icon names, if it names one. Emoji do not. */
 export const lucideIcon = (stored: string): LucideIcon | undefined => byName[iconName(stored)];
 
-/** Every Lucide icon once, by name; Lucide lists some icons under several names. */
-export const ICON_NAMES: string[] = (() => {
-  const seen = new Set<LucideIcon>();
-  return Object.keys(icons)
-    .sort()
-    .filter((name) => {
-      const icon = byName[name];
-      if (!icon || seen.has(icon)) return false;
-      seen.add(icon);
-      return true;
-    });
-})();
-
 /** `BookOpen` → `Book Open`. */
 export const iconLabel = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 

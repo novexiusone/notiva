@@ -8,15 +8,15 @@ A page's content is the `editor` module's job; a database's table belongs to `da
 
 ## Tech stack
 
-| Area              | Choice                                                                                                                                                                                                   |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tree              | react-arborist (virtualised, drag and drop, inline rename)                                                                                                                                               |
-| Routing           | TanStack Router, code-based routes, hash history                                                                                                                                                         |
-| Menus and dialogs | shadcn/ui `dropdown-menu` and `alert-dialog`                                                                                                                                                             |
-| Icons and covers  | Emoji (emojibase data) and a curated selection of Lucide icons (any Lucide icon still renders); local images through the existing `save_image` command, plus a built-in gallery of colours and gradients |
-| Panels            | shadcn/ui `popover` for the icon picker, a `dialog`-based sheet for export                                                                                                                               |
-| Data fetching     | TanStack Query on top of the page commands                                                                                                                                                               |
-| End-to-end tests  | Playwright against the frontend with an in-memory fake backend                                                                                                                                           |
+| Area              | Choice                                                                                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tree              | react-arborist (virtualised, drag and drop, inline rename)                                                                                                |
+| Routing           | TanStack Router, code-based routes, hash history                                                                                                          |
+| Menus and dialogs | shadcn/ui `dropdown-menu` and `alert-dialog`                                                                                                              |
+| Icons and covers  | Emoji (emojibase data) and curated Lucide icons; local images through the existing `save_image` command, plus a built-in gallery of colours and gradients |
+| Panels            | shadcn/ui `popover` for the icon picker, a `dialog`-based sheet for export                                                                                |
+| Data fetching     | TanStack Query on top of the page commands                                                                                                                |
+| End-to-end tests  | Playwright against the frontend with an in-memory fake backend                                                                                            |
 
 ## Behaviour
 
@@ -153,7 +153,7 @@ Components get their data from the hooks in `api.ts`, never from `commands` dire
 - [ ] The icon picker offers emoji and Lucide icons and both persist (#102)
 - [ ] The cover has Change, Reposition and Download; the position survives a restart (#106)
 - [ ] The cover picker offers the gallery and upload (#107)
-- [ ] Every Lucide icon can be chosen (#110), superseded by the curated, categorised set (#127)
+- [ ] The Icons tab offers the curated categories with a category bar, and the filter searches within them (#127)
 - [ ] A page can be locked at "content" or "everything", enforced by the backend (#104)
 
 ## Open questions
