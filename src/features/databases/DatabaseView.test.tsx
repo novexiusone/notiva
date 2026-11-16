@@ -110,7 +110,11 @@ describe('a database page', () => {
     await waitFor(async () =>
       expect(await headerNames()).toEqual(['Name', 'Notes', 'Hours', 'Due', 'Status', '']),
     );
-    expect(within(await grid()).getByRole('row', { name: 'Write spec' }).children).toHaveLength(5);
+    expect(
+      within(within(await grid()).getByRole('row', { name: 'Write spec' })).getAllByRole(
+        'gridcell',
+      ),
+    ).toHaveLength(5);
   });
 
   it('says so when there are no rows, also without any view', async () => {

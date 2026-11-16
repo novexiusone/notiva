@@ -2,7 +2,10 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TableColumn } from '@/features/databases/useDatabaseTable';
 import type { Row } from '@/lib/commands';
+import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
 import { PropertyCell, TitleCell } from './Cell';
+import { useTableActions } from './tableActions';
 import { columnWidth, ROW_HEIGHT } from './layout';
 
 type TableRowProps = {
@@ -14,6 +17,9 @@ type TableRowProps = {
   /** Where the virtualiser puts the row, from the top of the body. */
   top: number;
   width: number;
+  selected: boolean;
+  /** Whether any row is selected; the boxes of all rows then stay in sight. */
+  selecting: boolean;
 };
 
 /**
@@ -27,8 +33,11 @@ export const TableRow = memo(function TableRow({
   first,
   top,
   width,
+  selected,
+  selecting,
 }: TableRowProps) {
   const { t } = useTranslation();
+  const { toggleRow } = useTableActions();
 
   return (
     <div
@@ -41,8 +50,23 @@ export const TableRow = memo(function TableRow({
         height: ROW_HEIGHT,
         transform: `translateY(${top}px)`,
       }}
-      className="group border-border hover:bg-accent/40 absolute top-0 left-0 flex border-b"
+      className={cn(
+        'group border-border hover:bg-accent/40 absolute top-0 left-0 flex border-b',
+        selected && 'bg-primary/10 hover:bg-primary/10',
+      )}
     >
+      <div
+        className={cn(
+          'absolute right-full flex h-full w-7 items-center justify-center opacity-0 group-hover:opacity-100 hover:opacity-100 has-[:focus-visible]:opacity-100',
+          selecting && 'opacity-100',
+        )}
+      >
+        <Checkbox
+          checked={selected}
+          aria-label={t('databases.table.selectRow', { title: row.title || t('pages.untitled') })}
+          onCheckedChange={() => toggleRow(row.id)}
+        />
+      </div>
       {columns.map((column, columnIndex) => {
         const position = {
           rowId: row.id,

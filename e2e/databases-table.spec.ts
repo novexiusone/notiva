@@ -247,9 +247,13 @@ test('the keyboard reaches the header and edits cells', async ({ page }) => {
   await tab();
   await expect(page.getByRole('tabpanel')).toBeFocused();
   await tab();
+  await expect(page.getByRole('checkbox', { name: 'Select all rows' })).toBeFocused();
+  await tab();
   await expect(header(page, 'Notes').getByRole('button')).toBeFocused();
   await tab();
   await expect(page.getByRole('button', { name: 'Add a property' })).toBeFocused();
+  await tab();
+  await expect(page.getByRole('checkbox', { name: 'Select Write spec' })).toBeFocused();
   await tab();
   await expect(await cell(page, 'Write spec', 'Name')).toBeFocused();
 
@@ -324,4 +328,22 @@ test('a database with 10,000 rows renders only the visible ones and scrolls to t
   await newRow.scrollIntoViewIfNeeded();
   await expect(newRow).toBeInViewport();
   await expect(row(page, 'Row 10000')).toBeInViewport();
+});
+
+test('rows are selected one by one or all at once, and deleted together', async ({ page }) => {
+  await createDatabase(page, 'Tasks');
+  await addRow(page, 'One');
+  await addRow(page, 'Two');
+  await addRow(page, 'Three');
+
+  await page.getByRole('checkbox', { name: 'Select One' }).check();
+  await expect(page.getByRole('toolbar', { name: 'Selected rows' })).toContainText('1 selected');
+  await page.getByRole('checkbox', { name: 'Select all rows' }).click();
+  await expect(page.getByRole('toolbar', { name: 'Selected rows' })).toContainText('3 selected');
+  await page.getByRole('checkbox', { name: 'Select Two' }).uncheck();
+
+  await page.getByRole('button', { name: 'Delete selected rows' }).click();
+  await dialog(page).getByRole('button', { name: 'Delete' }).click();
+  await expect.poll(() => rowNames(page)).toEqual(['Two']);
+  await expect(page.getByRole('toolbar', { name: 'Selected rows' })).toHaveCount(0);
 });

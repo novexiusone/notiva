@@ -114,6 +114,14 @@
       "noOptions": "Noch keine Optionen"
     },
     "table": {
+      "selectRow": "{{title}} auswählen",
+      "selectAll": "Alle Zeilen auswählen",
+      "selection": "Ausgewählte Zeilen",
+      "selected": "{{count}} ausgewählt",
+      "deleteSelected": "Ausgewählte Zeilen löschen",
+      "deleteSelectedTitle_one": "{{count}} Zeile löschen?",
+      "deleteSelectedTitle_other": "{{count}} Zeilen löschen?",
+      "deleteSelectedDescription": "Die Zeilen und alles in ihnen werden gelöscht.",
       "rows": "Zeilen",
       "titleColumn": "Name",
       "noRows": "Noch keine Zeilen",

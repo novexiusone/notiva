@@ -114,6 +114,14 @@
       "noOptions": "No options yet"
     },
     "table": {
+      "selectRow": "Select {{title}}",
+      "selectAll": "Select all rows",
+      "selection": "Selected rows",
+      "selected": "{{count}} selected",
+      "deleteSelected": "Delete selected rows",
+      "deleteSelectedTitle_one": "Delete {{count}} row?",
+      "deleteSelectedTitle_other": "Delete {{count}} rows?",
+      "deleteSelectedDescription": "The rows and everything in them are deleted.",
       "rows": "Rows",
       "titleColumn": "Name",
       "noRows": "No rows yet",

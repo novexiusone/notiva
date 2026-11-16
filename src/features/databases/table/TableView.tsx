@@ -1,7 +1,10 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useCreateRow, useSetCell } from '@/features/databases/api';
 import { useCellStore } from '@/features/databases/uiStore';
 import { TITLE_COLUMN_ID, useDatabaseTable } from '@/features/databases/useDatabaseTable';
@@ -9,6 +12,7 @@ import { useDeletePage, useRenamePage } from '@/features/pages/api';
 import { DeletePageDialog } from '@/features/pages/DeletePageDialog';
 import type { Database, Row, View, ViewConfig } from '@/lib/commands';
 import { AddPropertyMenu } from './AddPropertyMenu';
+import { ConfirmDialog } from './ConfirmDialog';
 import { PropertyHeaderCell, TitleHeaderCell } from './HeaderCell';
 import { GroupRow } from './GroupRow';
 import {
@@ -53,6 +57,8 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   const [rowToDelete, setRowToDelete] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(noRowsKept);
+  const [deletingChosen, setDeletingChosen] = useState(false);
 
   const setCell = useSetCell(databaseId);
   const renamePage = useRenamePage();
@@ -86,6 +92,12 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
       setCell: (rowId, propertyId, value) => latest.current.setCell(rowId, propertyId, value),
       renameRow: (rowId, title) => latest.current.renamePage(rowId, title),
       deleteRow: setRowToDelete,
+      toggleRow: (rowId) =>
+        setChosen((current) => {
+          const next = new Set(current);
+          if (!next.delete(rowId)) next.add(rowId);
+          return next;
+        }),
       move: (rowIndex, columnIndex, byRows, byColumns) => {
         const { items, columns } = latest.current;
         // The headers of groups hold no cells; the move goes past them.
@@ -139,7 +151,14 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
     });
 
   const width = tableWidth(columns);
-  const rowsShown = items.filter((item) => item.kind === 'row').length;
+  const visibleRowIds = useMemo(
+    () => items.flatMap((item) => (item.kind === 'row' ? [item.id] : [])),
+    [items],
+  );
+  const rowsShown = visibleRowIds.length;
+  // Rows that were filtered away or deleted drop out of the selection.
+  const selection = visibleRowIds.filter((id) => chosen.has(id));
+  const allChosen = rowsShown > 0 && selection.length === rowsShown;
   const pendingRow = rows.find((row) => row.id === rowToDelete);
 
   return (
@@ -152,7 +171,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
         className="overscroll-x-contain"
       >
         <div
-          className="pb-4"
+          className="group/table pb-4"
           // Fills the area; only more columns than fit make it scroll.
           style={{
             paddingLeft: TABLE_INSET,
@@ -160,6 +179,26 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
             minWidth: `calc(${width}px + 2 * ${TABLE_INSET})`,
           }}
         >
+          {selection.length > 0 ? (
+            <div
+              role="toolbar"
+              aria-label={t('databases.table.selection')}
+              className="border-border bg-popover mb-1 flex h-8 w-max items-center gap-1 rounded-md border pr-1 pl-2.5 text-sm"
+            >
+              <span className="text-primary tabular-nums">
+                {t('databases.table.selected', { count: selection.length })}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('databases.table.deleteSelected')}
+                onClick={() => setDeletingChosen(true)}
+              >
+                <Trash2 aria-hidden />
+              </Button>
+            </div>
+          ) : null}
           <div
             role="grid"
             aria-label={database.page.title || t('pages.untitled')}
@@ -172,8 +211,23 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                 role="row"
                 aria-rowindex={1}
                 style={{ height: HEADER_HEIGHT, minWidth: width }}
-                className="border-border flex border-b"
+                className="border-border relative flex border-b"
               >
+                <div
+                  className={cn(
+                    'absolute right-full flex h-full w-7 items-center justify-center opacity-0 group-hover/table:opacity-100 hover:opacity-100 has-[:focus-visible]:opacity-100',
+                    selection.length > 0 && 'opacity-100',
+                  )}
+                >
+                  <Checkbox
+                    checked={allChosen ? true : selection.length > 0 ? 'indeterminate' : false}
+                    disabled={rowsShown === 0}
+                    aria-label={t('databases.table.selectAll')}
+                    onCheckedChange={() =>
+                      setChosen(allChosen ? noRowsKept : new Set(visibleRowIds))
+                    }
+                  />
+                </div>
                 {columns.map((column, columnIndex) =>
                   column.property ? (
                     <PropertyHeaderCell
@@ -227,6 +281,8 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                     first={virtual.index === firstRowIndex}
                     top={virtual.start - HEADER_HEIGHT}
                     width={width}
+                    selected={chosen.has(item.row.id)}
+                    selecting={selection.length > 0}
                   />
                 );
               })}
@@ -241,31 +297,11 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
             type="button"
             onClick={addRow}
             style={{ minWidth: width }}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 border-border flex h-8 w-full items-center gap-2 border-b px-2 text-sm outline-none focus-visible:ring-2"
+            className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 flex h-8 w-full items-center gap-2 px-2 text-sm outline-none focus-visible:ring-2"
           >
             <Plus size={16} aria-hidden />
             {t('databases.table.newRow')}
           </button>
-          {rows.length === 0 ? (
-            // What a database without rows looks like: the lines of a table waiting to be filled.
-            <div aria-hidden style={{ minWidth: width }}>
-              {[0, 1].map((line) => (
-                <div
-                  key={line}
-                  style={{ height: ROW_HEIGHT }}
-                  className="border-border flex border-b"
-                >
-                  {columns.map((column) => (
-                    <div
-                      key={column.id}
-                      style={{ width: columnWidth(column) }}
-                      className="border-border h-full shrink-0 border-r"
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          ) : null}
           {rows.length > 0 ? (
             <p className="text-muted-foreground px-2 pt-2 text-xs tabular-nums">
               {rowsShown === rows.length
@@ -275,6 +311,18 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
           ) : null}
         </div>
       </section>
+      <ConfirmDialog
+        open={deletingChosen}
+        title={t('databases.table.deleteSelectedTitle', { count: selection.length })}
+        description={t('databases.table.deleteSelectedDescription')}
+        confirmLabel={t('databases.table.delete')}
+        onConfirm={() => {
+          selection.forEach((id) => deletePage.mutate(id));
+          setChosen(noRowsKept);
+          setDeletingChosen(false);
+        }}
+        onCancel={() => setDeletingChosen(false)}
+      />
       <DeletePageDialog
         page={pendingRow ? { title: pendingRow.title, subpages: 0, rows: 0 } : null}
         onConfirm={() => {

@@ -19,10 +19,10 @@ export function ToolbarButton({
     <Button
       type="button"
       variant="ghost"
-      size="icon-sm"
+      size="icon-xs"
       data-active={active || undefined}
       className={cn(
-        'text-muted-foreground data-[active]:text-primary relative data-[state=open]:bg-accent',
+        'text-muted-foreground data-[active]:text-primary relative size-6 [&_svg:not([class*=size-])]:size-3.5 data-[state=open]:bg-accent',
         className,
       )}
       {...props}

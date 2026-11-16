@@ -7,8 +7,8 @@ export function NewRowButton({ onNewRow }: { onNewRow: () => void }) {
   return (
     <Button
       type="button"
-      size="sm"
-      className="ml-1"
+      size="xs"
+      className="mx-1"
       aria-label={t('databases.toolbar.newRowLabel')}
       onClick={onNewRow}
     >
