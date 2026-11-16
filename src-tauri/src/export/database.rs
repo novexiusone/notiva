@@ -1,6 +1,8 @@
 //! Turns a database into a Markdown table and the values of a row into the
 //! list at the top of its file.
 
+use std::collections::HashMap;
+
 use crate::domain::{CellValue, Property, PropertyType};
 use crate::storage::number_as_text;
 
@@ -20,7 +22,11 @@ pub struct TableRow {
 
 /// The value of a cell as plain text, or an empty text when the cell is
 /// empty or holds something that does not fit its property.
-pub fn value(property: &Property, cell: Option<&CellValue>) -> String {
+pub fn value(
+    property: &Property,
+    cell: Option<&CellValue>,
+    titles: &HashMap<String, String>,
+) -> String {
     let Some(cell) = cell else {
         return String::new();
     };
@@ -34,8 +40,14 @@ pub fn value(property: &Property, cell: Option<&CellValue>) -> String {
             .find(|option| &option.id == id)
             .map(|option| option.name.clone())
             .unwrap_or_default(),
-        // Relations are written once they exist (#61). Every other pair is a
-        // value of the wrong type, which readers treat as empty.
+        (PropertyType::Relation, CellValue::Relation(ids)) => ids
+            .iter()
+            .filter_map(|id| titles.get(id))
+            .map(|title| name(title).to_owned())
+            .collect::<Vec<_>>()
+            .join(", "),
+        // Every other pair is a value of the wrong type, which readers treat
+        // as empty.
         _ => String::new(),
     }
 }
@@ -160,6 +172,10 @@ mod tests {
     fn every_type_is_written_as_text() {
         use PropertyType::*;
 
+        let titles = HashMap::from([
+            ("row".to_owned(), "Row".to_owned()),
+            ("blank".to_owned(), " ".to_owned()),
+        ]);
         let cases = [
             (Text, CellValue::Text("hello".into()), "hello"),
             (Number, CellValue::Number(412.0), "412"),
@@ -169,7 +185,11 @@ mod tests {
             (Select, CellValue::Select("open".into()), "Open"),
             // A deleted option.
             (Select, CellValue::Select("gone".into()), ""),
-            (Relation, CellValue::Relation(vec!["row".into()]), ""),
+            (
+                Relation,
+                CellValue::Relation(vec!["row".into(), "none".into(), "blank".into()]),
+                "Row, Untitled",
+            ),
             // Values of the wrong type.
             (Number, CellValue::Text("5".into()), ""),
             (Text, CellValue::Number(5.0), ""),
@@ -179,12 +199,12 @@ mod tests {
 
         for (kind, cell, expected) in cases {
             assert_eq!(
-                value(&property("P", kind), Some(&cell)),
+                value(&property("P", kind), Some(&cell), &titles),
                 expected,
                 "{kind:?} {cell:?}"
             );
         }
-        assert_eq!(value(&property("P", Text), None), "");
+        assert_eq!(value(&property("P", Text), None, &titles), "");
     }
 
     #[test]

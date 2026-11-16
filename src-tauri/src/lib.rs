@@ -70,6 +70,7 @@ pub fn run() {
             commands::databases::delete_property,
             commands::databases::delete_select_option,
             commands::databases::change_property_type,
+            commands::databases::list_incoming_relations,
             commands::blocks::load_blocks,
             commands::blocks::save_blocks,
             commands::images::save_image,
