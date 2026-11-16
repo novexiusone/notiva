@@ -376,7 +376,7 @@ pub fn check_folder(folder: &Path) -> Result<(), NotesError> {
     let canonical = folder.canonicalize()?;
     let home = ["HOME", "USERPROFILE"]
         .iter()
-        .filter_map(|key| std::env::var_os(key))
+        .filter_map(std::env::var_os)
         .filter_map(|home| Path::new(&home).canonicalize().ok())
         .any(|home| home == canonical);
     if canonical.parent().is_none() || home {
