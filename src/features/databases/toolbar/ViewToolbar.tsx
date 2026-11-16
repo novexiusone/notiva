@@ -6,10 +6,11 @@ import { FilterMenu } from './FilterMenu';
 import { NewRowButton } from './NewRowButton';
 import { SettingsMenu } from './SettingsMenu';
 import { SortMenu } from './SortMenu';
+import type { View } from '@/lib/commands';
 import type { ToolbarMenuProps } from './types';
 
 const reveal =
-  'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 flex size-6 items-center justify-center rounded-md opacity-0 outline-none group-hover/toolbar:opacity-100 focus-visible:opacity-100 focus-visible:ring-2';
+  'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 flex size-7 items-center justify-center rounded-md opacity-0 outline-none transition-opacity duration-200 group-hover/toolbar:opacity-100 focus-visible:opacity-100 focus-visible:ring-2';
 
 /** Slides its content away sideways and back; hidden, it takes no focus. */
 function Collapsible({ hidden, children }: { hidden: boolean; children: ReactNode }) {
@@ -34,8 +35,19 @@ function Collapsible({ hidden, children }: { hidden: boolean; children: ReactNod
 export function ViewToolbar({
   grouping,
   onNewRow,
+  view,
+  canDelete,
+  onRename,
+  onDelete,
   ...props
-}: ToolbarMenuProps & { grouping: boolean; onNewRow: () => void }) {
+}: ToolbarMenuProps & {
+  grouping: boolean;
+  onNewRow: () => void;
+  view: View;
+  canDelete: boolean;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+}) {
   const { t } = useTranslation();
   const [minimized, setMinimized] = useState(false);
   const Icon = minimized ? ChevronsLeft : ChevronsRight;
@@ -45,7 +57,8 @@ export function ViewToolbar({
     <div
       role="group"
       aria-label={t('databases.toolbar.label')}
-      className="group/toolbar flex items-center gap-0.5"
+      // The padding makes the area that shows the minimize button reach a little past the toolbar.
+      className="group/toolbar -my-2 -ml-10 flex items-center gap-0.5 py-2 pl-10"
     >
       <button
         type="button"
@@ -61,7 +74,14 @@ export function ViewToolbar({
         <FilterMenu {...props} />
         <SortMenu {...props} />
       </Collapsible>
-      <SettingsMenu grouping={grouping} {...props} />
+      <SettingsMenu
+        grouping={grouping}
+        view={view}
+        canDelete={canDelete}
+        onRename={onRename}
+        onDelete={onDelete}
+        {...props}
+      />
       <Collapsible hidden={minimized}>
         <NewRowButton onNewRow={onNewRow} />
       </Collapsible>

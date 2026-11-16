@@ -154,6 +154,8 @@
       "noMatches": "Keine Zeile erfüllt die Filter"
     },
     "views": {
+      "icon": "Icon wählen",
+      "iconPicker": "Ansichts-Icon",
       "label": "Ansichten",
       "add": "Ansicht hinzufügen",
       "chooseType": "Typ",
@@ -172,6 +174,12 @@
       "unavailable": "Diese Art von Ansicht kann diese Version noch nicht zeigen."
     },
     "toolbar": {
+      "close": "Schließen",
+      "addSortTitle": "Neue Sortierung",
+      "sortBy": "Sortieren nach…",
+      "layout": "Layout",
+      "propertyVisibility": "Sichtbarkeit der Properties",
+      "deleteView": "Ansicht löschen",
       "back": "Zurück",
       "addFilterTitle": "Filter hinzufügen",
       "filterBy": "Filtern nach…",

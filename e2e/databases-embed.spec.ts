@@ -272,12 +272,16 @@ test('typing in cells, filters and view names changes no block and saves nothing
   await page.keyboard.press('Escape');
 
   // A view's name.
-  await block.getByRole('button', { name: 'Actions for “All”' }).click();
-  await page.getByRole('menuitem', { name: 'Rename' }).click();
-  const viewName = block.getByRole('textbox', { name: 'View name' });
-  await expect(viewName).toBeFocused();
-  await page.keyboard.type('Mine');
+  await block
+    .getByRole('group', { name: 'View toolbar' })
+    .getByRole('button', { name: /^View settings/ })
+    .click();
+  const viewName = page
+    .getByRole('dialog', { name: 'View settings' })
+    .getByRole('textbox', { name: 'View name' });
+  await viewName.fill('Mine');
   await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
   await expect(tab(block, 'Mine')).toBeVisible();
 
   await page.waitForTimeout(AUTOSAVE);

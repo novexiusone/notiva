@@ -1,4 +1,5 @@
-import type { LucideIcon } from 'lucide-react';
+import { ArrowLeft, X, type LucideIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { ComponentProps, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -19,10 +20,10 @@ export function ToolbarButton({
     <Button
       type="button"
       variant="ghost"
-      size="icon-xs"
+      size="icon-sm"
       data-active={active || undefined}
       className={cn(
-        'text-muted-foreground data-[active]:text-primary relative size-6 [&_svg:not([class*=size-])]:size-3.5 data-[state=open]:bg-accent',
+        'text-muted-foreground data-[active]:text-primary relative size-7 [&_svg:not([class*=size-])]:size-3.5 data-[state=open]:bg-accent',
         className,
       )}
       {...props}
@@ -62,4 +63,42 @@ export function NativeSelect({
 /** A line that tells what the menu does while it holds nothing. */
 export function EmptyNote({ children }: { children: ReactNode }) {
   return <p className="text-muted-foreground px-1 text-sm">{children}</p>;
+}
+
+/** The title of a panel, with a way back to the one it was opened from and a way to close it. */
+export function PanelHeader({
+  title,
+  onBack,
+  onClose,
+}: {
+  title: string;
+  onBack?: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex items-center gap-1">
+      {onBack ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t('databases.toolbar.back')}
+          onClick={onBack}
+        >
+          <ArrowLeft aria-hidden />
+        </Button>
+      ) : null}
+      <h3 className="min-w-0 flex-1 truncate px-1 text-sm font-medium">{title}</h3>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        aria-label={t('databases.toolbar.close')}
+        onClick={onClose}
+      >
+        <X aria-hidden />
+      </Button>
+    </div>
+  );
 }

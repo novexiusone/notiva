@@ -447,6 +447,13 @@ describe('the views of a database', () => {
     return screen.findByRole('dialog', { name: panel });
   }
 
+  /** Opens the settings of the view and the screen of one of its rows. */
+  async function openSettings(user: ReturnType<typeof renderApp>['user'], row?: RegExp) {
+    const panel = await openMenu(user, /^View settings/, 'View settings');
+    if (row) await user.click(within(panel).getByRole('button', { name: row }));
+    return panel;
+  }
+
   it('shows a tab per view, the first one active, and switching changes the address', async () => {
     const { user, router } = renderApp(withViews);
 
@@ -530,13 +537,13 @@ describe('the views of a database', () => {
 
     const panel = await openMenu(user, /^Sort/, 'Sorts');
     await user.click(within(panel).getByRole('button', { name: 'Add a sort' }));
+    await user.click(within(panel).getByRole('button', { name: 'Status' }));
     const first = () => within(panel).getByRole('group', { name: 'Sort 1' });
-    await user.selectOptions(within(first()).getByRole('combobox', { name: 'Property' }), 'Status');
     expect(await rowTitles()).toEqual(['Build it', 'Test it', 'Write spec']);
 
     await user.click(within(panel).getByRole('button', { name: 'Add a sort' }));
+    await user.click(within(panel).getByRole('button', { name: 'Hours' }));
     const second = () => within(panel).getByRole('group', { name: 'Sort 2' });
-    await user.selectOptions(within(second()).getByRole('combobox', { name: 'Property' }), 'Hours');
     expect(await rowTitles()).toEqual(['Test it', 'Build it', 'Write spec']);
 
     await user.selectOptions(
@@ -556,7 +563,7 @@ describe('the views of a database', () => {
     });
     await waitFor(async () => expect(await rowTitles()).toHaveLength(4));
 
-    const panel = await openMenu(user, /^View settings/, 'View settings');
+    const panel = await openSettings(user, /^Group/);
     await user.selectOptions(within(panel).getByRole('combobox', { name: 'Group by' }), 'Status');
     await user.keyboard('{Escape}');
 
@@ -599,7 +606,7 @@ describe('the views of a database', () => {
       expect(await headerNames()).toEqual(['Name', 'Notes', 'Hours', 'Due', 'Status', '']),
     );
 
-    const panel = await openMenu(user, /^View settings/, 'View settings');
+    const panel = await openSettings(user, /^Property visibility/);
     await user.click(within(panel).getByRole('checkbox', { name: 'Hours' }));
 
     expect(await headerNames()).toEqual(['Name', 'Notes', 'Due', 'Status', '']);
@@ -616,7 +623,7 @@ describe('the views of a database', () => {
 
     const panel = await openMenu(user, /^Sort/, 'Sorts');
     await user.click(within(panel).getByRole('button', { name: 'Add a sort' }));
-    await user.selectOptions(within(panel).getByRole('combobox', { name: 'Property' }), 'Hours');
+    await user.click(within(panel).getByRole('button', { name: 'Hours' }));
     await user.keyboard('{Escape}');
     expect(await rowTitles()).toEqual(['Test it', 'Write spec', 'Build it']);
 
@@ -644,6 +651,7 @@ describe('the views of a database', () => {
     const settle = () => act(() => vi.advanceTimersByTimeAsync(0));
     try {
       await user.click(within(panel).getByRole('button', { name: 'Add a sort' }));
+      await user.click(within(panel).getByRole('button', { name: 'Name' }));
       await settle();
       expect(titles()).toEqual(['Build it', 'Test it', 'Write spec']);
       expect(updateView).not.toHaveBeenCalled();
@@ -694,16 +702,18 @@ describe('the views of a database', () => {
     expect(created).toMatchObject({ name: 'Table', config: emptyTable });
     await waitFor(() => expect(router.state.location.search).toEqual({ view: created.id }));
 
-    await user.click(screen.getByRole('button', { name: 'Actions for “Table”' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
-    const input = await screen.findByRole('textbox', { name: 'View name' });
+    const settings = await openSettings(user);
+    const input = within(settings).getByRole('textbox', { name: 'View name' });
     await user.clear(input);
     await user.type(input, 'Open tasks{Enter}');
     expect(await tab('Open tasks')).toBeInTheDocument();
     await waitFor(async () => expect((await storedView(created.id))?.name).toBe('Open tasks'));
 
-    await user.click(screen.getByRole('button', { name: 'Actions for “Open tasks”' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Delete view' }));
+    await user.click(
+      within(await screen.findByRole('dialog', { name: 'View settings' })).getByRole('button', {
+        name: 'Delete view',
+      }),
+    );
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Delete the view “Open tasks”?');
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
@@ -725,13 +735,9 @@ describe('the views of a database', () => {
   it('cannot delete the last view', async () => {
     const { user } = renderApp({ ...withViews, views: [view('v1', 'All', 0)] });
 
-    await user.click(await screen.findByRole('button', { name: 'Actions for “All”' }));
+    const panel = await openSettings(user);
 
-    expect(await screen.findByRole('menuitem', { name: 'Delete view' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(screen.getByText('A database keeps at least one view.')).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'Delete view' })).toBeDisabled();
   });
 
   it('shows a notice for a view type this version cannot show yet', async () => {

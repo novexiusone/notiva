@@ -129,7 +129,7 @@ test('two views keep different filters, sorts and groupings across a reload', as
   await toolbarButton(page, /^Sort/).click();
   const sorts = page.getByRole('dialog', { name: 'Sorts' });
   await sorts.getByRole('button', { name: 'Add a sort' }).click();
-  await sorts.getByRole('combobox', { name: 'Property' }).selectOption('Hours');
+  await sorts.getByRole('button', { name: 'Hours', exact: true }).click();
   await sorts.getByRole('combobox', { name: 'Direction' }).selectOption('desc');
   await page.keyboard.press('Escape');
   await expect.poll(() => lineNames(page)).toEqual(['Build it', 'Write spec']);
@@ -140,6 +140,10 @@ test('two views keep different filters, sorts and groupings across a reload', as
     .poll(() => lineNames(page))
     .toEqual(['Write spec', 'Build it', 'Test it', 'Plan it']);
   await toolbarButton(page, /^View settings/).click();
+  await page
+    .getByRole('dialog', { name: 'View settings' })
+    .getByRole('button', { name: /^Group/ })
+    .click();
   await page
     .getByRole('dialog', { name: 'View settings' })
     .getByRole('combobox', { name: 'Group by' })
@@ -189,6 +193,7 @@ test('the properties list works with the keyboard alone', async ({ page }) => {
   await button.focus();
   await page.keyboard.press('Enter');
   const menu = page.getByRole('dialog', { name: 'View settings' });
+  await menu.getByRole('button', { name: /^Property visibility/ }).click();
   const hours = menu.getByRole('checkbox', { name: 'Hours' });
   // WebKit, like Safari, reaches buttons (a checkbox is one) only with Option-Tab.
   await hours.focus();
@@ -210,6 +215,10 @@ test('a database of 3,000 rows filters and groups with only the visible rows ren
   await expect(grid(page)).toHaveAttribute('aria-rowcount', '3001');
 
   await toolbarButton(page, /^View settings/).click();
+  await page
+    .getByRole('dialog', { name: 'View settings' })
+    .getByRole('button', { name: /^Group/ })
+    .click();
   await page
     .getByRole('dialog', { name: 'View settings' })
     .getByRole('combobox', { name: 'Group by' })

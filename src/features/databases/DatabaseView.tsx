@@ -180,8 +180,6 @@ function DatabaseViews({
       activeId={activeId}
       onSelect={select}
       onAdd={add}
-      onRename={(id, name) => changeView(id, { name }, { immediately: true })}
-      onDelete={remove}
       toolbar={
         active && definition ? (
           <ViewToolbar
@@ -190,6 +188,10 @@ function DatabaseViews({
             onChange={setConfig}
             grouping={definition.grouping}
             onNewRow={() => createRow.mutate()}
+            view={active}
+            canDelete={views.length > 1}
+            onRename={(name) => changeView(active.id, { name }, { immediately: true })}
+            onDelete={() => remove(active.id)}
           />
         ) : null
       }

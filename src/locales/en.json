@@ -154,6 +154,8 @@
       "noMatches": "No rows match the filters"
     },
     "views": {
+      "icon": "Choose an icon",
+      "iconPicker": "View icon",
       "label": "Views",
       "add": "Add a view",
       "chooseType": "Type",
@@ -172,6 +174,12 @@
       "unavailable": "This kind of view cannot be shown in this version yet."
     },
     "toolbar": {
+      "close": "Close",
+      "addSortTitle": "New sort",
+      "sortBy": "Sort by…",
+      "layout": "Layout",
+      "propertyVisibility": "Property visibility",
+      "deleteView": "Delete view",
       "back": "Back",
       "addFilterTitle": "Add filter",
       "filterBy": "Filter by…",
