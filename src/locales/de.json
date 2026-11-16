@@ -163,6 +163,7 @@
       "unavailable": "Diese Art von Ansicht kann diese Version noch nicht zeigen."
     },
     "toolbar": {
+      "newRow": "Neue Zeile",
       "label": "Einstellungen der Ansicht",
       "filter": "Filter",
       "filters": "Filter",

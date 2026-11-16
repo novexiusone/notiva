@@ -163,6 +163,7 @@
       "unavailable": "This kind of view cannot be shown in this version yet."
     },
     "toolbar": {
+      "newRow": "New row",
       "label": "View settings",
       "filter": "Filter",
       "filters": "Filters",

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   databaseKeys,
+  useCreateRow,
   useCreateView,
   useDatabase,
   useDeleteView,
@@ -96,6 +97,7 @@ function DatabaseViews({
   const search = embedded ? { view: embeddedView } : address;
   const queryClient = useQueryClient();
   const createView = useCreateView(databaseId);
+  const createRow = useCreateRow(databaseId);
   const { change: changeView, flush: flushViews } = useUpdateView(databaseId);
   const deleteView = useDeleteView(databaseId);
   const { views } = database;
@@ -187,6 +189,7 @@ function DatabaseViews({
             properties={database.properties}
             onChange={setConfig}
             grouping={definition.grouping}
+            onNewRow={() => createRow.mutate()}
           />
         ) : null
       }
