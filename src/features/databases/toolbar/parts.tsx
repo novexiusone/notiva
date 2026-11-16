@@ -28,7 +28,8 @@ export function ToolbarButton({
       {...props}
     >
       <Icon aria-hidden />
-      {label}
+      {/* Icon only on narrow views; the name stays for screen readers. */}
+      <span className="max-lg:sr-only">{label}</span>
       {active ? (
         <span className="bg-primary/10 text-primary rounded-sm px-1 text-xs tabular-nums">
           {badge}

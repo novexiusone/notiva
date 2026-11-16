@@ -139,6 +139,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
     });
 
   const width = tableWidth(columns);
+  const rowsShown = items.filter((item) => item.kind === 'row').length;
   const pendingRow = rows.find((row) => row.id === rowToDelete);
 
   return (
@@ -240,6 +241,13 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
             <Plus size={16} aria-hidden />
             {t('databases.table.newRow')}
           </button>
+          {rows.length > 0 ? (
+            <p className="text-muted-foreground px-2 pt-2 text-xs tabular-nums">
+              {rowsShown === rows.length
+                ? t('databases.rowCount', { count: rows.length })
+                : t('databases.table.rowsShown', { shown: rowsShown, total: rows.length })}
+            </p>
+          ) : null}
         </div>
       </section>
       <DeletePageDialog

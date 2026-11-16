@@ -116,6 +116,7 @@
       "rows": "Zeilen",
       "titleColumn": "Name",
       "noRows": "Noch keine Zeilen",
+      "rowsShown": "{{shown}} von {{total}} Zeilen",
       "newRow": "Neu",
       "loadFailed": "Die Zeilen konnten nicht geladen werden.",
       "open": "Öffnen",
