@@ -249,7 +249,9 @@ Three behaviours of SurrealDB 4.0.1 that the research run found:
 
 - `UPDATE … UNSET props[$key]` does nothing and reports no error. `SET props[$key] = NONE` removes the key.
 - An index on a key inside `props` is only used when the path is written out in the schema and in the query. A key passed as a parameter never uses it.
-- Deleting a database with 10,000 rows in one transaction took 13.8 s, because the delete events fire for every row and every block. The repository therefore deletes the rows in chunks of 500 before the database page (#59). That keeps each transaction under about a second, but the whole delete stays slow: the event for a deleted block costs about 0.5 ms per block however the rows are chunked. A faster delete needs different events, which is a migration (#83).
+- Deleting a database with 10,000 rows in one transaction took 13.8 s, and 17 s in chunks of 500 (#59), because the delete events run their lookups for every row and every block: about 0.8 ms per page (seven lookups) and 0.3 ms per block (two lookups). Measured with 2,000 rows and 6,000 blocks: 3.3 s with the events, 0.17 s with the events removed; removing the full-text indexes instead saved only 0.2 to 0.4 s. Every lookup uses its index, so no index is missing; the cost is the number of statements. The fix (#83, migration 11): the events do nothing when the variable `$cascade_done` is `true`, and `delete_database_rows` sets it for the rows it deletes after doing the cascade itself for a whole chunk with set-based statements (the blocks of all rows, the links of the rows and of their blocks). Rows that have subpages are deleted with the events, which find the subpages. Every other delete leaves the variable unset, which is not `true`, so the events run as before; if SurrealDB ever stopped passing the variable to events, the cascade would still happen, only slowly.
+- `WHERE page IN $rows` with 500 ids is slow in a large table: 370 ms for 500 pages of a table with 200,000 blocks, although the plan shows the index. The same lookup written per record, `array::flatten(array::map($rows, |$p| (SELECT VALUE id FROM block WHERE page = $p)))`, took 10 ms. The chunk delete uses the second form. Without it the delete took 17.5 s in the benchmark, no faster than before.
+- The row ids are read once and deleted in slices of 500 rows (the chunk is only there to keep each transaction short), so a later chunk does not read past the index entries of the rows already deleted. Deleting in the background with progress was not built: it would need a state the interface shows, which is outside this change, and the delete now takes about 5 s.
 
 ## Performance targets
 
@@ -265,10 +267,31 @@ Database with 10,000 rows, benchmark profile. "Research" is the research run. "B
 | `load_database` (seven properties, one view)            | report |                                        | median 0.3 to 1.0 ms                                                                                                                           |
 | Delete a select option (2,500 cells emptied)            | report |                                        | 260 to 407 ms                                                                                                                                  |
 | Delete a property / change a type text to number        | report | 513 ms / 536 ms                        | 789 to 1,132 ms / 770 to 988 ms; with the search text of #69 (two runs, same machine and day), 1,621 to 1,693 ms / 1,871 to 1,881 ms           |
-| Delete the database (`delete_page`)                     | report | 13.8 s in one transaction              | 26.6 to 31.0 s in chunks of 500, with 30,000 blocks                                                                                            |
+| Delete the database (`delete_page`)                     | report | 13.8 s in one transaction              | 26.6 to 31.0 s in chunks of 500, with 30,000 blocks; 17.1 s before #83 on a quieter machine, 5.3 to 5.4 s after (idle runs below)              |
 | Size on disk                                            | report |                                        | 481 to 497 MiB for the pages, 530 MiB with the database (+33 to 49 MiB); 546 to 562 MiB after deleting it; the search index of #69 adds 16 MiB |
 
 `list_pages` with the 10,000 ordinary pages alone took a median of 87 to 154 ms and a p95 of 143 to 195 ms in the same runs. The rows roughly double it. The "rows stay in `list_pages`" decision above names 200 ms as the point to revisit it, and the benchmark is past that point. The machine was loaded, so check this on an idle machine before acting on it. The size on disk does not shrink when the database is deleted, because the storage engine appends deletions. Deleting the database took longer here than the 17.5 s measured for #59, probably because of the load.
+
+### Idle machine (#89, #83)
+
+Run twice on 2026-11-17 on the same machine, with SurrealDB 4.0.1 on disk, after the delete change of #83 (migration 11). The load average was 5 to 10 on 12 cores while the first run went and 7 to 10 during the second, which is as quiet as this machine got while other builds ran; the earlier runs had 15 to 55. Median, then p95:
+
+| Measurement                         | Target | Run 1            | Run 2            | Result     |
+| ----------------------------------- | ------ | ---------------- | ---------------- | ---------- |
+| `list_rows`, 10,000 rows            | 100 ms | 59.0 / 93.5 ms   | 56.7 / 72.4 ms   | met        |
+| `create_row`                        | 50 ms  | 33.1 / 39.0 ms   | 32.1 / 38.9 ms   | met        |
+| `list_pages`, 20,002 pages          | 200 ms | 184.9 / 187.1 ms | 177.4 / 180.5 ms | met, close |
+| Search block text, every match      | 200 ms | 106.6 / 112.4 ms | 105.0 / 109.6 ms | met        |
+| `list_pages`, 10,000 pages alone    | 200 ms | 82.3 / 87.2 ms   | 79.3 / 84.0 ms   | met        |
+| Delete the database (30,000 blocks) | report | 5,412 ms         | 5,284 ms         |            |
+
+Decisions:
+
+- The four targets that were reported as missed under load are met on a quiet machine. They stay as they are; no target was loosened.
+- `list_pages` with the rows is within 10% of its target. Rows stay in `list_pages`. The point to revisit is unchanged: over 200 ms on a quiet machine.
+- `create_row` stays as it is: it sorts the rows to find the last position and still takes 33 ms. An index on `database, position` was not tried; revisit when `create_row` exceeds 50 ms on a quiet machine.
+- Size on disk: 464.9 MiB for the pages, 513.7 MiB with the database, 598.4 MiB after deleting it, in both runs. The storage engine (SurrealKV) is log-structured and the repository has no way to compact it; nothing was found in the embedded API that does. Not solved: the space is not reclaimed after a delete. This stays open in #89.
+- "Delete a page with 20 blocks and its subpages" (target 50 ms) had a median of 12 ms and a p95 of 51 to 65 ms over the few samples taken; not part of this change.
 
 Not measured: how long the WebView takes to parse the 2 MiB that 10,000 rows are as JSON, and databases with long text cells.
 

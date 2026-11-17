@@ -13,30 +13,35 @@ use crate::domain::{Database, PageKind, Property, PropertyType, SelectOption, Vi
 const FIRST_VIEW_NAME: &str = "Table";
 
 /// How many rows of a database one transaction deletes. The transaction
-/// does the cascade with set-based statements (see `CHUNK_DELETE`).
-///
-/// Measured on disk in the benchmark profile with 10,000 rows, seven
-/// properties and three blocks per row, on a machine that was busy with
-/// other work (#83): in one transaction 5.3 s, in chunks of 2,500 rows 5.2 s,
-/// of 1,000 rows 14 s, of 500 rows 18 s, of 50 rows 47 s. Every chunk costs
-/// more than its rows, so small chunks are slow. 2,500 rows stay at about a
-/// second per transaction on a quiet machine.
-pub(super) const ROW_CHUNK: usize = 2500;
+/// does the cascade with set-based statements (see `CHUNK_DELETE`), so the
+/// chunk is only there to keep each transaction short; see "Delete the
+/// database" in SPEC-databases for the measurements.
+pub(super) const ROW_CHUNK: usize = 500;
 
 /// Deletes the rows `$rows` of a database. The rows with subpages go through the delete events, which delete
 /// the subpages with their own cascade. The others are deleted with the
-/// cascade done here for all of them at once, and `$cascade_done` tells the
+/// cascade done here for all of them at once (the lookups are written one
+/// record at a time with `array::map`, because `WHERE page IN $rows` took
+/// 370 ms for 500 rows where this takes 10 ms in a large table), and `$cascade_done` tells the
 /// events (migration 11) to do nothing for them. The cascade is that of the
 /// event `page_deleted`: blocks, and the links of the pages and of their
 /// blocks. A row is no database and no database's target, so it has no
 /// properties and no views.
 const CHUNK_DELETE: &str = "BEGIN TRANSACTION;
-    LET $parents = array::distinct((SELECT VALUE parent FROM page WHERE parent IN $rows));
+    LET $parents = array::distinct(array::flatten(
+        array::map($rows, |$p| (SELECT VALUE parent FROM page WHERE parent = $p))));
     LET $plain = array::complement($rows, $parents);
-    LET $blocks = (SELECT VALUE id FROM block WHERE page IN $plain);
-    DELETE (SELECT VALUE id FROM links_to WHERE block IN $blocks) RETURN NONE;
-    DELETE (SELECT VALUE id FROM links_to WHERE in IN $plain) RETURN NONE;
-    DELETE (SELECT VALUE id FROM links_to WHERE out IN $plain) RETURN NONE;
+    LET $blocks = array::flatten(
+        array::map($plain, |$p| (SELECT VALUE id FROM block WHERE page = $p)));
+    LET $block_links = array::flatten(
+        array::map($blocks, |$b| (SELECT VALUE id FROM links_to WHERE block = $b)));
+    LET $in_links = array::flatten(
+        array::map($plain, |$p| (SELECT VALUE id FROM links_to WHERE in = $p)));
+    LET $out_links = array::flatten(
+        array::map($plain, |$p| (SELECT VALUE id FROM links_to WHERE out = $p)));
+    DELETE $block_links RETURN NONE;
+    DELETE $in_links RETURN NONE;
+    DELETE $out_links RETURN NONE;
     LET $cascade_done = true;
     DELETE $blocks RETURN NONE;
     DELETE $plain RETURN NONE;
