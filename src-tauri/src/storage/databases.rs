@@ -23,7 +23,7 @@ pub(super) const ROW_CHUNK: usize = 500;
 /// cascade done here for all of them at once (the lookups are written one
 /// record at a time with `array::map`, because `WHERE page IN $rows` took
 /// 370 ms for 500 rows where this takes 10 ms in a large table), and `$cascade_done` tells the
-/// events (migration 11) to do nothing for them. The cascade is that of the
+/// events (migration 12) to do nothing for them. The cascade is that of the
 /// event `page_deleted`: blocks, and the links of the pages and of their
 /// blocks. A row is no database and no database's target, so it has no
 /// properties and no views.

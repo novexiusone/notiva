@@ -70,7 +70,7 @@ links_to       relation page → page
 - Record ids are the stable ids: BlockNote's block id becomes the id of the `block` record.
 - Indexes: `page.parent`, `block.page`, and full-text indexes on `page.title` and `block.text`.
 - Backlinks are a graph query: `SELECT <-links_to<-page FROM $page`.
-- Deleting a page deletes its subpages, its blocks and its links; deleting a block deletes its child blocks and the links it contains. This is done by table events so no caller can forget it. The events do nothing while the variable `$cascade_done` is `true`; only the bulk delete of the rows of a database sets it, after doing the same cascade itself with set-based statements (migration 11, SPEC-databases).
+- Deleting a page deletes its subpages, its blocks and its links; deleting a block deletes its child blocks and the links it contains. This is done by table events so no caller can forget it. The events do nothing while the variable `$cascade_done` is `true`; only the bulk delete of the rows of a database sets it, after doing the same cascade itself with set-based statements (migration 12, SPEC-databases).
 
 Later modules change the schema only by adding a migration.
 
