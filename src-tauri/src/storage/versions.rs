@@ -122,14 +122,24 @@ impl Storage {
         }
         .await;
 
-        if due.ok().flatten().unwrap_or(false) {
-            let _ = self.insert_version(page_id, &document(stored)).await;
+        match due {
+            Ok(Some(true)) => {
+                if let Err(error) = self.insert_version(page_id, &document(stored)).await {
+                    eprintln!("could not keep a version of page {page_id}: {error}");
+                }
+            }
+            Ok(_) => {}
+            Err(error) => eprintln!("could not check the versions of page {page_id}: {error}"),
         }
     }
 
     /// Stores a version unless it equals the newest one, then removes the
     /// versions beyond the limit. Returns whether one was stored.
-    async fn insert_version(&self, page_id: &str, blocks: &[Block]) -> Result<bool, StorageError> {
+    pub(super) async fn insert_version(
+        &self,
+        page_id: &str,
+        blocks: &[Block],
+    ) -> Result<bool, StorageError> {
         let json = serde_json::to_string(blocks).map_err(|error| {
             StorageError::Invalid(format!("the blocks cannot be saved: {error}"))
         })?;
@@ -141,14 +151,14 @@ impl Storage {
                  LET $latest = (SELECT VALUE blocks FROM page_version WHERE page = $page
                      ORDER BY created_at DESC LIMIT 1)[0];
                  IF $latest = $blocks {
-                     RETURN false;
+                     false
                  } ELSE {
                      CREATE page_version SET page = $page, title = $page.title ?? '',
                          blocks = $blocks, block_count = $count, preview = $preview;
                      LET $old = (SELECT VALUE id FROM page_version WHERE page = $page
                          ORDER BY created_at DESC START $max);
                      DELETE $old RETURN NONE;
-                     RETURN true;
+                     true
                  };",
             )
             .bind(("page_id", page_id.to_owned()))
@@ -158,9 +168,9 @@ impl Storage {
             .bind(("max", MAX_VERSIONS))
             .await?
             .check()?
-            .take(3)?;
+            .take(2)?;
 
-        Ok(stored.unwrap_or(false))
+        stored.ok_or_else(|| StorageError::Database("a version was not stored".into()))
     }
 
     /// The versions of a page, the newest first.

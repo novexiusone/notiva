@@ -38,6 +38,12 @@ Notion-style databases are the first feature after the MVP (#19, #20). They are 
 
 Build order: `databases` → `database-views`, `database-embed`. `search` and `export` each get one extension (#69, #68).
 
+### Backup
+
+| Module id | Responsibility                                                                                        | Depends on | Spec                             |
+| --------- | ----------------------------------------------------------------------------------------------------- | ---------- | -------------------------------- |
+| `backup`  | Backup archive, safe restore, local schedule with pruning, passphrase encryption (#26, backend first) | `storage`  | [SPEC-backup.md](SPEC-backup.md) |
+
 ### Work packages
 
 Each package is one issue, built by one subagent on its own branch and delivered as one pull request. The issue lists the files the package owns. Packages in the same wave own different files and can be built at the same time; a wave starts when the packages it depends on are merged.

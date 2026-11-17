@@ -133,6 +133,7 @@ impl Storage {
         page_id: &str,
         blocks: &[Block],
     ) -> Result<SaveSummary, StorageError> {
+        let _gate = self.write_gate.lock().await;
         self.require_page(page_id).await?;
 
         let mut incoming = Vec::new();

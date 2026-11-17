@@ -17,6 +17,9 @@ DEFINE FIELD groups ON trash TYPE int DEFAULT 0;
 -- False while the page is being moved to the trash. An entry that stays
 -- incomplete (a crash) is rolled back at startup.
 DEFINE FIELD complete ON trash TYPE bool DEFAULT false;
+-- True while the entry is being deleted for good: it is no longer restorable
+-- and a crash is finished at the next start.
+DEFINE FIELD purging ON trash TYPE bool DEFAULT false;
 DEFINE FIELD deleted_at ON trash TYPE datetime DEFAULT time::now();
 DEFINE INDEX trash_deleted_at ON trash FIELDS deleted_at;
 

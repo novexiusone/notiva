@@ -4,6 +4,7 @@
 //! uses plain domain types and [`StorageError`], so the rest of the backend
 //! does not depend on the database.
 
+mod backup;
 mod blocks;
 mod databases;
 mod error;
@@ -28,6 +29,7 @@ use std::path::Path;
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, SurrealKv};
 
+pub use backup::restore_snapshot;
 pub use error::StorageError;
 pub(crate) use properties::number_as_text;
 
@@ -37,6 +39,9 @@ const DATABASE: &str = "main";
 /// A handle to the embedded database with its schema up to date.
 pub struct Storage {
     db: Surreal<Db>,
+    /// Held while a page is moved to the trash and while blocks are saved,
+    /// so that a save cannot slip in between copying a page and deleting it.
+    write_gate: tokio::sync::Mutex<()>,
 }
 
 impl Storage {
@@ -57,7 +62,10 @@ impl Storage {
     async fn prepare(db: Surreal<Db>) -> Result<Self, StorageError> {
         db.use_ns(NAMESPACE).use_db(DATABASE).await?;
         migrations::run(&db, migrations::MIGRATIONS).await?;
-        let storage = Self { db };
+        let storage = Self {
+            db,
+            write_gate: tokio::sync::Mutex::new(()),
+        };
         // Housekeeping must never keep the app from starting: both only tidy
         // the trash and are tried again at the next start.
         let _ = storage.recover_trash().await;

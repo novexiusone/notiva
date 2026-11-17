@@ -214,3 +214,14 @@ async fn versions_go_with_a_deleted_page_and_come_back_with_a_trashed_one() {
         .unwrap();
     assert_eq!(left, Some(0));
 }
+
+#[tokio::test]
+async fn a_version_is_written_and_an_identical_one_is_not() {
+    let (storage, id) = storage_with_page().await;
+    let blocks = [paragraph("a", "one")];
+
+    assert!(storage.insert_version(&id, &blocks).await.unwrap());
+    assert_eq!(storage.list_page_versions(&id).await.unwrap().len(), 1);
+    assert!(!storage.insert_version(&id, &blocks).await.unwrap());
+    assert_eq!(storage.list_page_versions(&id).await.unwrap().len(), 1);
+}

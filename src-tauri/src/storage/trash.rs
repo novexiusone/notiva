@@ -95,6 +95,8 @@ struct EntryRow {
     database: Option<String>,
     page_count: i64,
     groups: i64,
+    complete: bool,
+    purging: bool,
     deleted_at: String,
 }
 
@@ -118,7 +120,7 @@ impl From<EntryRow> for TrashedPage {
 }
 
 const ENTRY_FIELDS: &str = "record::id(id) AS id, title, kind, icon, parent, database, \
-     page_count, groups, <string> deleted_at AS deleted_at";
+     page_count, groups, complete, purging, <string> deleted_at AS deleted_at";
 
 #[derive(SurrealValue)]
 struct ConfigRow {
@@ -141,6 +143,12 @@ impl Storage {
             .find_page(id)
             .await?
             .ok_or_else(|| StorageError::NotFound(format!("page {id}")))?;
+        let _gate = self.write_gate.lock().await;
+        // An entry for a page that is live is a leftover of an earlier attempt
+        // (a purge that stopped): its records are not needed any more.
+        if self.entry(id).await?.is_some() {
+            self.purge_entry(id).await?;
+        }
         let ids = self.subtree(id).await?;
 
         let groups = ids.chunks(GROUP).count();
@@ -166,7 +174,7 @@ impl Storage {
             .bind(("groups", groups as i64))
             .await?
             .check()
-            .map_err(|_| StorageError::Invalid(format!("page {id} is already being deleted")))?;
+            .map_err(|error| StorageError::Database(error.to_string()))?;
 
         let archived = async {
             for (grp, group) in ids.chunks(GROUP).enumerate() {
@@ -194,7 +202,7 @@ impl Storage {
         let rows: Vec<EntryRow> = self
             .db
             .query(format!(
-                "SELECT {ENTRY_FIELDS} FROM trash WHERE complete = true ORDER BY deleted_at DESC"
+                "SELECT {ENTRY_FIELDS} FROM trash WHERE complete = true AND purging = false ORDER BY deleted_at DESC"
             ))
             .await?
             .check()?
@@ -207,7 +215,22 @@ impl Storage {
     /// returns to its old parent, or to the top level when that parent is
     /// gone. A row whose database is gone returns as an ordinary page.
     pub async fn restore_page(&self, id: &str) -> Result<Page, StorageError> {
-        let entry = self.entry(id).await?.ok_or_else(|| trash_not_found(id))?;
+        let entry = self
+            .entry(id)
+            .await?
+            .filter(|entry| entry.complete && !entry.purging)
+            .ok_or_else(|| trash_not_found(id))?;
+
+        // A row belongs to its database: its cells are lost when the row
+        // comes back without it, so the database has to come back first.
+        if let Some(database_id) = &entry.database {
+            let live = self.find_page(database_id).await?.is_some();
+            if !live && self.entry(database_id).await?.is_some() {
+                return Err(StorageError::Invalid(
+                    "the database of this row is in the trash: restore the database first".into(),
+                ));
+            }
+        }
 
         self.restore_items(id, entry.groups.max(0) as usize).await?;
         self.place_restored(id, &entry).await?;
@@ -220,7 +243,10 @@ impl Storage {
 
     /// Deletes a trashed page for good.
     pub async fn delete_page_permanently(&self, id: &str) -> Result<(), StorageError> {
-        self.entry(id).await?.ok_or_else(|| trash_not_found(id))?;
+        self.entry(id)
+            .await?
+            .filter(|entry| entry.complete && !entry.purging)
+            .ok_or_else(|| trash_not_found(id))?;
         self.purge_entry(id).await
     }
 
@@ -229,7 +255,9 @@ impl Storage {
     pub async fn empty_trash(&self) -> Result<usize, StorageError> {
         let ids: Vec<String> = self
             .db
-            .query("SELECT VALUE record::id(id) FROM trash WHERE complete = true")
+            .query(
+                "SELECT VALUE record::id(id) FROM trash WHERE complete = true AND purging = false",
+            )
             .await?
             .check()?
             .take(0)?;
@@ -290,7 +318,7 @@ impl Storage {
             .db
             .query(
                 "SELECT VALUE record::id(id) FROM trash
-                     WHERE complete = true AND deleted_at < time::now() - <duration> $span",
+                     WHERE complete = true AND purging = false AND deleted_at < time::now() - <duration> $span",
             )
             .bind(("span", format!("{days}d")))
             .await?
@@ -307,7 +335,10 @@ impl Storage {
     pub async fn recover_trash(&self) -> Result<(), StorageError> {
         let ids: Vec<String> = self
             .db
-            .query("SELECT VALUE record::id(id) FROM trash WHERE complete = false")
+            .query(
+                "SELECT VALUE record::id(id) FROM trash
+                     WHERE complete = false OR purging = true",
+            )
             .await?
             .check()?
             .take(0)?;
@@ -323,6 +354,10 @@ impl Storage {
         let Some(entry) = self.entry(id).await? else {
             return Ok(());
         };
+        // A purge that stopped is finished, not undone: its items are partly gone.
+        if entry.purging {
+            return self.purge_entry(id).await;
+        }
         self.restore_items(id, entry.groups.max(0) as usize).await?;
         self.purge_entry(id).await
     }
@@ -436,7 +471,7 @@ impl Storage {
         if let Some(database_id) = &entry.database {
             let database = self.find_page(database_id).await?;
             if database.is_some_and(|page| page.kind == PageKind::Database) {
-                return Ok(());
+                return self.avoid_position_clash(id, Some(database_id)).await;
             }
             // The database is gone, so the row becomes an ordinary page: its
             // cells had no property left to belong to.
@@ -446,10 +481,36 @@ impl Storage {
         if let Some(parent_id) = &entry.parent {
             let parent = self.find_page(parent_id).await?;
             if parent.is_some_and(|page| page.kind != PageKind::Database) {
-                return Ok(());
+                return self.avoid_position_clash(id, Some(parent_id)).await;
             }
             return self.move_to_top(id, false).await;
         }
+        Ok(())
+    }
+
+    /// Puts a restored page last among its siblings when one of them took its
+    /// position while it was in the trash.
+    async fn avoid_position_clash(
+        &self,
+        id: &str,
+        parent_id: Option<&String>,
+    ) -> Result<(), StorageError> {
+        self.db
+            .query(
+                "LET $page = type::record('page', $id);
+                 LET $parent = type::record('page', $parent_id);
+                 LET $clash = (SELECT VALUE id FROM page
+                     WHERE parent = $parent AND position = $page.position AND id != $page LIMIT 1);
+                 IF array::len($clash) > 0 {
+                     LET $last = (SELECT VALUE position FROM page WHERE parent = $parent
+                         ORDER BY position DESC LIMIT 1)[0];
+                     UPDATE $page SET position = $last + 1.0;
+                 };",
+            )
+            .bind(("id", id.to_owned()))
+            .bind(("parent_id", parent_id.cloned()))
+            .await?
+            .check()?;
         Ok(())
     }
 
@@ -474,6 +535,13 @@ impl Storage {
 
     /// Removes an entry and its items, in chunks.
     async fn purge_entry(&self, id: &str) -> Result<(), StorageError> {
+        // From here the entry cannot be restored any more; a crash is finished
+        // at the next start instead of leaving a half-empty entry to restore.
+        self.db
+            .query("UPDATE type::record('trash', $id) SET purging = true")
+            .bind(("id", id.to_owned()))
+            .await?
+            .check()?;
         loop {
             let removed: Option<usize> = self
                 .db

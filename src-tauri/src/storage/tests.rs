@@ -676,7 +676,10 @@ async fn a_database_at_version_5_migrates_and_its_rows_are_found_by_their_proper
     .unwrap();
 
     migrations::run(&db, MIGRATIONS).await.unwrap();
-    let storage = Storage { db };
+    let storage = Storage {
+        db,
+        write_gate: tokio::sync::Mutex::new(()),
+    };
 
     assert_eq!(
         migrations::current_version(&storage.db).await.unwrap(),
