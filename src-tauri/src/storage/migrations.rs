@@ -66,11 +66,6 @@ pub(super) const MIGRATIONS: &[Migration] = &[
         name: "fill_props_text",
         sql: include_str!("migrations/0010_fill_props_text.surql"),
     },
-    Migration {
-        version: 12,
-        name: "bulk_delete",
-        sql: include_str!("migrations/0012_bulk_delete.surql"),
-    },
 ];
 
 const BOOTSTRAP: &str = "

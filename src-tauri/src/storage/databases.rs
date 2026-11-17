@@ -18,15 +18,15 @@ const FIRST_VIEW_NAME: &str = "Table";
 /// database" in SPEC-databases for the measurements.
 pub(super) const ROW_CHUNK: usize = 500;
 
-/// Deletes the rows `$rows` of a database. The rows with subpages go through the delete events, which delete
-/// the subpages with their own cascade. The others are deleted with the
-/// cascade done here for all of them at once (the lookups are written one
+/// Deletes the rows `$rows` of a database. The rows with subpages are
+/// deleted last through the delete events, which delete the subpages with
+/// their own cascade. For the others the cascade of the event `page_deleted`
+/// is done here for all of them at once: blocks, and the links of the pages
+/// and of their blocks. The events still fire for every deleted record, but
+/// find nothing left to delete. A row is no database and no database's
+/// target, so it has no properties and no views. The lookups are written one
 /// record at a time with `array::map`, because `WHERE page IN $rows` took
-/// 370 ms for 500 rows where this takes 10 ms in a large table), and `$cascade_done` tells the
-/// events (migration 12) to do nothing for them. The cascade is that of the
-/// event `page_deleted`: blocks, and the links of the pages and of their
-/// blocks. A row is no database and no database's target, so it has no
-/// properties and no views.
+/// 370 ms for 500 rows where this takes 10 ms in a large table.
 const CHUNK_DELETE: &str = "BEGIN TRANSACTION;
     LET $parents = array::distinct(array::flatten(
         array::map($rows, |$p| (SELECT VALUE parent FROM page WHERE parent = $p))));
@@ -42,10 +42,8 @@ const CHUNK_DELETE: &str = "BEGIN TRANSACTION;
     DELETE $block_links RETURN NONE;
     DELETE $in_links RETURN NONE;
     DELETE $out_links RETURN NONE;
-    LET $cascade_done = true;
     DELETE $blocks RETURN NONE;
     DELETE $plain RETURN NONE;
-    LET $cascade_done = false;
     DELETE $parents RETURN NONE;
     COMMIT TRANSACTION;";
 
@@ -572,98 +570,125 @@ mod tests {
         assert_eq!(count(&storage, "block").await, 0);
     }
 
-    async fn link(storage: &Storage, from: &str, to: &str, block: &str) {
+    /// The same records in a fresh storage every time, with fixed ids: a
+    /// database `db` with five rows `r0` to `r4` that each have a block with
+    /// a child block, a subpage `sub` of `r1` with a block, links from blocks
+    /// of rows and subpage to `other`, links from `other` to rows, and a
+    /// second database `kept` with one row, a block and a link.
+    async fn fixture() -> Storage {
+        let storage = storage().await;
+        let mut sql = String::from(
+            "CREATE page:db SET kind = 'database', title = 'db', position = 0.0;
+             CREATE page:kept SET kind = 'database', title = 'kept', position = 1.0;
+             CREATE page:other SET title = 'other', position = 2.0;
+             CREATE property:p SET database = page:db, name = 'P', type = 'text';
+             CREATE view:v SET database = page:db, name = 'V', config = {};
+             CREATE page:kr SET title = 'kr', parent = page:kept, database = page:kept;
+             CREATE block:kb SET page = page:kr, type = 'paragraph';
+             RELATE page:kr->links_to->page:other SET block = block:kb;
+             CREATE page:sub SET title = 'sub', parent = page:r1;
+             CREATE block:sub SET page = page:sub, type = 'paragraph';
+             RELATE page:sub->links_to->page:other SET block = block:sub;",
+        );
+        for row in 0..5 {
+            sql.push_str(&format!(
+                "CREATE page:r{row} SET title = 'r{row}', parent = page:db, database = page:db,
+                     position = {row}.0, props = {{}};
+                 CREATE block:r{row}a SET page = page:r{row}, type = 'paragraph';
+                 CREATE block:r{row}b SET page = page:r{row}, parent = block:r{row}a,
+                     type = 'paragraph';"
+            ));
+        }
+        sql.push_str(
+            "RELATE page:r0->links_to->page:other SET block = block:r0b;
+             RELATE page:other->links_to->page:r2 SET block = block:kb;
+             RELATE page:other->links_to->page:r3 SET block = block:r0a;",
+        );
+        storage.db.query(sql).await.unwrap().check().unwrap();
         storage
-            .db
-            .query(format!(
-                "RELATE page:`{from}`->links_to->page:`{to}` SET block = block:`{block}`;"
-            ))
-            .await
-            .unwrap()
-            .check()
-            .unwrap();
     }
 
-    /// The set-based delete of a chunk does what the delete events do: it
-    /// removes the blocks with their children, the links of the rows and of
-    /// their blocks, and the subpages of a row, and it keeps what belongs to
-    /// other pages. Rows with and without subpages share a chunk.
-    #[tokio::test]
-    async fn a_chunk_delete_cascades_like_the_events_do() {
-        let storage = storage().await;
-        let database = filled_database(&storage, None, 5).await;
-        let rows = storage.list_rows(&database.page.id).await.unwrap();
-        let other = storage.create_page(None).await.unwrap().id;
-        let kept = filled_database(&storage, None, 1).await;
-        let kept_row = storage.list_rows(&kept.page.id).await.unwrap().remove(0).id;
-
-        // A block with a child block in every row.
-        for row in &rows {
-            let mut parent = paragraph(&format!("parent-{}", row.id));
-            parent.children = vec![paragraph(&format!("child-{}", row.id))];
-            let mut blocks = storage.load_blocks(&row.id).await.unwrap();
-            blocks.push(parent);
-            storage.save_blocks(&row.id, &blocks).await.unwrap();
-        }
-        // A subpage with a block below the second row.
-        let subpage = storage.create_page(Some(&rows[1].id)).await.unwrap().id;
-        storage
-            .save_blocks(&subpage, &[paragraph("sub")])
-            .await
-            .unwrap();
-        link(&storage, &subpage, &other, "sub").await;
-        // Links from the blocks of rows, to a row, and between pages that stay.
-        link(
-            &storage,
-            &rows[0].id,
-            &other,
-            &format!("child-{}", rows[0].id),
-        )
-        .await;
-        link(
-            &storage,
-            &other,
-            &rows[3].id,
-            &format!("{}-0", kept.page.id),
-        )
-        .await;
-        link(&storage, &kept_row, &other, &format!("{}-0", kept.page.id)).await;
-        assert_eq!(count(&storage, "links_to").await, 4);
-        assert_eq!(count(&storage, "block").await, 5 + 10 + 1 + 1);
-
-        storage
-            .delete_database_rows(&database.page.id, 3)
-            .await
-            .unwrap();
-
-        assert!(
-            storage
-                .list_rows(&database.page.id)
+    /// The ids of every record of the tables the cascade touches.
+    async fn records(storage: &Storage) -> Vec<(&'static str, Vec<String>)> {
+        let mut all = Vec::new();
+        for table in ["page", "block", "links_to", "property", "view"] {
+            // The ids of links are random, so a link is named by its ends.
+            let name = if table == "links_to" {
+                "<string>in + '>' + <string>out + '@' + <string>block"
+            } else {
+                "<string>id"
+            };
+            let mut ids: Vec<String> = storage
+                .db
+                .query(format!("SELECT VALUE {name} FROM {table}"))
                 .await
                 .unwrap()
-                .is_empty()
-        );
-        assert_eq!(count(&storage, "block").await, 1);
-        assert_eq!(count(&storage, "links_to").await, 1);
-        let mut expected = vec![
-            database.page.id.clone(),
-            other.clone(),
-            kept.page.id.clone(),
-            kept_row,
-        ];
-        expected.sort();
-        assert_eq!(page_ids(&storage).await, expected);
+                .take(0)
+                .unwrap();
+            ids.sort();
+            all.push((table, ids));
+        }
+        all
+    }
 
-        // The events work again afterwards in the same connection.
-        let page = storage.create_page(None).await.unwrap().id;
+    /// The set-based delete of a chunk removes exactly what the delete events
+    /// remove. One copy of the fixture loses its rows through the events (one
+    /// `DELETE` per row), the other through `delete_database_rows`, with rows
+    /// with and without subpages in one chunk; every table must match.
+    #[tokio::test]
+    async fn a_chunk_delete_removes_what_the_events_remove() {
+        let by_events = fixture().await;
+        for row in 0..5 {
+            by_events
+                .db
+                .query(format!("DELETE page:r{row}"))
+                .await
+                .unwrap()
+                .check()
+                .unwrap();
+        }
+        let by_chunk = fixture().await;
+
+        by_chunk.delete_database_rows("db", 3).await.unwrap();
+
+        let expected = records(&by_events).await;
+        assert_eq!(records(&by_chunk).await, expected);
+        // And that is what should be left: the database with its property
+        // and view, the other database with its row, block and link.
+        let table = |name: &str| {
+            expected
+                .iter()
+                .find(|(table, _)| *table == name)
+                .unwrap()
+                .1
+                .clone()
+        };
+        assert_eq!(table("block"), ["block:kb"]);
+        assert_eq!(table("property"), ["property:p"]);
+        assert_eq!(table("view"), ["view:v"]);
+        assert_eq!(table("links_to").len(), 1);
+        assert_eq!(table("page").len(), 4);
+    }
+
+    /// A row is never a database: a database below a row has no `database`
+    /// field, so the chunk delete does not take it for a row, and deleting
+    /// the row cascades its properties and views through the events.
+    #[tokio::test]
+    async fn a_database_below_a_row_is_not_a_row_of_the_outer_one() {
+        let storage = storage().await;
+        let outer = filled_database(&storage, None, 1).await;
+        let row = storage.list_rows(&outer.page.id).await.unwrap().remove(0);
+        let inner = filled_database(&storage, Some(&row.id), 2).await;
+
         storage
-            .save_blocks(&page, &[paragraph("after")])
+            .delete_database_rows(&outer.page.id, 10)
             .await
             .unwrap();
-        link(&storage, &page, &other, "after").await;
-        storage.delete_page(&page).await.unwrap();
-        assert_eq!(count(&storage, "block").await, 1);
-        assert_eq!(count(&storage, "links_to").await, 1);
+
+        // The inner database lost its rows first, then went with the row.
+        assert!(storage.load_database(&inner.page.id).await.is_err());
+        assert_eq!(count(&storage, "property").await, 1);
+        assert_eq!(count(&storage, "view").await, 2);
     }
 
     #[tokio::test]
