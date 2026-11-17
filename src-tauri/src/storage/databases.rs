@@ -12,17 +12,37 @@ use crate::domain::{Database, PageKind, Property, PropertyType, SelectOption, Vi
 /// The name of the view a new database starts with.
 const FIRST_VIEW_NAME: &str = "Table";
 
-/// How many rows of a database one transaction deletes. Deleting a row fires
-/// the delete events for the row and its blocks inside the transaction, and
-/// one transaction for 10,000 rows took 13.8 s in the research run.
+/// How many rows of a database one transaction deletes. The transaction
+/// does the cascade with set-based statements (see `CHUNK_DELETE`).
 ///
 /// Measured on disk in the benchmark profile with 10,000 rows, seven
-/// properties and three blocks per row: 23.8 s in one transaction, 17.5 to
-/// 17.7 s in chunks of 500 to 2,500 rows (18.8 s with 100). Without blocks:
-/// 1.5 s in one transaction, 1.7 to 1.9 s in chunks of 500 to 2,500. The
-/// block events dominate either way; 500 keeps each transaction under a
-/// second without costing anything measurable.
-pub(super) const ROW_CHUNK: usize = 500;
+/// properties and three blocks per row, on a machine that was busy with
+/// other work (#83): in one transaction 5.3 s, in chunks of 2,500 rows 5.2 s,
+/// of 1,000 rows 14 s, of 500 rows 18 s, of 50 rows 47 s. Every chunk costs
+/// more than its rows, so small chunks are slow. 2,500 rows stay at about a
+/// second per transaction on a quiet machine.
+pub(super) const ROW_CHUNK: usize = 2500;
+
+/// Deletes the rows `$rows` of a database. The rows with subpages go through the delete events, which delete
+/// the subpages with their own cascade. The others are deleted with the
+/// cascade done here for all of them at once, and `$cascade_done` tells the
+/// events (migration 11) to do nothing for them. The cascade is that of the
+/// event `page_deleted`: blocks, and the links of the pages and of their
+/// blocks. A row is no database and no database's target, so it has no
+/// properties and no views.
+const CHUNK_DELETE: &str = "BEGIN TRANSACTION;
+    LET $parents = array::distinct((SELECT VALUE parent FROM page WHERE parent IN $rows));
+    LET $plain = array::complement($rows, $parents);
+    LET $blocks = (SELECT VALUE id FROM block WHERE page IN $plain);
+    DELETE (SELECT VALUE id FROM links_to WHERE block IN $blocks) RETURN NONE;
+    DELETE (SELECT VALUE id FROM links_to WHERE in IN $plain) RETURN NONE;
+    DELETE (SELECT VALUE id FROM links_to WHERE out IN $plain) RETURN NONE;
+    LET $cascade_done = true;
+    DELETE $blocks RETURN NONE;
+    DELETE $plain RETURN NONE;
+    LET $cascade_done = false;
+    DELETE $parents RETURN NONE;
+    COMMIT TRANSACTION;";
 
 /// A page found while walking down the tree, and whether it is a database.
 #[derive(SurrealValue)]
@@ -187,26 +207,28 @@ impl Storage {
                 .take(1)?;
         }
 
+        // The ids of the rows are read once and deleted in slices. Asking for
+        // the first rows again after every chunk would read past the entries
+        // of the rows just deleted, which makes the delete slower with every
+        // chunk. Rows added meanwhile are found by the next pass.
         for database in databases.into_iter().rev() {
             loop {
-                let deleted: Option<usize> = self
+                let rows: Vec<RecordId> = self
                     .db
-                    .query(
-                        "BEGIN TRANSACTION;
-                         LET $database = $record;
-                         LET $rows = (SELECT VALUE id FROM page WHERE database = $database
-                             LIMIT $chunk);
-                         DELETE $rows RETURN NONE;
-                         RETURN array::len($rows);
-                         COMMIT TRANSACTION;",
-                    )
+                    .query("SELECT VALUE id FROM page WHERE database = $record")
                     .bind(("record", database.clone()))
-                    .bind(("chunk", chunk))
                     .await?
                     .check()?
-                    .take(4)?;
-                if deleted.unwrap_or(0) < chunk {
+                    .take(0)?;
+                if rows.is_empty() {
                     break;
+                }
+                for slice in rows.chunks(chunk.max(1)) {
+                    self.db
+                        .query(CHUNK_DELETE)
+                        .bind(("rows", slice.to_vec()))
+                        .await?
+                        .check()?;
                 }
             }
         }
@@ -543,6 +565,100 @@ mod tests {
         expected.sort();
         assert_eq!(page_ids(&storage).await, expected);
         assert_eq!(count(&storage, "block").await, 0);
+    }
+
+    async fn link(storage: &Storage, from: &str, to: &str, block: &str) {
+        storage
+            .db
+            .query(format!(
+                "RELATE page:`{from}`->links_to->page:`{to}` SET block = block:`{block}`;"
+            ))
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+    }
+
+    /// The set-based delete of a chunk does what the delete events do: it
+    /// removes the blocks with their children, the links of the rows and of
+    /// their blocks, and the subpages of a row, and it keeps what belongs to
+    /// other pages. Rows with and without subpages share a chunk.
+    #[tokio::test]
+    async fn a_chunk_delete_cascades_like_the_events_do() {
+        let storage = storage().await;
+        let database = filled_database(&storage, None, 5).await;
+        let rows = storage.list_rows(&database.page.id).await.unwrap();
+        let other = storage.create_page(None).await.unwrap().id;
+        let kept = filled_database(&storage, None, 1).await;
+        let kept_row = storage.list_rows(&kept.page.id).await.unwrap().remove(0).id;
+
+        // A block with a child block in every row.
+        for row in &rows {
+            let mut parent = paragraph(&format!("parent-{}", row.id));
+            parent.children = vec![paragraph(&format!("child-{}", row.id))];
+            let mut blocks = storage.load_blocks(&row.id).await.unwrap();
+            blocks.push(parent);
+            storage.save_blocks(&row.id, &blocks).await.unwrap();
+        }
+        // A subpage with a block below the second row.
+        let subpage = storage.create_page(Some(&rows[1].id)).await.unwrap().id;
+        storage
+            .save_blocks(&subpage, &[paragraph("sub")])
+            .await
+            .unwrap();
+        link(&storage, &subpage, &other, "sub").await;
+        // Links from the blocks of rows, to a row, and between pages that stay.
+        link(
+            &storage,
+            &rows[0].id,
+            &other,
+            &format!("child-{}", rows[0].id),
+        )
+        .await;
+        link(
+            &storage,
+            &other,
+            &rows[3].id,
+            &format!("{}-0", kept.page.id),
+        )
+        .await;
+        link(&storage, &kept_row, &other, &format!("{}-0", kept.page.id)).await;
+        assert_eq!(count(&storage, "links_to").await, 4);
+        assert_eq!(count(&storage, "block").await, 5 + 10 + 1 + 1);
+
+        storage
+            .delete_database_rows(&database.page.id, 3)
+            .await
+            .unwrap();
+
+        assert!(
+            storage
+                .list_rows(&database.page.id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(count(&storage, "block").await, 1);
+        assert_eq!(count(&storage, "links_to").await, 1);
+        let mut expected = vec![
+            database.page.id.clone(),
+            other.clone(),
+            kept.page.id.clone(),
+            kept_row,
+        ];
+        expected.sort();
+        assert_eq!(page_ids(&storage).await, expected);
+
+        // The events work again afterwards in the same connection.
+        let page = storage.create_page(None).await.unwrap().id;
+        storage
+            .save_blocks(&page, &[paragraph("after")])
+            .await
+            .unwrap();
+        link(&storage, &page, &other, "after").await;
+        storage.delete_page(&page).await.unwrap();
+        assert_eq!(count(&storage, "block").await, 1);
+        assert_eq!(count(&storage, "links_to").await, 1);
     }
 
     #[tokio::test]
