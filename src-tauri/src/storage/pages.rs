@@ -296,7 +296,7 @@ impl Storage {
 
     /// Deletes a page together with its subpages, blocks and links. The rows
     /// of databases at or below the page are deleted first, in chunks.
-    pub async fn delete_page(&self, id: &str) -> Result<(), StorageError> {
+    pub(super) async fn delete_page(&self, id: &str) -> Result<(), StorageError> {
         self.require_page(id).await?;
         self.delete_database_rows(id, super::databases::ROW_CHUNK)
             .await?;

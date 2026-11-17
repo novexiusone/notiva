@@ -702,25 +702,77 @@ async fn a_write_that_started_before_the_move_is_in_the_copy() {
 }
 
 #[tokio::test]
-async fn writers_wait_while_a_page_is_moved_and_run_afterwards() {
+async fn every_writer_waits_while_a_page_is_moved_and_runs_afterwards() {
+    use crate::domain::{View, ViewConfig};
+    use std::time::Duration;
+
     let storage = storage().await;
-    let exclusive = storage.write_gate.write().await;
+    let page = storage.create_page(None).await.unwrap();
+    storage
+        .save_blocks(&page.id, &[paragraph("a", "one")])
+        .await
+        .unwrap();
+    storage
+        .save_blocks(&page.id, &[paragraph("a", "two")])
+        .await
+        .unwrap();
+    let version = storage
+        .list_page_versions(&page.id)
+        .await
+        .unwrap()
+        .remove(0);
+    let database = storage.create_database(None).await.unwrap();
+    let database_id = database.page.id.clone();
+    let property = storage
+        .create_property(&database_id, "Notes", PropertyType::Text, None)
+        .await
+        .unwrap();
+    let row = storage.create_row(&database_id).await.unwrap();
+    let view: View = database.views[0].clone();
+    let config: ViewConfig = view.config.clone();
+    let text = json!("text");
 
-    let blocked = tokio::time::timeout(
-        std::time::Duration::from_millis(200),
-        storage.create_page(None),
-    )
-    .await;
-    assert!(blocked.is_err(), "create_page must wait for the gate");
-    let blocked = tokio::time::timeout(
-        std::time::Duration::from_millis(200),
-        storage.save_blocks("page", &[]),
-    )
-    .await;
-    assert!(blocked.is_err(), "save_blocks must wait for the gate");
+    // Every method that writes pages or what belongs to them, with arguments
+    // that are valid, so that only the gate can keep it from finishing. A new
+    // writer has to be added here; one that skips the gate fails this test.
+    macro_rules! writers {
+        ($($name:literal => $call:expr),* $(,)?) => {{
+            let exclusive = storage.write_gate.write().await;
+            $(
+                let waited = tokio::time::timeout(Duration::from_millis(100), $call).await;
+                assert!(waited.is_err(), "{} must wait for the write gate", $name);
+            )*
+            drop(exclusive);
+        }};
+    }
 
-    drop(exclusive);
+    writers! {
+        "create_page" => storage.create_page(None),
+        "rename_page" => storage.rename_page(&page.id, "Title"),
+        "set_favorite" => storage.set_favorite(&page.id, true),
+        "update_appearance" => storage.update_appearance(&page.id, Some("star"), None),
+        "set_banner_position" => storage.set_banner_position(&page.id, 10),
+        "move_page" => storage.move_page(&page.id, None, 0),
+        "save_blocks" => storage.save_blocks(&page.id, &[paragraph("b", "three")]),
+        "restore_page_version" => storage.restore_page_version(&page.id, &version.id),
+        "create_database" => storage.create_database(None),
+        "create_row" => storage.create_row(&database_id),
+        "set_cell" => storage.set_cell(&row.id, &property.id, CellValue::Text("x".into())),
+        "set_cell_from_json" => storage.set_cell_from_json(&row.id, &property.id, &text),
+        "create_property" => storage.create_property(&database_id, "More", PropertyType::Text, None),
+        "update_property" => storage.update_property(&property.id, Some("Renamed"), None),
+        "delete_select_option" => storage.delete_select_option(&property.id, "option"),
+        "change_property_type" => storage.change_property_type(&property.id, PropertyType::Number),
+        "delete_property" => storage.delete_property(&property.id),
+        "create_view" => storage.create_view(&database_id, "Another", &config),
+        "update_view" => storage.update_view(&view.id, Some("Renamed"), None),
+        "delete_view" => storage.delete_view(&view.id),
+    }
+
+    // Nothing was written while it waited, and the writers run afterwards.
+    assert_eq!(storage.list_pages().await.unwrap().len(), 3);
     storage.create_page(None).await.unwrap();
+    storage.rename_page(&page.id, "Title").await.unwrap();
 }
 
 /// A database on disk with a page, a child and a block, and a crash simulated
