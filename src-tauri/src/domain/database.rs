@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Page, View};
+use super::{Page, PageRef, View};
 
 /// A database: its page, its properties in column order and its views.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -61,6 +61,13 @@ pub struct Property {
     pub options: Vec<SelectOption>,
     /// Relation only: the database whose rows the cells point at.
     pub target_id: Option<String>,
+}
+
+/// The rows that point at a row through one relation property.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct IncomingRelation {
+    pub property: Property,
+    pub rows: Vec<PageRef>,
 }
 
 /// The colours a select option can have, in the order conversions hand them out.

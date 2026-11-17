@@ -19,6 +19,7 @@ import {
   type ViewConfig,
   type ViewSort,
 } from '@/lib/commands';
+import { createFakeNotes, type NotesOptions } from '@/test/fakeNotes';
 
 const STORAGE_KEY = 'notiva.fake.pages';
 const BLOCKS_KEY = 'notiva.fake.blocks';
@@ -46,6 +47,8 @@ type Options = {
   views?: View[];
   /** Cell values by row id, then by property id. */
   cells?: Record<string, Cells>;
+  /** The notes folder: the chosen folder and its files by relative path. */
+  notes?: NotesOptions;
 };
 
 function byPosition(a: { position: number }, b: { position: number }) {
@@ -402,6 +405,7 @@ export function installFakeBackend({
   properties: initialProperties = [],
   views: initialViews = [],
   cells: initialCells = {},
+  notes: initialNotes,
 }: Options = {}) {
   let pages: Page[] = initial;
   let blocks: Record<string, Block[]> = initialBlocks;
@@ -419,6 +423,7 @@ export function installFakeBackend({
     if (storedDatabases !== null) databases = JSON.parse(storedDatabases) as DatabaseState;
   }
   pages = pages.map(withPageFields);
+  const notes = createFakeNotes(initialNotes);
 
   const save = (next: Page[]) => {
     pages = next;
@@ -468,6 +473,15 @@ export function installFakeBackend({
   const guardCells = (id: string) => {
     const page = require(id);
     if (page.lock === 'all' || databaseLockOf(page) === 'all') refuse(id);
+  };
+
+  /** A cascade rewrites the cells of every row that holds a value: none may be locked `all`. */
+  const guardHeldCells = (propertyId: string, held?: (value: unknown) => boolean) => {
+    for (const page of pages) {
+      const value = databases.cells[page.id]?.[propertyId];
+      const holds = value !== undefined && value !== null && (held ? held(value) : true);
+      if (holds && page.lock === 'all') refuse(page.id);
+    }
   };
 
   /** Properties, views and rows of a database: locked by `all`. */
@@ -845,6 +859,7 @@ export function installFakeBackend({
       case 'delete_property': {
         const property = requireProperty(args.id as string);
         guardDatabase(property.databaseId);
+        guardHeldCells(property.id);
         saveDatabases(dropProperties(databases, new Set([property.id])));
         return null;
       }
@@ -853,6 +868,7 @@ export function installFakeBackend({
         const property = requireProperty(args.propertyId as string);
         guardDatabase(property.databaseId);
         const optionId = args.optionId as string;
+        guardHeldCells(property.id, (value) => value === optionId);
         if (property.type !== 'select') fail('invalid', 'only a select has options');
         if (!property.options.some((option) => option.id === optionId)) {
           fail('not_found', `option ${optionId} was not found`);
@@ -867,6 +883,7 @@ export function installFakeBackend({
       case 'change_property_type': {
         const property = requireProperty(args.id as string);
         guardDatabase(property.databaseId);
+        if ((args.type as string) !== property.type) guardHeldCells(property.id);
         const type = requirePropertyType(args.type);
         if (type === property.type) return property;
         if (property.type === 'relation') fail('invalid', 'a relation cannot change its type');
@@ -1095,8 +1112,11 @@ export function installFakeBackend({
         return `data:${type};base64,${btoa(binary)}`;
       }
 
-      default:
+      default: {
+        const result = notes(command, args);
+        if (result !== undefined) return result;
         return fail('internal', `the fake backend does not implement ${command}`);
+      }
     }
   });
 }

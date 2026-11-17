@@ -473,3 +473,40 @@ async fn moving_a_page_renumbers_locked_siblings_without_refusing() {
     assert_eq!(pages[0].id, locked.id);
     assert_eq!(pages[0].lock, PageLock::All);
 }
+
+#[tokio::test]
+async fn a_relation_cell_of_a_locked_row_is_not_rewritten_or_cascaded_away() {
+    let storage = storage().await;
+    let (database, _) = database(&storage).await;
+    let relation = storage
+        .create_property(
+            &database.id,
+            "Related",
+            PropertyType::Relation,
+            Some(&database.id),
+        )
+        .await
+        .unwrap();
+    storage
+        .set_cell(
+            "row_a",
+            &relation.id,
+            CellValue::Relation(vec!["row_b".into()]),
+        )
+        .await
+        .unwrap();
+    storage.set_lock("row_a", PageLock::All).await.unwrap();
+
+    assert!(is_locked(
+        storage
+            .set_cell("row_a", &relation.id, CellValue::Relation(Vec::new()))
+            .await
+    ));
+    assert!(is_locked(storage.delete_property(&relation.id).await));
+    let rows = storage.list_rows(&database.id).await.unwrap();
+    let row = rows.iter().find(|row| row.id == "row_a").unwrap();
+    assert_eq!(
+        row.cells.get(&relation.id),
+        Some(&CellValue::Relation(vec!["row_b".into()]))
+    );
+}

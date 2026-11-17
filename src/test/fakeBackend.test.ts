@@ -1201,3 +1201,22 @@ describe('page locks', () => {
     await expect(commands.setCell(rows[0]!.id, property.id, 'no')).rejects.toMatchObject(locked);
   });
 });
+
+describe('page locks and cascades', () => {
+  beforeEach(() => installFakeBackend());
+
+  it('refuses a cascade that would rewrite a cell of a row locked at everything', async () => {
+    const { id, rows } = await databaseWithRows('A', 'B');
+    const property = await commands.createProperty(id, 'Text', 'text', null);
+    await commands.setCell(rows[0]!.id, property.id, 'kept');
+    await commands.setLock(rows[0]!.id, 'all');
+
+    await expect(commands.deleteProperty(property.id)).rejects.toMatchObject({ kind: 'locked' });
+    await expect(commands.changePropertyType(property.id, 'number')).rejects.toMatchObject({
+      kind: 'locked',
+    });
+    expect((await cellsOf(id, property.id))[0]).toBe('kept');
+    await commands.setLock(rows[0]!.id, 'content');
+    await commands.deleteProperty(property.id);
+  });
+});

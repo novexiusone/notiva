@@ -2,11 +2,13 @@ mod commands;
 mod domain;
 mod export;
 mod media;
+mod notes;
 mod storage;
 
 use tauri::Manager;
 
 use media::ImageStore;
+use notes::NotesSettings;
 use storage::Storage;
 
 /// SurrealDB recurses deeply while parsing and planning queries, which
@@ -29,6 +31,7 @@ pub fn run() {
             let storage = tauri::async_runtime::block_on(Storage::open(&data.join("db")))?;
             app.manage(storage);
             app.manage(ImageStore::open(&data.join("images"))?);
+            app.manage(NotesSettings::open(&data.join("settings.json")));
             Ok(())
         })
         // Serves stored images to the WebView, and nothing else.
@@ -71,6 +74,7 @@ pub fn run() {
             commands::databases::delete_property,
             commands::databases::delete_select_option,
             commands::databases::change_property_type,
+            commands::databases::list_incoming_relations,
             commands::blocks::load_blocks,
             commands::blocks::save_blocks,
             commands::images::save_image,
@@ -82,6 +86,15 @@ pub fn run() {
             commands::views::create_view,
             commands::views::update_view,
             commands::views::delete_view,
+            commands::notes::get_notes_folder,
+            commands::notes::set_notes_folder,
+            commands::notes::clear_notes_folder,
+            commands::notes::list_notes,
+            commands::notes::read_note,
+            commands::notes::create_note,
+            commands::notes::save_note,
+            commands::notes::rename_note,
+            commands::notes::delete_note,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -72,7 +72,7 @@ fn expected(kind: PropertyType) -> &'static str {
         PropertyType::Number => "a number cell takes a finite number",
         PropertyType::Date => "a date cell takes a day of the calendar as yyyy-MM-dd",
         PropertyType::Select => "a select cell takes the id of one of its options",
-        PropertyType::Relation => "relation cells are not supported yet",
+        PropertyType::Relation => "a relation cell takes a list of row ids",
     }
 }
 
@@ -92,7 +92,7 @@ fn check(property: &Property, value: CellValue) -> Result<CellValue, StorageErro
             }
             true
         }
-        // Relation cells are graph edges, delivered with #61.
+        (CellValue::Relation(_), PropertyType::Relation) => true,
         _ => false,
     };
 
@@ -155,7 +155,8 @@ pub(super) fn read_cell(property: &Property, stored: &Value) -> CellValue {
 }
 
 /// The cells of a row: the stored values of the existing properties that are
-/// not empty. Keys of properties that are gone are skipped.
+/// not empty. Keys of properties that are gone are skipped. Relation cells
+/// are edges, not stored values, so they are not read here.
 fn read_cells(properties: &[Property], props: Option<&Value>) -> BTreeMap<String, CellValue> {
     let Some(props) = props.and_then(Value::as_object) else {
         return BTreeMap::new();
@@ -163,6 +164,7 @@ fn read_cells(properties: &[Property], props: Option<&Value>) -> BTreeMap<String
 
     properties
         .iter()
+        .filter(|property| property.kind != PropertyType::Relation)
         .filter_map(|property| {
             let value = read_cell(property, props.get(&property.id)?);
             (value != CellValue::Empty).then(|| (property.id.clone(), value))
@@ -208,14 +210,19 @@ impl Storage {
             .map(Property::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         let records: Vec<RowRecord> = response.take(2)?;
+        let mut relations = self.read_relation_cells(&properties).await?;
 
         Ok(records
             .into_iter()
-            .map(|record| Row {
-                cells: read_cells(&properties, record.props.as_ref()),
-                id: record.id,
-                title: record.title,
-                position: record.position,
+            .map(|record| {
+                let mut cells = read_cells(&properties, record.props.as_ref());
+                cells.extend(relations.remove(&record.id).unwrap_or_default());
+                Row {
+                    cells,
+                    id: record.id,
+                    title: record.title,
+                    position: record.position,
+                }
             })
             .collect())
     }
@@ -304,7 +311,15 @@ impl Storage {
         value: CellValue,
     ) -> Result<(), StorageError> {
         let property = self.cell_property(row_id, property_id).await?;
-        let value = stored(check(&property, value)?);
+        let value = check(&property, value)?;
+        if property.kind == PropertyType::Relation {
+            let targets = match value {
+                CellValue::Relation(ids) => ids,
+                _ => Vec::new(),
+            };
+            return self.write_relation(row_id, &property, &targets).await;
+        }
+        let value = stored(value);
 
         // `UNSET props[$key]` does nothing in SurrealDB 4.0.1; setting the key
         // to NONE removes it.
@@ -1194,25 +1209,221 @@ mod tests {
         assert_eq!(props(&storage, &rows[0].id).await, None);
     }
 
-    #[tokio::test]
-    async fn relation_cells_are_refused_until_relations_arrive() {
-        let storage = storage().await;
-        let (database, rows) = database_with_rows(&storage, &["Row", "Other"]).await;
-        run_with_pages(
-            &storage,
-            &[("database", &database)],
-            "CREATE property:link SET database = $database, name = 'Link', type = 'relation',
-                 target = $database;",
-        )
-        .await;
-
-        let error = storage
-            .set_cell_from_json(&rows[0].id, "link", &json!([rows[1].id]))
+    async fn relation(storage: &Storage, database: &str, target: &str) -> Property {
+        storage
+            .create_property(database, "Link", PropertyType::Relation, Some(target))
             .await
-            .unwrap_err();
+            .unwrap()
+    }
 
-        assert!(matches!(error, StorageError::Invalid(_)));
-        assert_eq!(props(&storage, &rows[0].id).await, None);
+    #[tokio::test]
+    async fn a_relation_cell_holds_rows_of_the_target_in_the_order_they_were_added() {
+        let storage = storage().await;
+        let (books, book_rows) = database_with_rows(&storage, &["Dune"]).await;
+        let (authors, author_rows) = database_with_rows(&storage, &["Herbert", "Asimov"]).await;
+        let link = relation(&storage, &books, &authors).await;
+        let ids = vec![author_rows[1].id.clone(), author_rows[0].id.clone()];
+
+        storage
+            .set_cell_from_json(&book_rows[0].id, &link.id, &json!(ids))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            cells(&storage, &books, 0).await,
+            BTreeMap::from([(link.id.clone(), CellValue::Relation(ids))])
+        );
+        assert_eq!(props(&storage, &book_rows[0].id).await, None);
+
+        // Replacing keeps only the new rows; an empty list empties the cell.
+        let one = vec![author_rows[0].id.clone()];
+        storage
+            .set_cell(&book_rows[0].id, &link.id, CellValue::Relation(one.clone()))
+            .await
+            .unwrap();
+        assert_eq!(
+            cells(&storage, &books, 0).await[&link.id],
+            CellValue::Relation(one)
+        );
+        storage
+            .set_cell_from_json(&book_rows[0].id, &link.id, &json!([]))
+            .await
+            .unwrap();
+        assert!(cells(&storage, &books, 0).await.is_empty());
+        storage
+            .set_cell_from_json(&book_rows[0].id, &link.id, &Value::Null)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_relation_cell_refuses_what_is_not_a_row_of_the_target() {
+        let storage = storage().await;
+        let (books, book_rows) = database_with_rows(&storage, &["Dune", "Emma"]).await;
+        let (authors, author_rows) = database_with_rows(&storage, &["Herbert"]).await;
+        let link = relation(&storage, &books, &authors).await;
+        let author = author_rows[0].id.clone();
+        let page = storage.create_page(None).await.unwrap().id;
+
+        for value in [
+            json!("a"),
+            json!([1]),
+            json!([book_rows[1].id]),
+            json!([authors]),
+            json!([page]),
+            json!(["missing"]),
+            json!([author, author]),
+        ] {
+            let error = storage
+                .set_cell_from_json(&book_rows[0].id, &link.id, &value)
+                .await
+                .unwrap_err();
+            assert!(
+                matches!(error, StorageError::Invalid(_)),
+                "{value}: {error}"
+            );
+        }
+        assert!(cells(&storage, &books, 0).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_row_can_point_at_a_row_of_its_own_database() {
+        let storage = storage().await;
+        let (database, rows) = database_with_rows(&storage, &["A", "B"]).await;
+        let link = relation(&storage, &database, &database).await;
+
+        storage
+            .set_cell(
+                &rows[0].id,
+                &link.id,
+                CellValue::Relation(vec![rows[1].id.clone(), rows[0].id.clone()]),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            cells(&storage, &database, 0).await[&link.id],
+            CellValue::Relation(vec![rows[1].id.clone(), rows[0].id.clone()])
+        );
+        let incoming = storage.list_incoming_relations(&rows[1].id).await.unwrap();
+        assert_eq!(incoming.len(), 1);
+        assert_eq!(incoming[0].rows[0].title, "A");
+    }
+
+    #[tokio::test]
+    async fn deleting_a_target_row_empties_the_cells_that_held_it() {
+        let storage = storage().await;
+        let (books, book_rows) = database_with_rows(&storage, &["Dune", "Emma"]).await;
+        let (authors, author_rows) = database_with_rows(&storage, &["Herbert", "Austen"]).await;
+        let link = relation(&storage, &books, &authors).await;
+        for (book, author) in book_rows.iter().zip(&author_rows) {
+            storage
+                .set_cell(
+                    &book.id,
+                    &link.id,
+                    CellValue::Relation(vec![author.id.clone()]),
+                )
+                .await
+                .unwrap();
+        }
+
+        storage.delete_page(&author_rows[0].id).await.unwrap();
+
+        assert!(cells(&storage, &books, 0).await.is_empty());
+        assert_eq!(
+            cells(&storage, &books, 1).await[&link.id],
+            CellValue::Relation(vec![author_rows[1].id.clone()])
+        );
+    }
+
+    #[tokio::test]
+    async fn deleting_the_target_database_removes_the_property_and_its_edges() {
+        let storage = storage().await;
+        let (books, book_rows) = database_with_rows(&storage, &["Dune"]).await;
+        let (authors, author_rows) = database_with_rows(&storage, &["Herbert"]).await;
+        let link = relation(&storage, &books, &authors).await;
+        storage
+            .set_cell(
+                &book_rows[0].id,
+                &link.id,
+                CellValue::Relation(vec![author_rows[0].id.clone()]),
+            )
+            .await
+            .unwrap();
+
+        storage.delete_page(&authors).await.unwrap();
+
+        assert!(
+            storage
+                .load_database(&books)
+                .await
+                .unwrap()
+                .properties
+                .is_empty()
+        );
+        assert!(cells(&storage, &books, 0).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn incoming_relations_are_grouped_by_property() {
+        let storage = storage().await;
+        let (books, book_rows) = database_with_rows(&storage, &["Dune", "Emma"]).await;
+        let (authors, author_rows) = database_with_rows(&storage, &["Herbert"]).await;
+        let wrote = relation(&storage, &books, &authors).await;
+        let read = relation(&storage, &books, &authors).await;
+        let author = &author_rows[0].id;
+        for (book, property) in [
+            (&book_rows[1], &wrote),
+            (&book_rows[0], &wrote),
+            (&book_rows[0], &read),
+        ] {
+            let mut cell = match cells(
+                &storage,
+                &books,
+                if book.id == book_rows[0].id { 0 } else { 1 },
+            )
+            .await
+            .remove(&property.id)
+            {
+                Some(CellValue::Relation(ids)) => ids,
+                _ => Vec::new(),
+            };
+            cell.push(author.clone());
+            storage
+                .set_cell(&book.id, &property.id, CellValue::Relation(cell))
+                .await
+                .unwrap();
+        }
+
+        let incoming = storage.list_incoming_relations(author).await.unwrap();
+
+        assert_eq!(incoming.len(), 2);
+        assert_eq!(incoming[0].property.id, wrote.id);
+        assert_eq!(
+            incoming[0]
+                .rows
+                .iter()
+                .map(|row| row.title.as_str())
+                .collect::<Vec<_>>(),
+            ["Dune", "Emma"]
+        );
+        assert_eq!(incoming[1].property.id, read.id);
+        assert_eq!(incoming[1].rows.len(), 1);
+        assert!(storage.list_incoming_relations(&books).await.is_err());
+        assert!(matches!(
+            storage
+                .list_incoming_relations("missing")
+                .await
+                .unwrap_err(),
+            StorageError::NotFound(_)
+        ));
+        assert!(
+            storage
+                .list_incoming_relations(&book_rows[0].id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 
     // Readers.

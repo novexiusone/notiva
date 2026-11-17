@@ -2,7 +2,7 @@ use serde_json::Value;
 use tauri::State;
 
 use super::error::CommandError;
-use crate::domain::{Database, Property, PropertyType, Row, SelectOption};
+use crate::domain::{Database, IncomingRelation, Property, PropertyType, Row, SelectOption};
 use crate::storage::{Storage, StorageError};
 
 #[tauri::command]
@@ -108,4 +108,12 @@ pub async fn change_property_type(
     let kind = PropertyType::from_name(&r#type)
         .ok_or_else(|| StorageError::Invalid(format!("{} is not a property type", r#type)))?;
     Ok(storage.change_property_type(&id, kind).await?)
+}
+
+#[tauri::command]
+pub async fn list_incoming_relations(
+    storage: State<'_, Storage>,
+    row_id: String,
+) -> Result<Vec<IncomingRelation>, CommandError> {
+    Ok(storage.list_incoming_relations(&row_id).await?)
 }

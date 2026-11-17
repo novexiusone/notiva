@@ -2,6 +2,7 @@ use serde::Serialize;
 
 use crate::export::ExportError;
 use crate::media::ImageError;
+use crate::notes::NotesError;
 use crate::storage::StorageError;
 
 /// What the frontend sees when a command fails.
@@ -54,6 +55,22 @@ impl From<ExportError> for CommandError {
                 kind: "internal",
                 message: error.to_string(),
             },
+        }
+    }
+}
+
+impl From<NotesError> for CommandError {
+    fn from(error: NotesError) -> Self {
+        let kind = match error {
+            NotesError::NoFolder | NotesError::NotFound(_) => "not_found",
+            NotesError::Conflict => "conflict",
+            NotesError::Io(_) | NotesError::Settings(_) => "internal",
+            _ => "invalid",
+        };
+
+        Self {
+            kind,
+            message: error.to_string(),
         }
     }
 }

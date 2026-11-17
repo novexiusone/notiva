@@ -11,6 +11,7 @@ mod links;
 mod migrations;
 pub(crate) mod pages;
 mod properties;
+mod relations;
 mod rows;
 mod search;
 mod views;

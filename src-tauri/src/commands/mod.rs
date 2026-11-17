@@ -8,6 +8,7 @@ pub mod error;
 pub mod export;
 pub mod images;
 pub mod links;
+pub mod notes;
 pub mod pages;
 pub mod search;
 pub mod views;
