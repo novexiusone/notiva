@@ -22,8 +22,9 @@ fn data_dir(app: &AppHandle) -> Result<PathBuf, CommandError> {
     })
 }
 
-fn passphrase(text: Option<String>) -> Option<Passphrase> {
-    text.and_then(Passphrase::new)
+/// `None` means no passphrase; an empty one is an error, never "none".
+fn passphrase(text: Option<String>) -> Result<Option<Passphrase>, CommandError> {
+    Ok(text.map(Passphrase::new).transpose()?)
 }
 
 #[tauri::command]
@@ -47,7 +48,7 @@ pub async fn create_backup(
 ) -> Result<BackupInfo, CommandError> {
     let data = data_dir(&app)?;
     let folder = Settings::load(&data)?.folder_or_default(&data);
-    let passphrase = self::passphrase(passphrase);
+    let passphrase = self::passphrase(passphrase)?;
 
     Ok(service
         .create(&storage, &data, &folder, Kind::Manual, passphrase.as_ref())
@@ -67,7 +68,7 @@ pub async fn inspect_backup(
     path: String,
     passphrase: Option<String>,
 ) -> Result<BackupSummary, CommandError> {
-    let passphrase = self::passphrase(passphrase);
+    let passphrase = self::passphrase(passphrase)?;
     tokio::task::spawn_blocking(move || backup::inspect(Path::new(&path), passphrase.as_ref()))
         .await
         .map_err(|error| CommandError {
@@ -88,7 +89,7 @@ pub async fn restore_backup(
     passphrase: Option<String>,
 ) -> Result<RestoreOutcome, CommandError> {
     let data = data_dir(&app)?;
-    let passphrase = self::passphrase(passphrase);
+    let passphrase = self::passphrase(passphrase)?;
 
     Ok(service
         .restore(&storage, &data, Path::new(&path), passphrase.as_ref())
@@ -104,7 +105,7 @@ pub async fn restore_backup_to_folder(
     directory: String,
 ) -> Result<(), CommandError> {
     let data = data_dir(&app)?;
-    let passphrase = self::passphrase(passphrase);
+    let passphrase = self::passphrase(passphrase)?;
 
     Ok(backup::restore_to_folder(
         Path::new(&path),
@@ -130,12 +131,22 @@ pub fn restart_app(app: AppHandle) {
 /// one is due and then whenever the interval has passed. A failure is
 /// remembered in the status and sent to the frontend as an event.
 pub async fn run_scheduler(app: AppHandle) {
+    let mut failures = 0u32;
     loop {
-        if let Err(message) = tick(&app).await {
-            eprintln!("scheduled backup failed: {message}");
-            let _ = app.emit(FAILED_EVENT, message);
+        match tick(&app).await {
+            Ok(()) => failures = 0,
+            Err(message) => {
+                failures = failures.saturating_add(1);
+                eprintln!("scheduled backup failed: {message}");
+                let _ = app.emit(FAILED_EVENT, message);
+            }
         }
-        tokio::time::sleep(TICK).await;
+        // After a failure the wait doubles up to 6 hours, so a full disk or a
+        // missing drive does not cause a full export every few minutes.
+        let wait = TICK
+            .saturating_mul(1 << failures.min(6))
+            .min(Duration::from_secs(6 * 60 * 60));
+        tokio::time::sleep(if failures == 0 { TICK } else { wait }).await;
     }
 }
 

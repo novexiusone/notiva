@@ -54,7 +54,7 @@ const LANES: u32 = 1;
 
 /// Limits for what a file may ask for, so a crafted header cannot make the
 /// app allocate gigabytes or hash for minutes.
-const MAX_MEMORY_KIB: u32 = 1024 * 1024;
+const MAX_MEMORY_KIB: u32 = 256 * 1024;
 const MAX_ITERATIONS: u32 = 10;
 const MAX_LANES: u32 = 8;
 const MAX_CHUNK_SIZE: u32 = 16 * 1024 * 1024;

@@ -65,7 +65,7 @@ An encrypted backup is the same tar+zstd stream sealed with a passphrase. File l
 chunk = length u32 | ChaCha20-Poly1305 ciphertext (plaintext + 16 byte tag)
 ```
 
-- Key: Argon2id, 64 MiB, 3 iterations, 1 lane, random 16 byte salt; parameters are in the header so they can change later. A header that asks for more than 1 GiB, 10 iterations or 8 lanes is refused.
+- Key: Argon2id, 64 MiB, 3 iterations, 1 lane, random 16 byte salt; parameters are in the header so they can change later. A header that asks for more than 256 MiB, 10 iterations or 8 lanes is refused.
 - Chunks of 1 MiB. The nonce is the chunk index plus a flag that marks the last chunk; the whole header is authenticated data of every chunk. A changed, reordered or truncated file fails to open.
 - A passphrase that does not fit fails on the first chunk and is reported as `wrong_passphrase`; damage later in the file is `corrupt`.
 - The passphrase is held in a wrapper that wipes it on drop and has no `Debug` or `Display`. It is never written to disk, a log or an error message. A restore of an encrypted backup uses the same passphrase for the safety backup, so no unencrypted copy of the data appears.
@@ -143,6 +143,18 @@ src-tauri/src/
 - Restore: live data is untouched until the swap, a safety backup exists, the previous data is kept, a second start changes nothing, an interrupted swap is finished, a failed restore schedules nothing, a non-empty target is refused.
 - Schedule: due logic per interval, pruning (only scheduled, newest kept, never zero), failure reported in the status.
 - Encryption primitives: round trip at chunk boundaries, tampering, truncation at chunk boundaries, oversized header values.
+
+## Limits and known risks
+
+- **Writes between the safety backup and the restart** are only in `restore-previous/db` (the replaced data); the safety backup was taken earlier and does not have them.
+- **`restore-previous/` keeps a plaintext database and the images**, even when the backup that was restored was encrypted. It is kept until the next restore is prepared. Deleting it is the user's call until the UI offers it.
+- **Declared sizes are not trusted.** Before extraction the manifest sizes are summed (overflow and more than 256 GiB are refused) and twice the total must fit in the free space of the target volume (checked on Unix). Each entry must have exactly the declared size and is never written beyond it.
+- **Passphrase.** An empty passphrase is an error, never "no passphrase". Copies of it are wrapped in `Zeroizing`; the Argon2 key is wiped after use, and the cipher key too (`chacha20poly1305` with the `zeroize` feature). The string that arrives from the WebView through Tauri's IPC cannot be wiped by this module.
+- **The import of a snapshot** is SurrealQL from a file. It runs on an engine with network targets and scripting denied, but a crafted snapshot can still define schema and events and be expensive. Checksums prove integrity, not trust. Tracked in #151.
+- **Which backups the schedule may delete.** Only files that are named `notiva-auto-*`, are not encrypted and whose manifest says `"kind": "auto"`, ordered by the manifest timestamp. A copied, renamed or touched file, or a changed clock, cannot make the app delete the newest backup; a newest backup dated in the future counts as just made.
+- **A second restore** is built in `restore-staging.new/` and replaces a pending one only when it is complete and the safety backup exists; a failed second restore keeps the first.
+- **At start** leftover `*.partial` files, `pending-restore.json.tmp` and `restore-staging.new/` are removed, and a rename that fails is retried a few times before the start is aborted with a message.
+- **After failures** the scheduler waits twice as long each time, up to 6 hours, and starts over after a success.
 
 ## Boundaries
 

@@ -251,6 +251,7 @@ fn an_archive_whose_content_does_not_match_its_manifest_is_refused() {
         app_version: "0.0.0",
         schema_version: 1,
         created_at: "2026-11-16T00:00:00Z",
+        kind: None,
         snapshot: &snapshot,
         images: &images,
     };
@@ -310,6 +311,7 @@ async fn a_backup_with_a_newer_schema_is_refused_before_anything_is_extracted() 
             app_version: "99.0.0",
             schema_version: supported + 1,
             created_at: "2026-01-01T00:00:00Z",
+            kind: None,
             snapshot: &snapshot,
             images: &images,
         },
@@ -406,42 +408,6 @@ async fn a_prepared_restore_is_applied_at_the_next_start_and_keeps_the_old_data(
 }
 
 #[tokio::test]
-async fn an_interrupted_swap_is_finished_at_the_next_start() {
-    let world = world().await;
-    let info = backup(&world, Kind::Manual, None).await;
-    let service = BackupService::default();
-    std::fs::create_dir_all(world.data.join("db")).unwrap();
-    std::fs::write(world.data.join("db").join("old.txt"), "old database").unwrap();
-    service
-        .restore(&world.storage, &world.data, Path::new(&info.path), None)
-        .await
-        .unwrap();
-
-    // The crash: the old database was moved aside, the new one not moved in.
-    std::fs::create_dir_all(world.data.join("restore-previous")).unwrap();
-    std::fs::rename(
-        world.data.join("db"),
-        world.data.join("restore-previous").join("db"),
-    )
-    .unwrap();
-
-    apply_pending_restore(&world.data).unwrap();
-
-    assert_restored(&world.data, &world.image).await;
-    assert_eq!(
-        std::fs::read(
-            world
-                .data
-                .join("restore-previous")
-                .join("db")
-                .join("old.txt")
-        )
-        .unwrap(),
-        b"old database"
-    );
-}
-
-#[tokio::test]
 async fn a_restore_that_fails_changes_nothing_and_schedules_nothing() {
     let world = world().await;
     let service = BackupService::default();
@@ -474,7 +440,9 @@ fn staged_data_without_a_marker_is_discarded_at_start() {
 }
 
 fn touch(folder: &Path, name: &str) {
-    // A real archive is needed for a file to be listed.
+    // A real archive is needed for a file to be listed; its manifest says
+    // what the name says.
+    let (kind, created) = parse_name(name).unwrap();
     let directory = tempfile::tempdir().unwrap();
     let snapshot = directory.path().join("db.surql");
     std::fs::write(&snapshot, "-- x").unwrap();
@@ -484,7 +452,8 @@ fn touch(folder: &Path, name: &str) {
         &archive::Contents {
             app_version: "0.0.0",
             schema_version: 1,
-            created_at: "2026-01-01T00:00:00Z",
+            created_at: &rfc3339(created),
+            kind: (kind == Kind::Auto).then_some("auto"),
             snapshot: &snapshot,
             images: &directory.path().join("images"),
         },
@@ -718,4 +687,429 @@ fn backup_file_names_round_trip() {
     ] {
         assert!(parse_name(bad).is_none(), "{bad}");
     }
+}
+
+/// The four moves of the swap, in order.
+fn swap_step(data: &Path, step: usize) {
+    let previous = data.join("restore-previous");
+    let staging = data.join("restore-staging");
+    std::fs::create_dir_all(&previous).unwrap();
+    match step {
+        0 => std::fs::rename(data.join("db"), previous.join("db")).unwrap(),
+        1 => std::fs::rename(staging.join("db"), data.join("db")).unwrap(),
+        2 => std::fs::rename(data.join("images"), previous.join("images")).unwrap(),
+        _ => std::fs::rename(staging.join("images"), data.join("images")).unwrap(),
+    }
+}
+
+#[tokio::test]
+async fn a_swap_interrupted_at_any_step_is_finished_at_the_next_start() {
+    // 0 steps done: nothing moved yet; 1: db moved aside; 2: new db in place;
+    // 3: images moved aside; 4: everything moved, marker and staging remain.
+    for done in 0..=4 {
+        let world = world().await;
+        let info = backup(&world, Kind::Manual, None).await;
+        std::fs::create_dir_all(world.data.join("db")).unwrap();
+        std::fs::write(world.data.join("db").join("old.txt"), "old database").unwrap();
+        std::fs::write(world.data.join("images").join("old.png"), "old image").unwrap();
+        BackupService::default()
+            .restore(&world.storage, &world.data, Path::new(&info.path), None)
+            .await
+            .unwrap();
+
+        for step in 0..done {
+            swap_step(&world.data, step);
+        }
+        apply_pending_restore(&world.data).unwrap();
+
+        assert_restored(&world.data, &world.image).await;
+        let previous = world.data.join("restore-previous");
+        assert_eq!(
+            std::fs::read(previous.join("db").join("old.txt")).unwrap(),
+            b"old database",
+            "after {done} steps"
+        );
+        assert_eq!(
+            std::fs::read(previous.join("images").join("old.png")).unwrap(),
+            b"old image",
+            "after {done} steps"
+        );
+        assert!(!world.data.join("pending-restore.json").exists());
+        assert!(!world.data.join("restore-staging").exists());
+    }
+}
+
+#[tokio::test]
+async fn a_marker_that_is_gone_while_staging_remains_discards_the_staging() {
+    let world = world().await;
+    let info = backup(&world, Kind::Manual, None).await;
+    std::fs::create_dir_all(world.data.join("db")).unwrap();
+    BackupService::default()
+        .restore(&world.storage, &world.data, Path::new(&info.path), None)
+        .await
+        .unwrap();
+    for step in 0..4 {
+        swap_step(&world.data, step);
+    }
+    // The crash came after the marker was removed, before the staging was.
+    std::fs::remove_file(world.data.join("pending-restore.json")).unwrap();
+
+    assert_eq!(apply_pending_restore(&world.data).unwrap(), None);
+
+    assert_restored(&world.data, &world.image).await;
+    assert!(!world.data.join("restore-staging").exists());
+}
+
+#[tokio::test]
+async fn a_failed_second_restore_keeps_the_pending_first_one() {
+    let world = world().await;
+    let info = backup(&world, Kind::Manual, None).await;
+    let service = BackupService::default();
+    service
+        .restore(&world.storage, &world.data, Path::new(&info.path), None)
+        .await
+        .unwrap();
+    let bogus = world.data.join("bogus.notiva-backup");
+    std::fs::write(&bogus, b"not an archive").unwrap();
+
+    assert!(
+        service
+            .restore(&world.storage, &world.data, &bogus, None)
+            .await
+            .is_err()
+    );
+
+    assert!(world.data.join("pending-restore.json").exists());
+    assert!(world.data.join("restore-staging").join("db").exists());
+    assert!(!world.data.join("restore-staging.new").exists());
+}
+
+#[test]
+fn leftovers_of_interrupted_work_are_removed_at_start() {
+    let data = tempfile::tempdir().unwrap();
+    let backups = data.path().join("backups");
+    std::fs::create_dir_all(&backups).unwrap();
+    std::fs::write(backups.join("notiva-auto-x.partial"), "half").unwrap();
+    std::fs::write(data.path().join("pending-restore.json.tmp"), "{").unwrap();
+    std::fs::create_dir_all(data.path().join("restore-staging.new")).unwrap();
+
+    apply_pending_restore(data.path()).unwrap();
+
+    assert!(!backups.join("notiva-auto-x.partial").exists());
+    assert!(!data.path().join("pending-restore.json.tmp").exists());
+    assert!(!data.path().join("restore-staging.new").exists());
+}
+
+#[tokio::test]
+async fn a_restore_of_a_newer_schema_schedules_nothing_and_backs_nothing_up() {
+    let directory = tempfile::tempdir().unwrap();
+    let world = world().await;
+    let snapshot = directory.path().join("db.surql");
+    std::fs::write(&snapshot, "-- from the future").unwrap();
+    let path = directory.path().join("future.notiva-backup");
+    archive::write(
+        &path,
+        &archive::Contents {
+            app_version: "99.0.0",
+            schema_version: Storage::supported_schema_version() + 1,
+            created_at: "2026-01-01T00:00:00Z",
+            kind: None,
+            snapshot: &snapshot,
+            images: &directory.path().join("images"),
+        },
+        None,
+    )
+    .unwrap();
+
+    let error = BackupService::default()
+        .restore(&world.storage, &world.data, &path, None)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, BackupError::SchemaTooNew { .. }));
+    assert!(!world.data.join("pending-restore.json").exists());
+    assert!(!world.data.join("restore-staging").exists());
+    assert!(!world.data.join("restore-staging.new").exists());
+    assert!(list(&world.data.join("backups")).unwrap().is_empty());
+}
+
+#[test]
+fn an_empty_passphrase_is_refused_instead_of_meaning_none() {
+    assert!(matches!(
+        Passphrase::new(String::new()),
+        Err(BackupError::Invalid(_))
+    ));
+}
+
+/// What a hostile archive can contain: raw entries with names, types and
+/// data of the attacker's choosing, and a manifest to match.
+struct Entry<'a> {
+    name: &'a str,
+    kind: tar::EntryType,
+    link: Option<&'a str>,
+    data: &'a [u8],
+}
+
+fn file<'a>(name: &'a str, data: &'a [u8]) -> Entry<'a> {
+    Entry {
+        name,
+        kind: tar::EntryType::Regular,
+        link: None,
+        data,
+    }
+}
+
+fn sha(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(data)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn forged(directory: &Path, files: &[(&str, u64, String)], entries: &[Entry]) -> PathBuf {
+    let manifest = archive::Manifest {
+        format: 1,
+        app_version: "0.0.0".into(),
+        schema_version: 1,
+        created_at: "2026-01-01T00:00:00Z".into(),
+        kind: None,
+        files: files
+            .iter()
+            .map(|(path, size, sha256)| archive::FileEntry {
+                path: (*path).into(),
+                size: *size,
+                sha256: sha256.clone(),
+            })
+            .collect(),
+    };
+    let path = directory.join("forged.notiva-backup");
+    let encoder = zstd::Encoder::new(std::fs::File::create(&path).unwrap(), 1).unwrap();
+    let mut builder = tar::Builder::new(encoder);
+    let json = serde_json::to_vec(&manifest).unwrap();
+    let mut header = tar::Header::new_gnu();
+    header.set_size(json.len() as u64);
+    header.set_cksum();
+    builder
+        .append_data(&mut header, archive::MANIFEST, json.as_slice())
+        .unwrap();
+    for entry in entries {
+        let mut header = tar::Header::new_gnu();
+        header.set_entry_type(entry.kind);
+        header.set_size(entry.data.len() as u64);
+        // Written as raw bytes, because the builder refuses `..` in a path.
+        let gnu = header.as_gnu_mut().unwrap();
+        gnu.name = [0; 100];
+        gnu.name[..entry.name.len()].copy_from_slice(entry.name.as_bytes());
+        if let Some(link) = entry.link {
+            gnu.linkname[..link.len()].copy_from_slice(link.as_bytes());
+        }
+        header.set_cksum();
+        builder.append(&header, entry.data).unwrap();
+    }
+    builder.into_inner().unwrap().finish().unwrap();
+    path
+}
+
+fn extract_into(path: &Path, target: &Path) -> Result<archive::Manifest, BackupError> {
+    archive::extract(path, None, Some(target), |_| Ok(()))
+}
+
+#[test]
+fn hostile_archives_cannot_write_outside_the_target_or_link_to_other_files() {
+    let directory = tempfile::tempdir().unwrap();
+    let target = directory.path().join("target");
+    let data = b"-- snapshot";
+    let good = [("db.surql", data.len() as u64, sha(data))];
+    let evil = b"evil";
+    let outside = directory.path().join("outside-the-target");
+    let outside_name = outside.to_string_lossy().into_owned();
+    let special = |kind, link: Option<&'static str>| Entry {
+        name: "db.surql",
+        kind,
+        link,
+        data: b"",
+    };
+
+    let cases: Vec<(&str, Vec<Entry>)> = vec![
+        (
+            "a relative path out of the folder",
+            vec![file("db.surql", data), file("../outside-the-target", evil)],
+        ),
+        (
+            "an absolute path",
+            vec![file("db.surql", data), file(&outside_name, evil)],
+        ),
+        (
+            "a traversal inside images",
+            vec![
+                file("db.surql", data),
+                file("images/../../outside-the-target", evil),
+            ],
+        ),
+        (
+            "a symlink in place of a listed file",
+            vec![special(tar::EntryType::Symlink, Some("elsewhere"))],
+        ),
+        (
+            "a hard link in place of a listed file",
+            vec![special(tar::EntryType::Link, Some("elsewhere"))],
+        ),
+        (
+            "a directory in place of a listed file",
+            vec![special(tar::EntryType::Directory, None)],
+        ),
+        (
+            "the same entry twice",
+            vec![file("db.surql", data), file("db.surql", data)],
+        ),
+        ("a missing entry", vec![]),
+    ];
+
+    for (name, entries) in cases {
+        let archive = forged(directory.path(), &good, &entries);
+        let result = extract_into(&archive, &target);
+        assert!(
+            matches!(result, Err(BackupError::Corrupt(_))),
+            "{name}: {result:?}"
+        );
+        assert!(!outside.exists(), "{name}");
+        let _ = std::fs::remove_dir_all(&target);
+    }
+}
+
+#[test]
+fn a_manifest_that_names_paths_outside_the_target_is_refused() {
+    let directory = tempfile::tempdir().unwrap();
+    let data = b"x";
+    for path in [
+        "../evil",
+        "/absolute/path",
+        "images/../x",
+        "images/notanimage.png",
+        "db.surql/../x",
+    ] {
+        let archive = forged(
+            directory.path(),
+            &[("db.surql", 1, sha(data)), (path, 1, sha(data))],
+            &[file("db.surql", data), file(path, data)],
+        );
+
+        assert!(
+            matches!(
+                archive::read_manifest(&archive, None),
+                Err(BackupError::Corrupt(_))
+            ),
+            "{path}"
+        );
+    }
+}
+
+#[test]
+fn declared_sizes_are_not_trusted() {
+    let directory = tempfile::tempdir().unwrap();
+    let target = directory.path().join("target");
+    let data = b"-- snapshot";
+
+    // More than any backup may hold.
+    for declared in [u64::MAX, 1 << 50] {
+        let archive = forged(
+            directory.path(),
+            &[("db.surql", declared, sha(data))],
+            &[file("db.surql", data)],
+        );
+        let result = extract_into(&archive, &target);
+        assert!(
+            matches!(result, Err(BackupError::Corrupt(_))),
+            "{declared}: {result:?}"
+        );
+        // Refused before extraction: no file was written.
+        assert!(!target.join("db.surql").exists());
+        let _ = std::fs::remove_dir_all(&target);
+    }
+
+    // Two entries that fit the arithmetic one by one but not together.
+    let image = format!("images/{}.png", "a".repeat(32));
+    let archive = forged(
+        directory.path(),
+        &[
+            ("db.surql", u64::MAX / 2 + 1, sha(data)),
+            (&image, u64::MAX / 2 + 1, sha(data)),
+        ],
+        &[file("db.surql", data)],
+    );
+    assert!(matches!(
+        extract_into(&archive, &target),
+        Err(BackupError::Corrupt(_))
+    ));
+    let _ = std::fs::remove_dir_all(&target);
+
+    // An entry that is larger than declared is refused and writes nothing.
+    let archive = forged(
+        directory.path(),
+        &[("db.surql", 3, sha(b"-- "))],
+        &[file("db.surql", data)],
+    );
+    assert!(matches!(
+        extract_into(&archive, &target),
+        Err(BackupError::Corrupt(_))
+    ));
+    assert!(!target.join("db.surql").exists());
+}
+
+#[test]
+fn scheduled_backups_are_only_those_that_say_so_and_are_ordered_by_their_manifest() {
+    let folder = tempfile::tempdir().unwrap();
+    touch(folder.path(), "notiva-auto-20261101T030000Z.notiva-backup");
+    touch(folder.path(), "notiva-auto-20261102T030000Z.notiva-backup");
+    // A manual backup that was renamed to look scheduled, and a file that is
+    // not an archive but is named like one.
+    touch(
+        folder.path(),
+        "notiva-backup-20261103T030000Z.notiva-backup",
+    );
+    std::fs::rename(
+        folder
+            .path()
+            .join("notiva-backup-20261103T030000Z.notiva-backup"),
+        folder
+            .path()
+            .join("notiva-auto-20261103T030000Z.notiva-backup"),
+    )
+    .unwrap();
+    std::fs::write(
+        folder
+            .path()
+            .join("notiva-auto-20261104T030000Z.notiva-backup"),
+        b"junk",
+    )
+    .unwrap();
+
+    let found: Vec<String> = scheduled(folder.path())
+        .unwrap()
+        .into_iter()
+        .map(|(backup, _)| backup.name)
+        .collect();
+    assert_eq!(
+        found,
+        [
+            "notiva-auto-20261102T030000Z.notiva-backup",
+            "notiva-auto-20261101T030000Z.notiva-backup"
+        ]
+    );
+
+    let removed = prune(folder.path(), 1).unwrap();
+    assert_eq!(removed, ["notiva-auto-20261101T030000Z.notiva-backup"]);
+    assert!(
+        folder
+            .path()
+            .join("notiva-auto-20261103T030000Z.notiva-backup")
+            .exists()
+    );
+    assert!(
+        folder
+            .path()
+            .join("notiva-auto-20261104T030000Z.notiva-backup")
+            .exists()
+    );
 }

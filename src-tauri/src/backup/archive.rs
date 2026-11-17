@@ -24,6 +24,8 @@ pub const SNAPSHOT: &str = "db.surql";
 const IMAGES: &str = "images/";
 const FORMAT: u32 = 1;
 const MAX_MANIFEST_BYTES: u64 = 16 * 1024 * 1024;
+/// More than this in one backup is not a backup of a notes app.
+const MAX_TOTAL_BYTES: u64 = 256 * 1024 * 1024 * 1024;
 const ZSTD_MAGIC: [u8; 4] = [0x28, 0xB5, 0x2F, 0xFD];
 
 /// What a backup says about itself.
@@ -35,6 +37,9 @@ pub struct Manifest {
     pub schema_version: u32,
     /// RFC 3339, UTC.
     pub created_at: String,
+    /// `"auto"` for a backup the schedule made. Only such backups are pruned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
     pub files: Vec<FileEntry>,
 }
 
@@ -111,6 +116,7 @@ pub struct Contents<'a> {
     pub app_version: &'a str,
     pub schema_version: u32,
     pub created_at: &'a str,
+    pub kind: Option<&'a str>,
     /// The database snapshot file.
     pub snapshot: &'a Path,
     /// The directory the images are stored in.
@@ -164,6 +170,7 @@ fn build_manifest(contents: &Contents) -> Result<Manifest, BackupError> {
         app_version: contents.app_version.to_owned(),
         schema_version: contents.schema_version,
         created_at: contents.created_at.to_owned(),
+        kind: contents.kind.map(str::to_owned),
         files,
     })
 }
@@ -384,8 +391,27 @@ pub fn extract(
     )?;
     check(&manifest)?;
 
+    // The sizes in the manifest come from the file, so they are checked
+    // before anything is written: against a limit, and against the free
+    // space, because the restored data needs the files and the database
+    // built from the snapshot.
+    let total = manifest
+        .files
+        .iter()
+        .try_fold(0u64, |sum, entry| sum.checked_add(entry.size))
+        .filter(|total| *total <= MAX_TOTAL_BYTES)
+        .ok_or_else(|| BackupError::Corrupt("the manifest declares an impossible size".into()))?;
     if let Some(target) = target {
         std::fs::create_dir_all(target.join("images"))?;
+        if let Some(free) = free_space(target)
+            && total.saturating_mul(2) > free
+        {
+            return Err(BackupError::Invalid(format!(
+                "not enough free space to restore: {} MiB needed, {} MiB free",
+                total.saturating_mul(2) / (1024 * 1024),
+                free / (1024 * 1024)
+            )));
+        }
     }
     let expected: BTreeMap<&str, &FileEntry> = manifest
         .files
@@ -411,6 +437,11 @@ pub fn extract(
         }
         if !entry.header().entry_type().is_file() {
             return Err(BackupError::Corrupt(format!("{name} is not a file")));
+        }
+        if entry.size() != listed.size {
+            return Err(BackupError::Corrupt(format!(
+                "{name} does not have the size its manifest declares"
+            )));
         }
 
         let mut out = match target {
@@ -456,4 +487,25 @@ pub fn extract(
     // the file was not cut off.
     io::copy(&mut tar.into_inner(), &mut io::sink()).map_err(damaged)?;
     Ok(manifest)
+}
+
+/// Free bytes on the volume that holds `path`, when the platform can say.
+#[cfg(unix)]
+#[allow(clippy::unnecessary_cast)] // the field types differ between platforms
+fn free_space(path: &Path) -> Option<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut stats = std::mem::MaybeUninit::<libc::statvfs>::zeroed();
+    // SAFETY: `c_path` is a valid C string and `stats` is a valid out pointer.
+    if unsafe { libc::statvfs(c_path.as_ptr(), stats.as_mut_ptr()) } != 0 {
+        return None;
+    }
+    // SAFETY: statvfs succeeded, so the struct is initialised.
+    let stats = unsafe { stats.assume_init() };
+    Some((stats.f_bavail as u64).saturating_mul(stats.f_frsize as u64))
+}
+
+#[cfg(not(unix))]
+fn free_space(_path: &Path) -> Option<u64> {
+    None
 }

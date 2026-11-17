@@ -152,8 +152,16 @@ pub struct Status {
 pub struct Passphrase(Zeroizing<String>);
 
 impl Passphrase {
-    pub fn new(text: String) -> Option<Self> {
-        (!text.is_empty()).then(|| Self(Zeroizing::new(text)))
+    /// An empty passphrase is refused rather than treated as "none", which
+    /// would silently write an unencrypted backup.
+    pub fn new(text: String) -> Result<Self, BackupError> {
+        let text = Zeroizing::new(text);
+        if text.is_empty() {
+            return Err(BackupError::Invalid(
+                "the passphrase must not be empty".into(),
+            ));
+        }
+        Ok(Self(text))
     }
 
     fn as_str(&self) -> &str {
@@ -296,6 +304,7 @@ async fn create(
                 app_version: env!("CARGO_PKG_VERSION"),
                 schema_version,
                 created_at: &created_at,
+                kind: (kind == Kind::Auto).then_some("auto"),
                 snapshot: &snapshot,
                 images: &images,
             },
@@ -396,17 +405,42 @@ pub fn list(folder: &Path) -> Result<Vec<BackupInfo>, BackupError> {
 /// backups and the ones made before a restore are never touched. Returns the
 /// names that were deleted.
 pub fn prune(folder: &Path, keep_last: u32) -> Result<Vec<String>, BackupError> {
-    let auto: Vec<BackupInfo> = list(folder)?
-        .into_iter()
-        .filter(|backup| backup.kind == Kind::Auto)
-        .collect();
-
     let mut removed = Vec::new();
-    for backup in auto.into_iter().skip(keep_last.max(1) as usize) {
+    for (backup, _) in scheduled(folder)?
+        .into_iter()
+        .skip(keep_last.max(1) as usize)
+    {
         std::fs::remove_file(&backup.path)?;
         removed.push(backup.name);
     }
     Ok(removed)
+}
+
+/// The backups in `folder` that the schedule made, newest first.
+///
+/// A file only counts when it is named like one, is not encrypted (scheduled
+/// backups never are) and its own manifest says it is a scheduled backup. The
+/// order is the one in the manifest, not the file name or the modification
+/// time, so a copied or renamed file and a changed clock cannot make the app
+/// delete the newest backup or skip a due one.
+fn scheduled(folder: &Path) -> Result<Vec<(BackupInfo, DateTime<Utc>)>, BackupError> {
+    let mut found = Vec::new();
+    for backup in list(folder)? {
+        if backup.kind != Kind::Auto || backup.encrypted {
+            continue;
+        }
+        let Ok(manifest) = archive::read_manifest(Path::new(&backup.path), None) else {
+            continue;
+        };
+        let Ok(created) = DateTime::parse_from_rfc3339(&manifest.created_at) else {
+            continue;
+        };
+        if manifest.kind.as_deref() == Some("auto") {
+            found.push((backup, created.to_utc()));
+        }
+    }
+    found.sort_by(|a, b| (b.1, &b.0.name).cmp(&(a.1, &a.0.name)));
+    Ok(found)
 }
 
 /// Whether the newest scheduled backup in `folder` is older than `interval`.
@@ -414,14 +448,14 @@ fn is_due(folder: &Path, interval: Interval, time: DateTime<Utc>) -> bool {
     let Some(seconds) = interval.seconds() else {
         return false;
     };
-    let newest = list(folder)
+    match scheduled(folder)
         .ok()
-        .and_then(|backups| backups.into_iter().find(|backup| backup.kind == Kind::Auto))
-        .and_then(|backup| DateTime::parse_from_rfc3339(&backup.created_at).ok());
-
-    match newest {
+        .and_then(|found| found.into_iter().next())
+    {
         None => true,
-        Some(newest) => (time - newest.to_utc()).num_seconds() >= seconds,
+        // A newest backup from the future (the clock was set back) counts as
+        // just made, so the schedule waits instead of backing up in a loop.
+        Some((_, newest)) => (time - newest).num_seconds() >= seconds,
     }
 }
 

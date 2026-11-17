@@ -15,11 +15,13 @@
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use zeroize::Zeroizing;
 
 use super::{BackupError, Kind, Passphrase, archive};
 use crate::storage::{self, Storage};
 
 const STAGING: &str = "restore-staging";
+const STAGING_NEW: &str = "restore-staging.new";
 const PREVIOUS: &str = "restore-previous";
 const MARKER: &str = "pending-restore.json";
 const PARTS: [&str; 2] = ["db", "images"];
@@ -80,11 +82,12 @@ async fn stage_into(
 
     let archive_path = archive_path.to_owned();
     let target = directory.to_owned();
-    let passphrase_text = passphrase.map(|passphrase| passphrase.as_str().to_owned());
+    let passphrase_text =
+        passphrase.map(|passphrase| Zeroizing::new(passphrase.as_str().to_owned()));
     let manifest = tokio::task::spawn_blocking(move || {
         archive::extract(
             &archive_path,
-            passphrase_text.as_deref(),
+            passphrase_text.as_ref().map(|text| text.as_str()),
             Some(&target),
             |manifest| {
                 let supported = Storage::supported_schema_version();
@@ -134,13 +137,13 @@ pub(super) async fn prepare(
     passphrase: Option<&Passphrase>,
 ) -> Result<RestoreOutcome, BackupError> {
     let staging = data_dir.join(STAGING);
+    let building = data_dir.join(STAGING_NEW);
     let marker = data_dir.join(MARKER);
 
-    // A restore that was scheduled but not applied yet is replaced.
-    remove_file_if_exists(&marker)?;
-    remove_dir_if_exists(&staging)?;
-
-    stage(archive_path, passphrase, &staging).await?;
+    // The new restore is built next to a pending one, which stays valid until
+    // the new one is complete: a restore that fails changes nothing.
+    remove_dir_if_exists(&building)?;
+    stage(archive_path, passphrase, &building).await?;
 
     // Only now, with a restorable archive in hand, is the current data backed
     // up. It uses the same passphrase, so a backup that was encrypted never
@@ -159,13 +162,17 @@ pub(super) async fn prepare(
     let safety = match safety {
         Ok(info) => info,
         Err(error) => {
-            let _ = std::fs::remove_dir_all(&staging);
+            let _ = std::fs::remove_dir_all(&building);
             return Err(error);
         }
     };
     // The data that an earlier restore replaced is not needed any more: the
     // safety backup above is the newer copy. Removing it here, and never while
     // swapping, keeps a swap that was interrupted safe to finish.
+    // The pending restore it replaces, if any, is dropped only now.
+    remove_file_if_exists(&marker)?;
+    remove_dir_if_exists(&staging)?;
+    std::fs::rename(&building, &staging)?;
     remove_dir_if_exists(&data_dir.join(PREVIOUS))?;
 
     let temporary = data_dir.join(format!("{MARKER}.tmp"));
@@ -189,7 +196,18 @@ pub fn apply_pending_restore(data_dir: &Path) -> Result<Option<PathBuf>, BackupE
     let marker = data_dir.join(MARKER);
     let previous = data_dir.join(PREVIOUS);
 
-    // Scratch folders of a backup that was interrupted.
+    // Leftovers of work that was interrupted.
+    let _ = std::fs::remove_file(data_dir.join(format!("{MARKER}.tmp")));
+    let _ = std::fs::remove_dir_all(data_dir.join(STAGING_NEW));
+    if let Ok(settings) = super::Settings::load(data_dir)
+        && let Ok(entries) = std::fs::read_dir(settings.folder_or_default(data_dir))
+    {
+        for entry in entries.flatten() {
+            if entry.path().extension().is_some_and(|e| e == "partial") {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
     if let Ok(entries) = std::fs::read_dir(data_dir) {
         for entry in entries.flatten() {
             if entry
@@ -217,9 +235,9 @@ pub fn apply_pending_restore(data_dir: &Path) -> Result<Option<PathBuf>, BackupE
         let live = data_dir.join(part);
         if live.exists() {
             std::fs::create_dir_all(&previous)?;
-            std::fs::rename(&live, previous.join(part))?;
+            rename_with_retry(&live, &previous.join(part))?;
         }
-        std::fs::rename(&source, &live)?;
+        rename_with_retry(&source, &live)?;
     }
 
     remove_file_if_exists(&marker)?;
@@ -239,4 +257,25 @@ fn remove_dir_if_exists(path: &Path) -> Result<(), BackupError> {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
         _ => Ok(()),
     }
+}
+
+/// Renames, trying a few times: on some systems another program (a virus
+/// scanner, a file indexer) holds a folder for a moment.
+fn rename_with_retry(from: &Path, to: &Path) -> Result<(), BackupError> {
+    let mut last = None;
+    for attempt in 0..5 {
+        match std::fs::rename(from, to) {
+            Ok(()) => return Ok(()),
+            Err(error) => last = Some(error),
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200 * (attempt + 1)));
+    }
+    Err(BackupError::Io(std::io::Error::new(
+        last.map_or(std::io::ErrorKind::Other, |e| e.kind()),
+        format!(
+            "could not move {} to {} while applying the restore; close other programs that use the folder and start Notiva again, the restore will continue",
+            from.display(),
+            to.display()
+        ),
+    )))
 }

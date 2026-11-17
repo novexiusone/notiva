@@ -7,6 +7,8 @@ use std::path::Path;
 
 use surrealdb::Surreal;
 use surrealdb::engine::local::SurrealKv;
+use surrealdb::opt::Config;
+use surrealdb::opt::capabilities::Capabilities;
 
 use super::{DATABASE, NAMESPACE, Storage, StorageError, migrations};
 
@@ -42,7 +44,11 @@ pub async fn restore_snapshot(directory: &Path, snapshot: &Path) -> Result<u32, 
     }
     std::fs::create_dir_all(directory)?;
 
-    let db = Surreal::new::<SurrealKv>(directory).await?;
+    // The snapshot is a file that may not come from this app, so it is read
+    // by an engine that may not use the network or scripting. (This is also
+    // the default; it is spelled out so a change of the default cannot widen it.)
+    let config = Config::new().capabilities(Capabilities::new());
+    let db = Surreal::new::<SurrealKv>((directory, config)).await?;
     db.use_ns(NAMESPACE).use_db(DATABASE).await?;
     db.import(snapshot).await?;
 
