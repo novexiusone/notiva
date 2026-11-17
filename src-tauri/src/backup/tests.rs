@@ -789,13 +789,21 @@ fn leftovers_of_interrupted_work_are_removed_at_start() {
     let data = tempfile::tempdir().unwrap();
     let backups = data.path().join("backups");
     std::fs::create_dir_all(&backups).unwrap();
-    std::fs::write(backups.join("notiva-auto-x.partial"), "half").unwrap();
+    std::fs::write(backups.join("notiva-auto-20261101T030000Z.partial"), "half").unwrap();
+    std::fs::write(backups.join("foo.partial"), "a user's file").unwrap();
+    std::fs::write(backups.join("notiva-notes.partial"), "a user's file").unwrap();
     std::fs::write(data.path().join("pending-restore.json.tmp"), "{").unwrap();
     std::fs::create_dir_all(data.path().join("restore-staging.new")).unwrap();
 
     apply_pending_restore(data.path()).unwrap();
 
-    assert!(!backups.join("notiva-auto-x.partial").exists());
+    assert!(
+        !backups
+            .join("notiva-auto-20261101T030000Z.partial")
+            .exists()
+    );
+    assert!(backups.join("foo.partial").exists());
+    assert!(backups.join("notiva-notes.partial").exists());
     assert!(!data.path().join("pending-restore.json.tmp").exists());
     assert!(!data.path().join("restore-staging.new").exists());
 }
@@ -1085,7 +1093,7 @@ fn scheduled_backups_are_only_those_that_say_so_and_are_ordered_by_their_manifes
     )
     .unwrap();
 
-    let found: Vec<String> = scheduled(folder.path())
+    let found: Vec<String> = scheduled(folder.path(), now())
         .unwrap()
         .into_iter()
         .map(|(backup, _)| backup.name)
@@ -1112,4 +1120,45 @@ fn scheduled_backups_are_only_those_that_say_so_and_are_ordered_by_their_manifes
             .join("notiva-auto-20261104T030000Z.notiva-backup")
             .exists()
     );
+}
+
+#[test]
+fn a_backup_dated_in_the_future_is_not_a_scheduled_backup() {
+    let folder = tempfile::tempdir().unwrap();
+    touch(folder.path(), "notiva-auto-20261101T030000Z.notiva-backup");
+    touch(folder.path(), "notiva-auto-20301101T030000Z.notiva-backup");
+
+    let found: Vec<String> = scheduled(folder.path(), at(10, 12))
+        .unwrap()
+        .into_iter()
+        .map(|(backup, _)| backup.name)
+        .collect();
+
+    assert_eq!(found, ["notiva-auto-20261101T030000Z.notiva-backup"]);
+    assert!(is_due(folder.path(), Interval::Daily, at(10, 12)));
+}
+
+#[test]
+fn scratch_folders_of_the_app_cannot_be_the_backup_folder() {
+    let data = tempfile::tempdir().unwrap();
+    for name in [
+        "backup-tmp-abc",
+        "restore-staging.new",
+        "restore-staging.old",
+    ] {
+        let settings = Settings {
+            folder: Some(
+                data.path()
+                    .join(name)
+                    .join("x")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+            ..Settings::default()
+        };
+        assert!(
+            matches!(settings.save(data.path()), Err(BackupError::Invalid(_))),
+            "{name}"
+        );
+    }
 }

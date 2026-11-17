@@ -22,6 +22,7 @@ use crate::storage::{self, Storage};
 
 const STAGING: &str = "restore-staging";
 const STAGING_NEW: &str = "restore-staging.new";
+const STAGING_OLD: &str = "restore-staging.old";
 const PREVIOUS: &str = "restore-previous";
 const MARKER: &str = "pending-restore.json";
 const PARTS: [&str; 2] = ["db", "images"];
@@ -170,9 +171,23 @@ pub(super) async fn prepare(
     // safety backup above is the newer copy. Removing it here, and never while
     // swapping, keeps a swap that was interrupted safe to finish.
     // The pending restore it replaces, if any, is dropped only now.
+    // The earlier staging is moved aside, not deleted, until the new one is in
+    // place, so a rename that fails keeps the earlier pending restore.
+    let old = data_dir.join(STAGING_OLD);
+    remove_dir_if_exists(&old)?;
+    let had_old = staging.exists();
+    if had_old {
+        rename_with_retry(&staging, &old)?;
+    }
+    if let Err(error) = rename_with_retry(&building, &staging) {
+        if had_old {
+            let _ = std::fs::rename(&old, &staging);
+        }
+        let _ = std::fs::remove_dir_all(&building);
+        return Err(error);
+    }
     remove_file_if_exists(&marker)?;
-    remove_dir_if_exists(&staging)?;
-    std::fs::rename(&building, &staging)?;
+    remove_dir_if_exists(&old)?;
     remove_dir_if_exists(&data_dir.join(PREVIOUS))?;
 
     let temporary = data_dir.join(format!("{MARKER}.tmp"));
@@ -199,11 +214,17 @@ pub fn apply_pending_restore(data_dir: &Path) -> Result<Option<PathBuf>, BackupE
     // Leftovers of work that was interrupted.
     let _ = std::fs::remove_file(data_dir.join(format!("{MARKER}.tmp")));
     let _ = std::fs::remove_dir_all(data_dir.join(STAGING_NEW));
+    let _ = std::fs::remove_dir_all(data_dir.join(STAGING_OLD));
     if let Ok(settings) = super::Settings::load(data_dir)
         && let Ok(entries) = std::fs::read_dir(settings.folder_or_default(data_dir))
     {
         for entry in entries.flatten() {
-            if entry.path().extension().is_some_and(|e| e == "partial") {
+            // Only the exact names `archive::write` makes: the folder is the
+            // user's and may hold other files, even ones ending in `.partial`.
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if let Some(stem) = name.strip_suffix(".partial")
+                && super::parse_name(&format!("{stem}.{}", super::EXTENSION)).is_some()
+            {
                 let _ = std::fs::remove_file(entry.path());
             }
         }

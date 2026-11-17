@@ -403,14 +403,8 @@ pub fn extract(
         .ok_or_else(|| BackupError::Corrupt("the manifest declares an impossible size".into()))?;
     if let Some(target) = target {
         std::fs::create_dir_all(target.join("images"))?;
-        if let Some(free) = free_space(target)
-            && total.saturating_mul(2) > free
-        {
-            return Err(BackupError::Invalid(format!(
-                "not enough free space to restore: {} MiB needed, {} MiB free",
-                total.saturating_mul(2) / (1024 * 1024),
-                free / (1024 * 1024)
-            )));
+        if let Some(free) = free_space(target) {
+            check_space(total, free)?;
         }
     }
     let expected: BTreeMap<&str, &FileEntry> = manifest
@@ -508,4 +502,37 @@ fn free_space(path: &Path) -> Option<u64> {
 #[cfg(not(unix))]
 fn free_space(_path: &Path) -> Option<u64> {
     None
+}
+
+/// The restored data needs the files and the database built from the snapshot,
+/// so twice the declared total must fit.
+fn check_space(total: u64, free: u64) -> Result<(), BackupError> {
+    let needed = total.saturating_mul(2);
+    if needed > free {
+        return Err(BackupError::Invalid(format!(
+            "not enough free space to restore: {} MiB needed, {} MiB free",
+            needed / (1024 * 1024),
+            free / (1024 * 1024)
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn twice_the_declared_size_must_fit_in_the_free_space() {
+        assert!(check_space(100, 200).is_ok());
+        assert!(matches!(
+            check_space(100, 199),
+            Err(BackupError::Invalid(_))
+        ));
+        assert!(matches!(
+            check_space(u64::MAX, u64::MAX - 1),
+            Err(BackupError::Invalid(_))
+        ));
+        assert!(check_space(0, 0).is_ok());
+    }
 }

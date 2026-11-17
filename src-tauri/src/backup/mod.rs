@@ -406,7 +406,7 @@ pub fn list(folder: &Path) -> Result<Vec<BackupInfo>, BackupError> {
 /// names that were deleted.
 pub fn prune(folder: &Path, keep_last: u32) -> Result<Vec<String>, BackupError> {
     let mut removed = Vec::new();
-    for (backup, _) in scheduled(folder)?
+    for (backup, _) in scheduled(folder, now())?
         .into_iter()
         .skip(keep_last.max(1) as usize)
     {
@@ -423,7 +423,10 @@ pub fn prune(folder: &Path, keep_last: u32) -> Result<Vec<String>, BackupError> 
 /// order is the one in the manifest, not the file name or the modification
 /// time, so a copied or renamed file and a changed clock cannot make the app
 /// delete the newest backup or skip a due one.
-fn scheduled(folder: &Path) -> Result<Vec<(BackupInfo, DateTime<Utc>)>, BackupError> {
+fn scheduled(
+    folder: &Path,
+    time: DateTime<Utc>,
+) -> Result<Vec<(BackupInfo, DateTime<Utc>)>, BackupError> {
     let mut found = Vec::new();
     for backup in list(folder)? {
         if backup.kind != Kind::Auto || backup.encrypted {
@@ -435,6 +438,12 @@ fn scheduled(folder: &Path) -> Result<Vec<(BackupInfo, DateTime<Utc>)>, BackupEr
         let Ok(created) = DateTime::parse_from_rfc3339(&manifest.created_at) else {
             continue;
         };
+        // A file from the future (a copy, or a clock that was wrong) is not a
+        // backup the schedule made; it must not block the schedule or push
+        // real backups out of the keep-last window.
+        if created.to_utc() > time + chrono::Duration::minutes(5) {
+            continue;
+        }
         if manifest.kind.as_deref() == Some("auto") {
             found.push((backup, created.to_utc()));
         }
@@ -448,13 +457,11 @@ fn is_due(folder: &Path, interval: Interval, time: DateTime<Utc>) -> bool {
     let Some(seconds) = interval.seconds() else {
         return false;
     };
-    match scheduled(folder)
+    match scheduled(folder, time)
         .ok()
         .and_then(|found| found.into_iter().next())
     {
         None => true,
-        // A newest backup from the future (the clock was set back) counts as
-        // just made, so the schedule waits instead of backing up in a loop.
         Some((_, newest)) => (time - newest).num_seconds() >= seconds,
     }
 }

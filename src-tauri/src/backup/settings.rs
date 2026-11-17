@@ -110,6 +110,17 @@ fn check_folder(folder: &Path, data_dir: &Path) -> Result<(), BackupError> {
             ));
         }
     }
+    // Start-up deletes these, so nothing of the user's may live there.
+    if let Ok(relative) = folder.strip_prefix(data_dir)
+        && let Some(first) = relative.components().next()
+    {
+        let first = first.as_os_str().to_string_lossy();
+        if first.starts_with("backup-tmp-") || first.starts_with("restore-staging.") {
+            return Err(BackupError::Invalid(
+                "the backup folder cannot be a scratch folder of the app".into(),
+            ));
+        }
+    }
     std::fs::create_dir_all(folder).map_err(|error| {
         BackupError::Invalid(format!("the backup folder cannot be used: {error}"))
     })?;
