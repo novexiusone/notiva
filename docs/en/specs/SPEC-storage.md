@@ -42,7 +42,7 @@ src-tauri/src/
 
 `storage` is the repository layer. It is the only module that may import `surrealdb`. A test fails when any other source file mentions the crate.
 
-The database lives in `<app data dir>/db`, on macOS `~/Library/Application Support/com.novexlab.notiva/db`.
+The database lives in `<app data dir>/db`, on macOS `~/Library/Application Support/com.novexlab.notiva/db`, on Windows `%APPDATA%\com.novexlab.notiva\db` and on Linux `~/.local/share/com.novexlab.notiva/db`.
 
 ## Data model (schema version 1)
 

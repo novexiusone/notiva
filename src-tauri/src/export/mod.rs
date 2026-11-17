@@ -446,7 +446,14 @@ mod tests {
                 if path.is_dir() {
                     walk(&path, root, found);
                 } else {
-                    found.push(path.strip_prefix(root).unwrap().display().to_string());
+                    // Always "/", so the expected lists read the same on every system.
+                    found.push(
+                        path.strip_prefix(root)
+                            .unwrap()
+                            .display()
+                            .to_string()
+                            .replace('\\', "/"),
+                    );
                 }
             }
         }

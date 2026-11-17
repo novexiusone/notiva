@@ -89,7 +89,24 @@ Tests live next to the code they test (`Sidebar.test.tsx`, `#[cfg(test)]` module
 - Subtle borders instead of shadows, small radii, hardly any accent colour.
 - Lucide icons at 16 px in the sidebar and 20 px in toolbars, same stroke width everywhere. No emojis as icons.
 - Only text that is written can be selected: the editor, text fields and cells while they are edited. Labels, menus, buttons and the sidebar cannot, as in a native app.
-- The window uses the macOS overlay title bar so the sidebar reaches the top edge; the top of the sidebar is a drag region.
+- On macOS the window uses the overlay title bar so the sidebar reaches the top edge; the top of the sidebar is a drag region. Windows and Linux get their own title bar handling (#140); the top bar leaves no gap and never collides with the window controls.
+
+## Platforms
+
+The app builds and runs on macOS, Windows and Linux (#140). What differs per platform, and how it is handled:
+
+| Area                 | macOS                                 | Windows                                | Linux                             |
+| -------------------- | ------------------------------------- | -------------------------------------- | --------------------------------- |
+| WebView              | WKWebView                             | WebView2                               | WebKitGTK 4.1                     |
+| Bundles              | `.app`, `.dmg`                        | NSIS installer (`.exe`)                | `.AppImage`, `.deb`               |
+| Window chrome        | overlay title bar (`tauri.conf.json`) | native title bar (default)             | native title bar (default)        |
+| Image URL in WebView | `notiva-image://localhost/<name>`     | `http://notiva-image.localhost/<name>` | `notiva-image://localhost/<name>` |
+
+- `tauri.conf.json` holds what is shared. The bundle targets differ per platform, so they live in `tauri.macos.conf.json`, `tauri.windows.conf.json` and `tauri.linux.conf.json`, which Tauri merges over the shared file on the matching platform. The overlay title bar options (`titleBarStyle`, `hiddenTitle`) are macOS-only and ignored elsewhere, so Windows and Linux windows keep their native title bar and window controls. The top spacing in the sidebar and main area (kept for the macOS window buttons) is not yet platform-aware; that is the UI part of #140.
+- Stored image URLs are always the canonical `notiva-image://localhost/<name>`; they are portable between platforms. WebView2 cannot load a custom scheme directly and serves it as `http://notiva-image.localhost/<name>`, so the frontend converts a stored URL with `convertFileSrc(name, 'notiva-image')` before it is rendered, and the content security policy allows both forms.
+- Paths are built with `Path::join`, never by string concatenation; the app data directory comes from Tauri. File and folder names written by the app (export) must be valid on every file system: no reserved characters, no names Windows reserves (`CON`, `NUL`, `COM1`, ...), no trailing dot or space, unique without regard to case.
+- Builds are unsigned on every platform until #27: macOS Gatekeeper and Windows SmartScreen warn on first start.
+- Not testable on a developer's Mac: the Windows and Linux builds are verified by the CI matrix only.
 
 ## Code style
 
@@ -139,6 +156,7 @@ pub fn app_info(app: tauri::AppHandle) -> AppInfo {
 
 - Frontend unit tests with Vitest and Testing Library in jsdom. Tauri commands are mocked with `@tauri-apps/api/mocks`.
 - Rust unit tests for logic behind commands.
+- CI runs the frontend checks and the Rust checks and tests on macOS, Windows and Linux. The end-to-end suite runs once, on Linux, because it drives WebKit against the fake backend and does not depend on the host system.
 - The layout is checked by eye in the browser against the frontend dev server in light and dark mode; the Tauri window is started once to confirm it launches.
 - End-to-end tests with Playwright start with the first module that has user flows worth protecting (`pages`). They run against the frontend with mocked commands, because WebDriver cannot drive WKWebView on macOS.
 
@@ -157,6 +175,7 @@ pub fn app_info(app: tauri::AppHandle) -> AppInfo {
 - [ ] The sidebar shows search, home, a page tree placeholder and settings at the bottom (#8)
 - [ ] With the system language set to German the UI is German, otherwise English (#8)
 - [ ] The CI workflow runs frontend and Rust checks on every pull request (#9)
+- [ ] The frontend and Rust checks pass on macOS, Windows and Linux, and a release builds a bundle for each (#140)
 
 ## Open questions
 
