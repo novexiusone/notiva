@@ -278,6 +278,7 @@ impl Storage {
         // Writers wait while a page is moved to or from the trash.
         let _write = self.write_gate.read().await;
         self.require_database(database_id).await?;
+        self.guard_database(database_id).await?;
 
         let record: Option<RowRecord> = self
             .db
@@ -366,9 +367,13 @@ impl Storage {
             let written: Option<String> = self
                 .db
                 .query(format!(
-                    "UPDATE ONLY type::record('page', $id)
+                    "BEGIN TRANSACTION;
+                     {guard}
+                     UPDATE ONLY type::record('page', $id)
                          SET {cell}, props_text = $text, updated_at = time::now()
-                         WHERE props = $before RETURN VALUE record::id(id);"
+                         WHERE props = $before RETURN VALUE record::id(id);
+                     COMMIT TRANSACTION;",
+                    guard = super::pages::guard_cells_sql()
                 ))
                 .bind(("id", row_id.to_owned()))
                 .bind(("key", property.id.clone()))
@@ -377,7 +382,7 @@ impl Storage {
                 .bind(("before", before))
                 .await?
                 .check()?
-                .take(0)?;
+                .take(3)?;
             if written.is_some() {
                 return Ok(());
             }
@@ -435,6 +440,7 @@ impl Storage {
                 "the property does not belong to the database of the row".into(),
             ));
         }
+        self.guard_cells(row_id).await?;
         Ok(property)
     }
 }

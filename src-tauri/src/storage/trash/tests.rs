@@ -750,6 +750,7 @@ async fn every_writer_waits_while_a_page_is_moved_and_runs_afterwards() {
         "create_page" => storage.create_page(None),
         "rename_page" => storage.rename_page(&page.id, "Title"),
         "set_favorite" => storage.set_favorite(&page.id, true),
+        "set_lock" => storage.set_lock(&page.id, crate::domain::PageLock::None),
         "update_appearance" => storage.update_appearance(&page.id, Some("star"), None),
         "set_banner_position" => storage.set_banner_position(&page.id, 10),
         "move_page" => storage.move_page(&page.id, None, 0),

@@ -283,6 +283,7 @@ describe('databases and rows as pages', () => {
       icon: null,
       banner: null,
       bannerPosition: 50,
+      lock: 'none',
       updatedAt: expect.any(String),
     });
     await waitFor(async () => expect(current().pages.data).toEqual(await commands.listPages()));

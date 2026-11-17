@@ -148,6 +148,10 @@ impl Storage {
             .find_page(id)
             .await?
             .ok_or_else(|| StorageError::NotFound(format!("page {id}")))?;
+        // Before anything is copied: a locked page, or a locked page below it,
+        // is not moved. Decided under the exclusive gate, so `set_lock` cannot
+        // slip in between this check and the delete.
+        self.guard_delete(id).await?;
         // An entry for a page that is live is a leftover of an earlier attempt
         // (a restore or purge that stopped). Finishing it never loses data.
         if self.entry(id).await?.is_some() {
@@ -240,6 +244,10 @@ impl Storage {
         // comes back without it, so the database has to come back first.
         if let Some(database_id) = &entry.database {
             let live = self.find_page(database_id).await?.is_some();
+            if live {
+                // A database locked at everything takes no new rows.
+                self.guard_database(database_id).await?;
+            }
             if !live && self.entry(database_id).await?.is_some() {
                 return Err(StorageError::Invalid(
                     "the database of this row is in the trash: restore the database first".into(),

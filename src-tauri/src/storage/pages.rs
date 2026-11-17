@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use surrealdb::types::SurrealValue;
 
 use super::{Storage, StorageError};
-use crate::domain::{Page, PageKind};
+use crate::domain::{Page, PageKind, PageLock};
 
 /// Selects a page with its ids as plain strings.
 const PAGE_FIELDS: &str = "record::id(id) AS id, title, \
      IF parent = NONE { NONE } ELSE { record::id(parent) } AS parent_id, position, kind, \
      IF database = NONE { NONE } ELSE { record::id(database) } AS database_id, is_favorite, \
-     icon, banner, banner_position, <string> updated_at AS updated_at";
+     icon, banner, banner_position, lock, <string> updated_at AS updated_at";
 
 /// Turns an optional page id into an optional record link.
 const PARENT: &str = "IF $parent_id = NONE { NONE } ELSE { type::record('page', $parent_id) }";
@@ -31,6 +31,7 @@ struct PageRow {
     icon: Option<String>,
     banner: Option<String>,
     banner_position: Option<i64>,
+    lock: Option<String>,
     updated_at: String,
 }
 
@@ -54,6 +55,8 @@ impl From<PageRow> for Page {
             banner_position: row
                 .banner_position
                 .map_or(50, |position| position.clamp(0, 100) as u8),
+            // Pages written before schema version 11 have no lock.
+            lock: PageLock::from_stored(row.lock.as_deref()),
             updated_at: row.updated_at,
         }
     }
@@ -61,6 +64,45 @@ impl From<PageRow> for Page {
 
 fn not_found(id: &str) -> StorageError {
     StorageError::NotFound(format!("page {id}"))
+}
+
+/// What a transaction throws when it finds a lock; [`StorageError`] turns it
+/// into `Locked`.
+pub(crate) const LOCKED_MARKER: &str = "notiva:locked";
+
+/// Statements for the start of a transaction that throw when the title, text,
+/// icon, cover or position of the page in `$id` may not change. The check is
+/// part of the transaction, so a lock set after the pre-check still counts.
+const GUARD_CONTENT: &str = "LET $guard = (SELECT lock, database.lock AS database_lock
+         FROM ONLY type::record('page', $id));
+     IF $guard != NONE AND ($guard.lock != NONE OR $guard.database_lock = 'all') {
+         THROW 'notiva:locked';
+     };";
+
+/// Like [`GUARD_CONTENT`] for the cells of the row in `$id`.
+const GUARD_CELLS: &str = "LET $guard = (SELECT lock, database.lock AS database_lock
+         FROM ONLY type::record('page', $id));
+     IF $guard != NONE AND ($guard.lock = 'all' OR $guard.database_lock = 'all') {
+         THROW 'notiva:locked';
+     };";
+
+pub(super) fn guard_content_sql() -> &'static str {
+    GUARD_CONTENT
+}
+
+pub(super) fn guard_cells_sql() -> &'static str {
+    GUARD_CELLS
+}
+
+fn locked(id: &str) -> StorageError {
+    StorageError::Locked(format!("page {id} is locked"))
+}
+
+/// The lock of a page and, for a row, of its database.
+#[derive(SurrealValue)]
+struct LockRow {
+    lock: Option<String>,
+    database_lock: Option<String>,
 }
 
 impl Storage {
@@ -127,17 +169,21 @@ impl Storage {
     pub async fn rename_page(&self, id: &str, title: &str) -> Result<Page, StorageError> {
         // Writers wait while a page is moved to or from the trash.
         let _write = self.write_gate.read().await;
+        self.guard_content(id).await?;
         let row: Option<PageRow> = self
             .db
             .query(format!(
-                "UPDATE type::record('page', $id) SET title = $title, updated_at = time::now()
-                     WHERE id != NONE RETURN {PAGE_FIELDS}"
+                "BEGIN TRANSACTION;
+                 {GUARD_CONTENT}
+                 UPDATE type::record('page', $id) SET title = $title, updated_at = time::now()
+                     WHERE id != NONE RETURN {PAGE_FIELDS};
+                 COMMIT TRANSACTION;"
             ))
             .bind(("id", id.to_owned()))
             .bind(("title", title.to_owned()))
             .await?
             .check()?
-            .take(0)?;
+            .take(3)?;
 
         row.map(Page::from).ok_or_else(|| not_found(id))
     }
@@ -173,21 +219,25 @@ impl Storage {
                 "an icon or banner must be a non-empty string or none".into(),
             ));
         }
+        self.guard_content(id).await?;
 
         let row: Option<PageRow> = self
             .db
             .query(format!(
-                "UPDATE type::record('page', $id)
+                "BEGIN TRANSACTION;
+                 {GUARD_CONTENT}
+                 UPDATE type::record('page', $id)
                      SET banner_position = IF banner = $banner {{ banner_position }} ELSE {{ 50 }},
                          icon = $icon, banner = $banner, updated_at = time::now()
-                     WHERE id != NONE RETURN {PAGE_FIELDS}"
+                     WHERE id != NONE RETURN {PAGE_FIELDS};
+                 COMMIT TRANSACTION;"
             ))
             .bind(("id", id.to_owned()))
             .bind(("icon", icon.map(str::to_owned)))
             .bind(("banner", banner.map(str::to_owned)))
             .await?
             .check()?
-            .take(0)?;
+            .take(3)?;
 
         row.map(Page::from).ok_or_else(|| not_found(id))
     }
@@ -202,6 +252,7 @@ impl Storage {
                 "a cover position is between 0 and 100".into(),
             ));
         }
+        self.guard_content(id).await?;
         let page = self.find_page(id).await?.ok_or_else(|| not_found(id))?;
         if page.banner.is_none() {
             return Err(StorageError::Invalid("the page has no cover".into()));
@@ -210,15 +261,18 @@ impl Storage {
         let row: Option<PageRow> = self
             .db
             .query(format!(
-                "UPDATE type::record('page', $id)
+                "BEGIN TRANSACTION;
+                 {GUARD_CONTENT}
+                 UPDATE type::record('page', $id)
                      SET banner_position = $position, updated_at = time::now()
-                     WHERE id != NONE RETURN {PAGE_FIELDS}"
+                     WHERE id != NONE RETURN {PAGE_FIELDS};
+                 COMMIT TRANSACTION;"
             ))
             .bind(("id", id.to_owned()))
             .bind(("position", i64::from(position)))
             .await?
             .check()?
-            .take(0)?;
+            .take(3)?;
 
         row.map(Page::from).ok_or_else(|| not_found(id))
     }
@@ -239,6 +293,7 @@ impl Storage {
             pages.iter().map(|page| (page.id.as_str(), page)).collect();
 
         let moved = by_id.get(id).ok_or_else(|| not_found(id))?;
+        self.guard_content(id).await?;
         if moved.database_id.is_some() {
             return Err(StorageError::Invalid(
                 "a row of a database cannot be moved".into(),
@@ -279,6 +334,7 @@ impl Storage {
         self.db
             .query(format!(
                 "BEGIN TRANSACTION;
+                 {GUARD_CONTENT}
                  UPDATE type::record('page', $id) SET parent = {PARENT}, updated_at = time::now();
                  FOR $index IN 0..array::len($order) {{
                      UPDATE type::record('page', $order[$index]) SET position = <float> $index;
@@ -301,13 +357,127 @@ impl Storage {
         self.delete_database_rows(id, super::databases::ROW_CHUNK)
             .await?;
 
+        // The page's own lock is checked again inside the transaction. The
+        // locks of its subpages are only checked before (best effort).
         self.db
-            .query("DELETE type::record('page', $id)")
+            .query(
+                "BEGIN TRANSACTION;
+                 LET $guard = (SELECT lock, database.lock AS database_lock
+                     FROM ONLY type::record('page', $id));
+                 IF $guard != NONE AND ($guard.lock != NONE OR $guard.database_lock = 'all') {
+                     THROW 'notiva:locked';
+                 };
+                 DELETE type::record('page', $id);
+                 COMMIT TRANSACTION;",
+            )
             .bind(("id", id.to_owned()))
             .await?
             .check()?;
 
         Ok(())
+    }
+
+    /// The lock of a page and the lock of its database (unlocked for a page
+    /// that is no row). Fails with `not_found` for an unknown page.
+    async fn locks_of(&self, id: &str) -> Result<(PageLock, PageLock), StorageError> {
+        let row: Option<LockRow> = self
+            .db
+            .query(
+                "SELECT lock, IF database = NONE { NONE } ELSE { database.lock } AS database_lock
+                     FROM type::record('page', $id)",
+            )
+            .bind(("id", id.to_owned()))
+            .await?
+            .check()?
+            .take(0)?;
+
+        let row = row.ok_or_else(|| not_found(id))?;
+        Ok((
+            PageLock::from_stored(row.lock.as_deref()),
+            PageLock::from_stored(row.database_lock.as_deref()),
+        ))
+    }
+
+    /// Fails with `locked` when the title, text, icon, cover or position of
+    /// the page may not change: it is locked itself, or it is a row of a
+    /// database locked at `all`.
+    pub(super) async fn guard_content(&self, id: &str) -> Result<(), StorageError> {
+        match self.locks_of(id).await? {
+            (PageLock::None, database) if database != PageLock::All => Ok(()),
+            _ => Err(locked(id)),
+        }
+    }
+
+    /// Fails with `locked` when the cells of a row may not change: the row or
+    /// its database is locked at `all`.
+    pub(super) async fn guard_cells(&self, row_id: &str) -> Result<(), StorageError> {
+        let (own, database) = self.locks_of(row_id).await?;
+        if own == PageLock::All || database == PageLock::All {
+            Err(locked(row_id))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Fails with `locked` when the properties, views and rows of a database
+    /// may not change: it is locked at `all`.
+    pub(super) async fn guard_database(&self, database_id: &str) -> Result<(), StorageError> {
+        if self.locks_of(database_id).await?.0 == PageLock::All {
+            Err(locked(database_id))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Fails with `locked` when the page cannot be deleted: it is a row of a
+    /// database locked at `all`, or it or a page below it is locked.
+    pub(super) async fn guard_delete(&self, id: &str) -> Result<(), StorageError> {
+        let (_, database) = self.locks_of(id).await?;
+        if database == PageLock::All {
+            return Err(locked(id));
+        }
+
+        let locked_ids: Vec<String> = self
+            .db
+            .query("SELECT VALUE record::id(id) FROM page WHERE lock != NONE")
+            .await?
+            .check()?
+            .take(0)?;
+        for locked_id in locked_ids {
+            // Walk up from the locked page: meeting `id` means it goes along.
+            let mut current = Some(locked_id.clone());
+            while let Some(page_id) = current {
+                if page_id == id {
+                    return Err(locked(&locked_id));
+                }
+                current = self
+                    .find_page(&page_id)
+                    .await?
+                    .and_then(|page| page.parent_id);
+            }
+        }
+        Ok(())
+    }
+
+    /// Sets the lock of a page. This never fails because of a lock and does
+    /// not advance `updated_at`.
+    pub async fn set_lock(&self, id: &str, lock: PageLock) -> Result<Page, StorageError> {
+        // Shared like every writer: a move to the trash decides under the
+        // exclusive gate, so no lock can be set between its check and its copy.
+        let _write = self.write_gate.read().await;
+        let row: Option<PageRow> = self
+            .db
+            .query(format!(
+                "UPDATE type::record('page', $id) SET lock = $lock
+                     WHERE id != NONE RETURN {PAGE_FIELDS}"
+            ))
+            .bind(("id", id.to_owned()))
+            .bind(("lock", lock.stored()))
+            .await?
+            .check()?
+            .take(0)?;
+
+        row.map(Page::from).ok_or_else(|| not_found(id))
     }
 
     /// The page with the given id, if there is one.

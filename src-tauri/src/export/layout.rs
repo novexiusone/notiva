@@ -195,6 +195,7 @@ mod tests {
             icon: None,
             banner: None,
             banner_position: 50,
+            lock: Default::default(),
             updated_at: "2026-11-15T00:00:00Z".into(),
         }
     }

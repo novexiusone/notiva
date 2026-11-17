@@ -67,6 +67,7 @@ pub fn run() {
             commands::pages::set_favorite,
             commands::pages::update_appearance,
             commands::pages::set_banner_position,
+            commands::pages::set_lock,
             commands::pages::move_page,
             commands::pages::delete_page,
             commands::databases::create_database,

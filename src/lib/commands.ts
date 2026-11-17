@@ -2,6 +2,9 @@ import { invoke } from '@tauri-apps/api/core';
 
 export type AppInfo = { name: string; version: string };
 
+/** `content` locks the page itself, `all` also a database's rows, cells, properties and views. */
+export type PageLock = 'none' | 'content' | 'all';
+
 export type Page = {
   id: string;
   title: string;
@@ -16,6 +19,8 @@ export type Page = {
   icon: string | null;
   banner: string | null;
   bannerPosition: number;
+  /** What the backend refuses to change; see `SPEC-pages.md`. */
+  lock: PageLock;
   updatedAt: string;
 };
 
@@ -203,6 +208,7 @@ export type CommandError = {
   kind:
     | 'not_found'
     | 'invalid'
+    | 'locked'
     | 'conflict'
     | 'internal'
     | 'passphrase_required'
@@ -254,6 +260,7 @@ export const commands = {
     invoke<Page>('update_appearance', { id, icon, banner }),
   setBannerPosition: (id: string, position: number) =>
     invoke<Page>('set_banner_position', { id, position }),
+  setLock: (id: string, lock: PageLock) => invoke<Page>('set_lock', { id, lock }),
   movePage: (id: string, parentId: string | null, index: number) =>
     invoke<void>('move_page', { id, parentId, index }),
   /** Moves the page with its subpages to the trash. */

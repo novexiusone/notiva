@@ -115,6 +115,7 @@ impl Storage {
         self.db
             .query(
                 "BEGIN TRANSACTION;
+                 {GUARD}
                  LET $row = type::record('page', $row_id);
                  LET $property = type::record('property', $property_id);
                  DELETE row_link WHERE in = $row AND property = $property;
@@ -124,8 +125,10 @@ impl Storage {
                          RETURN NONE;
                  };
                  UPDATE ONLY $row SET updated_at = time::now() RETURN NONE;
-                 COMMIT TRANSACTION;",
+                 COMMIT TRANSACTION;"
+                    .replace("{GUARD}", super::pages::guard_cells_sql()),
             )
+            .bind(("id", row_id.to_owned()))
             .bind(("row_id", row_id.to_owned()))
             .bind(("property_id", property.id.clone()))
             .bind(("edges", edges))

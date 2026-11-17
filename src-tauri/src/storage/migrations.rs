@@ -71,6 +71,11 @@ pub(super) const MIGRATIONS: &[Migration] = &[
         name: "trash_and_versions",
         sql: include_str!("migrations/0011_trash_and_versions.surql"),
     },
+    Migration {
+        version: 12,
+        name: "page_lock",
+        sql: include_str!("migrations/0012_page_lock.surql"),
+    },
 ];
 
 const BOOTSTRAP: &str = "

@@ -18,6 +18,19 @@ pub(super) const PROPERTY_FIELDS: &str = "record::id(id) AS id, \
      record::id(database) AS database_id, name, type AS kind, position, options, \
      IF target = NONE { NONE } ELSE { record::id(target) } AS target_id";
 
+/// The condition that a row about to be written by [`WRITE_CELLS`] is locked
+/// at `all`.
+const WRITTEN_ROW_LOCKED: &str = "count(SELECT VALUE id FROM page WHERE lock = 'all'
+         AND id IN array::concat($cells, $emptied).map(|$w| type::record('page', $w.id))) > 0";
+
+/// Throws when a row that is about to be written is locked at `all`. Goes at
+/// the start of a transaction that uses [`WRITE_CELLS`]. The check is the
+/// first statement, so that the error of the transaction is the lock.
+const GUARD_ROWS: &str = "IF count(SELECT VALUE id FROM page WHERE lock = 'all'
+         AND id IN array::concat($cells, $emptied).map(|$w| type::record('page', $w.id))) > 0 {
+         THROW 'notiva:locked';
+     };";
+
 /// Writes many cells of the property `$key` in two statements, whatever the
 /// number of rows: every `{ id, value, text }` in `$cells` is set, every row
 /// in `$emptied` (`{ id, text }`) loses the key. `text` is the row's search
@@ -304,6 +317,7 @@ impl Storage {
         // Writers wait while a page is moved to or from the trash.
         let _write = self.write_gate.read().await;
         self.require_database(database_id).await?;
+        self.guard_database(database_id).await?;
         match (kind, target_id) {
             (PropertyType::Relation, Some(target)) => {
                 self.require_database(target).await?;
@@ -356,6 +370,7 @@ impl Storage {
         // Writers wait while a page is moved to or from the trash.
         let _write = self.write_gate.read().await;
         let property = self.find_property(id).await?.ok_or_else(|| not_found(id))?;
+        self.guard_database(&property.database_id).await?;
         if let Some(options) = options {
             if property.kind != PropertyType::Select {
                 return Err(StorageError::Invalid("only a select has options".into()));
@@ -437,6 +452,7 @@ impl Storage {
         // Writers wait while a page is moved to or from the trash.
         let _write = self.write_gate.read().await;
         let property = self.find_property(id).await?.ok_or_else(|| not_found(id))?;
+        self.guard_database(&property.database_id).await?;
 
         let (properties, rows) = self
             .read_rows_with(&property.database_id, &property.id)
@@ -465,6 +481,12 @@ impl Storage {
         self.db
             .query(format!(
                 "BEGIN TRANSACTION;
+                 -- The edges of a relation are the cells of their source rows.
+                 IF {WRITTEN_ROW_LOCKED} OR count(SELECT VALUE id FROM page
+                     WHERE lock = 'all' AND id IN (SELECT VALUE in FROM row_link
+                         WHERE property = type::record('property', $id))) > 0 {{
+                     THROW 'notiva:locked';
+                 }};
                  DELETE type::record('property', $id);
                  {WRITE_CELLS}
                  FOR $view IN $views {{
@@ -497,6 +519,7 @@ impl Storage {
             .find_property(property_id)
             .await?
             .ok_or_else(|| not_found(property_id))?;
+        self.guard_database(&property.database_id).await?;
         if property.kind != PropertyType::Select {
             return Err(StorageError::Invalid("only a select has options".into()));
         }
@@ -528,6 +551,7 @@ impl Storage {
         self.db
             .query(format!(
                 "BEGIN TRANSACTION;
+                 {GUARD_ROWS}
                  UPDATE type::record('property', $id) SET options = options[WHERE id != $option]
                      RETURN NONE;
                  {WRITE_CELLS}
@@ -556,6 +580,7 @@ impl Storage {
         // Writers wait while a page is moved to or from the trash.
         let _write = self.write_gate.read().await;
         let property = self.find_property(id).await?.ok_or_else(|| not_found(id))?;
+        self.guard_database(&property.database_id).await?;
         if property.kind == kind {
             return Ok(property);
         }
@@ -607,6 +632,7 @@ impl Storage {
             .db
             .query(format!(
                 "BEGIN TRANSACTION;
+                 {GUARD_ROWS}
                  LET $property = type::record('property', $id);
                  IF (SELECT VALUE type FROM ONLY $property) != $from {{
                      THROW 'the property changed while its type was being changed';
@@ -625,7 +651,7 @@ impl Storage {
             .bind(("emptied", writes.emptied))
             .await?
             .check()?
-            .take(3)?;
+            .take(4)?;
 
         row.ok_or_else(|| not_found(id))?.try_into()
     }

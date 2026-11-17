@@ -11,7 +11,7 @@ pub use block::Block;
 pub use database::{
     CellValue, Database, IncomingRelation, Property, PropertyType, Row, SELECT_COLORS, SelectOption,
 };
-pub use page::{Page, PageKind, PageRef};
+pub use page::{Page, PageKind, PageLock, PageRef};
 pub use search::SearchHit;
 pub use trash::{PageVersion, PageVersionContent, TrashSettings, TrashedPage};
 pub use view::{View, ViewConfig};

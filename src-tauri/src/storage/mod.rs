@@ -10,7 +10,7 @@ mod databases;
 mod error;
 mod links;
 mod migrations;
-mod pages;
+pub(crate) mod pages;
 mod properties;
 mod relations;
 mod rows;
@@ -21,6 +21,8 @@ mod views;
 
 #[cfg(test)]
 mod benchmark;
+#[cfg(test)]
+mod lock_tests;
 #[cfg(test)]
 mod tests;
 
