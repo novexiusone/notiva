@@ -18,6 +18,7 @@ import {
   type ViewConfig,
   type ViewSort,
 } from '@/lib/commands';
+import { createFakeNotes, type NotesOptions } from '@/test/fakeNotes';
 
 const STORAGE_KEY = 'notiva.fake.pages';
 const BLOCKS_KEY = 'notiva.fake.blocks';
@@ -45,6 +46,8 @@ type Options = {
   views?: View[];
   /** Cell values by row id, then by property id. */
   cells?: Record<string, Cells>;
+  /** The notes folder: the chosen folder and its files by relative path. */
+  notes?: NotesOptions;
 };
 
 function byPosition(a: { position: number }, b: { position: number }) {
@@ -400,6 +403,7 @@ export function installFakeBackend({
   properties: initialProperties = [],
   views: initialViews = [],
   cells: initialCells = {},
+  notes: initialNotes,
 }: Options = {}) {
   let pages: Page[] = initial;
   let blocks: Record<string, Block[]> = initialBlocks;
@@ -417,6 +421,7 @@ export function installFakeBackend({
     if (storedDatabases !== null) databases = JSON.parse(storedDatabases) as DatabaseState;
   }
   pages = pages.map(withPageFields);
+  const notes = createFakeNotes(initialNotes);
 
   const save = (next: Page[]) => {
     pages = next;
@@ -1029,8 +1034,11 @@ export function installFakeBackend({
         return `data:${type};base64,${btoa(binary)}`;
       }
 
-      default:
+      default: {
+        const result = notes(command, args);
+        if (result !== undefined) return result;
         return fail('internal', `the fake backend does not implement ${command}`);
+      }
     }
   });
 }
