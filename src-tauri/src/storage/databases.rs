@@ -12,17 +12,40 @@ use crate::domain::{Database, PageKind, Property, PropertyType, SelectOption, Vi
 /// The name of the view a new database starts with.
 const FIRST_VIEW_NAME: &str = "Table";
 
-/// How many rows of a database one transaction deletes. Deleting a row fires
-/// the delete events for the row and its blocks inside the transaction, and
-/// one transaction for 10,000 rows took 13.8 s in the research run.
-///
-/// Measured on disk in the benchmark profile with 10,000 rows, seven
-/// properties and three blocks per row: 23.8 s in one transaction, 17.5 to
-/// 17.7 s in chunks of 500 to 2,500 rows (18.8 s with 100). Without blocks:
-/// 1.5 s in one transaction, 1.7 to 1.9 s in chunks of 500 to 2,500. The
-/// block events dominate either way; 500 keeps each transaction under a
-/// second without costing anything measurable.
+/// How many rows of a database one transaction deletes. The transaction
+/// does the cascade with set-based statements (see `CHUNK_DELETE`), so the
+/// chunk is only there to keep each transaction short; see "Delete the
+/// database" in SPEC-databases for the measurements.
 pub(super) const ROW_CHUNK: usize = 500;
+
+/// Deletes the rows `$rows` of a database. The rows with subpages are
+/// deleted last through the delete events, which delete the subpages with
+/// their own cascade. For the others the cascade of the event `page_deleted`
+/// is done here for all of them at once: blocks, and the links of the pages
+/// and of their blocks. The events still fire for every deleted record, but
+/// find nothing left to delete. A row is no database and no database's
+/// target, so it has no properties and no views. The lookups are written one
+/// record at a time with `array::map`, because `WHERE page IN $rows` took
+/// 370 ms for 500 rows where this takes 10 ms in a large table.
+const CHUNK_DELETE: &str = "BEGIN TRANSACTION;
+    LET $parents = array::distinct(array::flatten(
+        array::map($rows, |$p| (SELECT VALUE parent FROM page WHERE parent = $p))));
+    LET $plain = array::complement($rows, $parents);
+    LET $blocks = array::flatten(
+        array::map($plain, |$p| (SELECT VALUE id FROM block WHERE page = $p)));
+    LET $block_links = array::flatten(
+        array::map($blocks, |$b| (SELECT VALUE id FROM links_to WHERE block = $b)));
+    LET $in_links = array::flatten(
+        array::map($plain, |$p| (SELECT VALUE id FROM links_to WHERE in = $p)));
+    LET $out_links = array::flatten(
+        array::map($plain, |$p| (SELECT VALUE id FROM links_to WHERE out = $p)));
+    DELETE $block_links RETURN NONE;
+    DELETE $in_links RETURN NONE;
+    DELETE $out_links RETURN NONE;
+    DELETE $blocks RETURN NONE;
+    DELETE $plain RETURN NONE;
+    DELETE $parents RETURN NONE;
+    COMMIT TRANSACTION;";
 
 /// A page found while walking down the tree, and whether it is a database.
 #[derive(SurrealValue)]
@@ -189,27 +212,39 @@ impl Storage {
                 .take(1)?;
         }
 
+        // The ids of the rows are read once and deleted in slices. Asking for
+        // the first rows again after every chunk would read past the entries
+        // of the rows just deleted, which makes the delete slower with every
+        // chunk. Rows added meanwhile are found by the next pass.
         for database in databases.into_iter().rev() {
+            let mut previous: Vec<RecordId> = Vec::new();
             loop {
-                let deleted: Option<usize> = self
+                let rows: Vec<RecordId> = self
                     .db
-                    .query(
-                        "BEGIN TRANSACTION;
-                         LET $database = $record;
-                         LET $rows = (SELECT VALUE id FROM page WHERE database = $database
-                             LIMIT $chunk);
-                         DELETE $rows RETURN NONE;
-                         RETURN array::len($rows);
-                         COMMIT TRANSACTION;",
-                    )
+                    .query("SELECT VALUE id FROM page WHERE database = $record")
                     .bind(("record", database.clone()))
-                    .bind(("chunk", chunk))
                     .await?
                     .check()?
-                    .take(4)?;
-                if deleted.unwrap_or(0) < chunk {
+                    .take(0)?;
+                if rows.is_empty() {
                     break;
                 }
+                // A pass that deleted nothing would read the same rows again
+                // for ever.
+                if rows == previous {
+                    return Err(StorageError::Database(format!(
+                        "{} rows of a database could not be deleted",
+                        rows.len()
+                    )));
+                }
+                for slice in rows.chunks(chunk.max(1)) {
+                    self.db
+                        .query(CHUNK_DELETE)
+                        .bind(("rows", slice.to_vec()))
+                        .await?
+                        .check()?;
+                }
+                previous = rows;
             }
         }
 
@@ -545,6 +580,151 @@ mod tests {
         expected.sort();
         assert_eq!(page_ids(&storage).await, expected);
         assert_eq!(count(&storage, "block").await, 0);
+    }
+
+    /// The same records in a fresh storage every time, with fixed ids: a
+    /// database `db` with five rows `r0` to `r4` that each have a block with
+    /// a child block, a subpage `sub` of `r1` with a block, links from blocks
+    /// of rows and subpage to `other`, links from `other` to rows, and a
+    /// second database `kept` with one row, a block and a link.
+    async fn fixture() -> Storage {
+        let storage = storage().await;
+        let mut sql = String::from(
+            "CREATE page:db SET kind = 'database', title = 'db', position = 0.0;
+             CREATE page:kept SET kind = 'database', title = 'kept', position = 1.0;
+             CREATE page:other SET title = 'other', position = 2.0;
+             CREATE property:p SET database = page:db, name = 'P', type = 'text';
+             CREATE view:v SET database = page:db, name = 'V', config = {};
+             CREATE page:kr SET title = 'kr', parent = page:kept, database = page:kept;
+             CREATE block:kb SET page = page:kr, type = 'paragraph';
+             RELATE page:kr->links_to->page:other SET block = block:kb;
+             CREATE page:sub SET title = 'sub', parent = page:r1;
+             CREATE block:sub SET page = page:sub, type = 'paragraph';
+             RELATE page:sub->links_to->page:other SET block = block:sub;",
+        );
+        for row in 0..5 {
+            sql.push_str(&format!(
+                "CREATE page:r{row} SET title = 'r{row}', parent = page:db, database = page:db,
+                     position = {row}.0, props = {{}};
+                 CREATE block:r{row}a SET page = page:r{row}, type = 'paragraph';
+                 CREATE block:r{row}b SET page = page:r{row}, parent = block:r{row}a,
+                     type = 'paragraph';"
+            ));
+        }
+        sql.push_str(
+            "RELATE page:r0->links_to->page:other SET block = block:r0b;
+             RELATE page:other->links_to->page:r2 SET block = block:kb;
+             RELATE page:other->links_to->page:r3 SET block = block:r0a;",
+        );
+        storage.db.query(sql).await.unwrap().check().unwrap();
+        storage
+    }
+
+    /// The ids of every record of the tables the cascade touches.
+    async fn records(storage: &Storage) -> Vec<(&'static str, Vec<String>)> {
+        let mut all = Vec::new();
+        for table in ["page", "block", "links_to", "property", "view"] {
+            // The ids of links are random, so a link is named by its ends.
+            let name = if table == "links_to" {
+                "<string>in + '>' + <string>out + '@' + <string>block"
+            } else {
+                "<string>id"
+            };
+            let mut ids: Vec<String> = storage
+                .db
+                .query(format!("SELECT VALUE {name} FROM {table}"))
+                .await
+                .unwrap()
+                .take(0)
+                .unwrap();
+            ids.sort();
+            all.push((table, ids));
+        }
+        all
+    }
+
+    /// The set-based delete of a chunk removes exactly what the delete events
+    /// remove. One copy of the fixture loses its rows through the events (one
+    /// `DELETE` per row), the other through `delete_database_rows`, with rows
+    /// with and without subpages in one chunk; every table must match.
+    #[tokio::test]
+    async fn a_chunk_delete_removes_what_the_events_remove() {
+        let by_events = fixture().await;
+        for row in 0..5 {
+            by_events
+                .db
+                .query(format!("DELETE page:r{row}"))
+                .await
+                .unwrap()
+                .check()
+                .unwrap();
+        }
+        let by_chunk = fixture().await;
+
+        by_chunk.delete_database_rows("db", 3).await.unwrap();
+
+        let expected = records(&by_events).await;
+        assert_eq!(records(&by_chunk).await, expected);
+        // And that is what should be left: the database with its property
+        // and view, the other database with its row, block and link.
+        let table = |name: &str| {
+            expected
+                .iter()
+                .find(|(table, _)| *table == name)
+                .unwrap()
+                .1
+                .clone()
+        };
+        assert_eq!(table("block"), ["block:kb"]);
+        assert_eq!(table("property"), ["property:p"]);
+        assert_eq!(table("view"), ["view:v"]);
+        assert_eq!(table("links_to").len(), 1);
+        assert_eq!(table("page").len(), 4);
+    }
+
+    /// A delete that leaves rows behind ends with an error instead of
+    /// reading the same rows for ever. The event here brings every deleted
+    /// row back.
+    #[tokio::test]
+    async fn rows_that_cannot_be_deleted_end_the_delete_with_an_error() {
+        let storage = fixture().await;
+        storage
+            .db
+            .query(
+                "DEFINE EVENT bring_back ON page WHEN $event = 'DELETE' AND $before.database != NONE THEN {
+                     CREATE $before.id SET title = $before.title, parent = $before.parent,
+                         database = $before.database, props = {};
+                 };",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+
+        let error = storage.delete_database_rows("db", 3).await.unwrap_err();
+
+        assert!(matches!(error, StorageError::Database(_)));
+    }
+
+    /// A row is never a database: a database below a row has no `database`
+    /// field, so the chunk delete does not take it for a row, and deleting
+    /// the row cascades its properties and views through the events.
+    #[tokio::test]
+    async fn a_database_below_a_row_is_not_a_row_of_the_outer_one() {
+        let storage = storage().await;
+        let outer = filled_database(&storage, None, 1).await;
+        let row = storage.list_rows(&outer.page.id).await.unwrap().remove(0);
+        let inner = filled_database(&storage, Some(&row.id), 2).await;
+
+        storage
+            .delete_database_rows(&outer.page.id, 10)
+            .await
+            .unwrap();
+
+        // The inner database lost its rows first, then went with the row.
+        assert!(storage.load_database(&inner.page.id).await.is_err());
+        assert_eq!(count(&storage, "property").await, 1);
+        assert_eq!(count(&storage, "view").await, 2);
     }
 
     #[tokio::test]
