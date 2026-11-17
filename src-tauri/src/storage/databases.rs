@@ -215,6 +215,7 @@ impl Storage {
         // of the rows just deleted, which makes the delete slower with every
         // chunk. Rows added meanwhile are found by the next pass.
         for database in databases.into_iter().rev() {
+            let mut previous: Vec<RecordId> = Vec::new();
             loop {
                 let rows: Vec<RecordId> = self
                     .db
@@ -226,6 +227,14 @@ impl Storage {
                 if rows.is_empty() {
                     break;
                 }
+                // A pass that deleted nothing would read the same rows again
+                // for ever.
+                if rows == previous {
+                    return Err(StorageError::Database(format!(
+                        "{} rows of a database could not be deleted",
+                        rows.len()
+                    )));
+                }
                 for slice in rows.chunks(chunk.max(1)) {
                     self.db
                         .query(CHUNK_DELETE)
@@ -233,6 +242,7 @@ impl Storage {
                         .await?
                         .check()?;
                 }
+                previous = rows;
             }
         }
 
@@ -668,6 +678,30 @@ mod tests {
         assert_eq!(table("view"), ["view:v"]);
         assert_eq!(table("links_to").len(), 1);
         assert_eq!(table("page").len(), 4);
+    }
+
+    /// A delete that leaves rows behind ends with an error instead of
+    /// reading the same rows for ever. The event here brings every deleted
+    /// row back.
+    #[tokio::test]
+    async fn rows_that_cannot_be_deleted_end_the_delete_with_an_error() {
+        let storage = fixture().await;
+        storage
+            .db
+            .query(
+                "DEFINE EVENT bring_back ON page WHEN $event = 'DELETE' AND $before.database != NONE THEN {
+                     CREATE $before.id SET title = $before.title, parent = $before.parent,
+                         database = $before.database, props = {};
+                 };",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+
+        let error = storage.delete_database_rows("db", 3).await.unwrap_err();
+
+        assert!(matches!(error, StorageError::Database(_)));
     }
 
     /// A row is never a database: a database below a row has no `database`
