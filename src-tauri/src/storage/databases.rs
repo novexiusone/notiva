@@ -89,6 +89,8 @@ impl Storage {
     /// starts without properties: the title column is the title of its rows.
     /// It has one table view, because a database always has at least one.
     pub async fn create_database(&self, parent_id: Option<&str>) -> Result<Database, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let page = self.insert_page(parent_id, PageKind::Database).await?;
         let view = match self
             .insert_view(&page.id, FIRST_VIEW_NAME, &ViewConfig::empty_table())

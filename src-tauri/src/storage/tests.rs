@@ -6,7 +6,7 @@ use super::migrations::{self, MIGRATIONS, Migration};
 use super::{DATABASE, NAMESPACE, Storage, StorageError};
 use crate::domain::PageKind;
 
-const LATEST: u32 = 10;
+const LATEST: u32 = 11;
 
 async fn storage() -> Storage {
     Storage::open_in_memory()
@@ -59,7 +59,7 @@ async fn count(storage: &Storage, table: &str) -> i64 {
 
 /// Opens a database that was just closed. The engine releases its file lock
 /// shortly after the handle is dropped, so this retries for a moment.
-async fn reopen(path: &std::path::Path) -> Storage {
+pub(super) async fn reopen(path: &std::path::Path) -> Storage {
     for _ in 0..100 {
         if let Ok(storage) = Storage::open(path).await {
             return storage;
@@ -676,7 +676,10 @@ async fn a_database_at_version_5_migrates_and_its_rows_are_found_by_their_proper
     .unwrap();
 
     migrations::run(&db, MIGRATIONS).await.unwrap();
-    let storage = Storage { db };
+    let storage = Storage {
+        db,
+        write_gate: tokio::sync::RwLock::new(()),
+    };
 
     assert_eq!(
         migrations::current_version(&storage.db).await.unwrap(),

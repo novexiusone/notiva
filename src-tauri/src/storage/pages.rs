@@ -78,6 +78,8 @@ impl Storage {
     /// Creates an untitled page after the last child of `parent_id`. The
     /// children of a database are its rows, so a database cannot be the parent.
     pub async fn create_page(&self, parent_id: Option<&str>) -> Result<Page, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         self.insert_page(parent_id, PageKind::Page).await
     }
 
@@ -123,6 +125,8 @@ impl Storage {
     }
 
     pub async fn rename_page(&self, id: &str, title: &str) -> Result<Page, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let row: Option<PageRow> = self
             .db
             .query(format!(
@@ -139,6 +143,8 @@ impl Storage {
     }
 
     pub async fn set_favorite(&self, id: &str, favorite: bool) -> Result<Page, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let row: Option<PageRow> = self
             .db
             .query(format!(
@@ -160,6 +166,8 @@ impl Storage {
         icon: Option<&str>,
         banner: Option<&str>,
     ) -> Result<Page, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         if icon == Some("") || banner == Some("") {
             return Err(StorageError::Invalid(
                 "an icon or banner must be a non-empty string or none".into(),
@@ -187,6 +195,8 @@ impl Storage {
     /// Moves the cover image inside the cover. `position` runs from 0 (the top
     /// of the image is shown) to 100 (the bottom); the page needs a cover.
     pub async fn set_banner_position(&self, id: &str, position: u8) -> Result<Page, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         if position > 100 {
             return Err(StorageError::Invalid(
                 "a cover position is between 0 and 100".into(),
@@ -222,6 +232,8 @@ impl Storage {
         parent_id: Option<&str>,
         index: usize,
     ) -> Result<(), StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let pages = self.list_pages().await?;
         let by_id: HashMap<&str, &Page> =
             pages.iter().map(|page| (page.id.as_str(), page)).collect();

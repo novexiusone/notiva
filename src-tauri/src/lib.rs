@@ -109,6 +109,15 @@ pub fn run() {
             commands::backup::restore_backup_to_folder,
             commands::backup::backup_status,
             commands::backup::restart_app,
+            commands::trash::list_trash,
+            commands::trash::restore_page,
+            commands::trash::delete_page_permanently,
+            commands::trash::empty_trash,
+            commands::trash::get_trash_settings,
+            commands::trash::set_trash_retention,
+            commands::trash::list_page_versions,
+            commands::trash::load_page_version,
+            commands::trash::restore_page_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

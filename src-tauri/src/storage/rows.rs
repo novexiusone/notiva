@@ -275,6 +275,8 @@ impl Storage {
     /// Adds an untitled row after the last row of the database, without
     /// touching the others.
     pub async fn create_row(&self, database_id: &str) -> Result<Row, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         self.require_database(database_id).await?;
 
         let record: Option<RowRecord> = self
@@ -309,6 +311,8 @@ impl Storage {
         property_id: &str,
         value: CellValue,
     ) -> Result<(), StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let property = self.cell_property(row_id, property_id).await?;
         let value = check(&property, value)?;
         if property.kind == PropertyType::Relation {
