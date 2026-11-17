@@ -1,12 +1,15 @@
+mod backup;
 mod commands;
 mod domain;
 mod export;
 mod media;
+mod notes;
 mod storage;
 
 use tauri::Manager;
 
 use media::ImageStore;
+use notes::NotesSettings;
 use storage::Storage;
 
 /// SurrealDB recurses deeply while parsing and planning queries, which
@@ -26,9 +29,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data = app.path().app_data_dir()?;
+            // A restore that was prepared is applied before the database opens.
+            std::fs::create_dir_all(&data)?;
+            backup::apply_pending_restore(&data)?;
             let storage = tauri::async_runtime::block_on(Storage::open(&data.join("db")))?;
             app.manage(storage);
             app.manage(ImageStore::open(&data.join("images"))?);
+            app.manage(NotesSettings::open(&data.join("settings.json")));
+            app.manage(backup::BackupService::default());
+            tauri::async_runtime::spawn(commands::backup::run_scheduler(app.handle().clone()));
             Ok(())
         })
         // Serves stored images to the WebView, and nothing else.
@@ -70,6 +79,7 @@ pub fn run() {
             commands::databases::delete_property,
             commands::databases::delete_select_option,
             commands::databases::change_property_type,
+            commands::databases::list_incoming_relations,
             commands::blocks::load_blocks,
             commands::blocks::save_blocks,
             commands::images::save_image,
@@ -81,6 +91,24 @@ pub fn run() {
             commands::views::create_view,
             commands::views::update_view,
             commands::views::delete_view,
+            commands::notes::get_notes_folder,
+            commands::notes::set_notes_folder,
+            commands::notes::clear_notes_folder,
+            commands::notes::list_notes,
+            commands::notes::read_note,
+            commands::notes::create_note,
+            commands::notes::save_note,
+            commands::notes::rename_note,
+            commands::notes::delete_note,
+            commands::backup::get_backup_settings,
+            commands::backup::set_backup_settings,
+            commands::backup::create_backup,
+            commands::backup::list_backups,
+            commands::backup::inspect_backup,
+            commands::backup::restore_backup,
+            commands::backup::restore_backup_to_folder,
+            commands::backup::backup_status,
+            commands::backup::restart_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

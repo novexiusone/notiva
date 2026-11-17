@@ -1,7 +1,9 @@
 use serde::Serialize;
 
+use crate::backup::BackupError;
 use crate::export::ExportError;
 use crate::media::ImageError;
+use crate::notes::NotesError;
 use crate::storage::StorageError;
 
 /// What the frontend sees when a command fails.
@@ -41,6 +43,26 @@ impl From<ImageError> for CommandError {
     }
 }
 
+impl From<BackupError> for CommandError {
+    fn from(error: BackupError) -> Self {
+        let kind = match error {
+            BackupError::NotABackup | BackupError::Invalid(_) => "invalid",
+            BackupError::NotFound(_) => "not_found",
+            BackupError::PassphraseRequired => "passphrase_required",
+            BackupError::WrongPassphrase => "wrong_passphrase",
+            BackupError::Corrupt(_) => "corrupt",
+            BackupError::SchemaTooNew { .. } => "schema_too_new",
+            BackupError::Unsupported(_) => "unsupported",
+            BackupError::Storage(_) | BackupError::Io(_) | BackupError::Internal(_) => "internal",
+        };
+
+        Self {
+            kind,
+            message: error.to_string(),
+        }
+    }
+}
+
 impl From<ExportError> for CommandError {
     fn from(error: ExportError) -> Self {
         match error {
@@ -53,6 +75,22 @@ impl From<ExportError> for CommandError {
                 kind: "internal",
                 message: error.to_string(),
             },
+        }
+    }
+}
+
+impl From<NotesError> for CommandError {
+    fn from(error: NotesError) -> Self {
+        let kind = match error {
+            NotesError::NoFolder | NotesError::NotFound(_) => "not_found",
+            NotesError::Conflict => "conflict",
+            NotesError::Io(_) | NotesError::Settings(_) => "internal",
+            _ => "invalid",
+        };
+
+        Self {
+            kind,
+            message: error.to_string(),
         }
     }
 }

@@ -11,7 +11,7 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 
-use crate::domain::{Block, Page, PageKind};
+use crate::domain::{Block, Page, PageKind, PropertyType};
 use crate::media::{self, ImageStore};
 use crate::storage::{Storage, StorageError};
 
@@ -251,12 +251,31 @@ async fn read_database(
     let listed = storage.list_rows(database_id).await?;
     let mut blocks = storage.load_row_blocks(database_id).await?;
 
+    // The titles of the rows the relations point at: one read per target
+    // database, however many rows point at it.
+    let mut titles: HashMap<String, String> = HashMap::new();
+    let mut read_targets = HashSet::new();
+    for target in properties
+        .iter()
+        .filter(|property| property.kind == PropertyType::Relation)
+        .filter_map(|property| property.target_id.as_deref())
+    {
+        if read_targets.insert(target) {
+            let rows = if target == database_id {
+                listed.clone()
+            } else {
+                storage.list_rows(target).await?
+            };
+            titles.extend(rows.into_iter().map(|row| (row.id, row.title)));
+        }
+    }
+
     let mut table_rows = Vec::with_capacity(listed.len());
     let mut files = HashMap::with_capacity(listed.len());
     for row in listed {
         let values: Vec<String> = properties
             .iter()
-            .map(|property| database::value(property, row.cells.get(&property.id)))
+            .map(|property| database::value(property, row.cells.get(&property.id), &titles))
             .collect();
         files.insert(
             row.id.clone(),

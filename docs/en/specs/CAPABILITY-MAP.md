@@ -29,13 +29,20 @@ Deliberately excluded: real-time sync, permissions, comments, web clipper.
 
 Notion-style databases are the first feature after the MVP (#19, #20). They are three modules:
 
-| Module id        | Responsibility                                                                        | Depends on            | Spec                                             |
-| ---------------- | ------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------ |
-| `databases`      | Database pages, typed properties, rows as pages, cells, relations, the table          | `pages`, `storage`    | [SPEC-databases.md](SPEC-databases.md)           |
-| `database-views` | Stored views per database; filter, sort and group; drag and drop; kanban and calendar | `databases`           | [SPEC-database-views.md](SPEC-database-views.md) |
-| `database-embed` | A database as a block inside a normal page, inserted from the slash menu              | `databases`, `editor` | [SPEC-database-embed.md](SPEC-database-embed.md) |
+| Module id        | Responsibility                                                                                      | Depends on            | Spec                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------ |
+| `databases`      | Database pages, typed properties, rows as pages, cells, relations, the table                        | `pages`, `storage`    | [SPEC-databases.md](SPEC-databases.md)           |
+| `database-views` | Stored views per database; filter, sort and group; drag and drop; kanban and calendar               | `databases`           | [SPEC-database-views.md](SPEC-database-views.md) |
+| `database-embed` | A database as a block inside a normal page, inserted from the slash menu                            | `databases`, `editor` | [SPEC-database-embed.md](SPEC-database-embed.md) |
+| `notes`          | A user-chosen folder of plain Markdown files: list, read, create, save, rename, delete; path safety | `app-shell`           | [SPEC-notes.md](SPEC-notes.md)                   |
 
 Build order: `databases` → `database-views`, `database-embed`. `search` and `export` each get one extension (#69, #68).
+
+### Backup
+
+| Module id | Responsibility                                                                                        | Depends on | Spec                             |
+| --------- | ----------------------------------------------------------------------------------------------------- | ---------- | -------------------------------- |
+| `backup`  | Backup archive, safe restore, local schedule with pruning, passphrase encryption (#26, backend first) | `storage`  | [SPEC-backup.md](SPEC-backup.md) |
 
 ### Work packages
 

@@ -3,6 +3,9 @@ import { canMove, childIds, descendantIds, movePage } from '@/features/pages/tre
 import {
   SELECT_COLORS,
   type Block,
+  type BackupInfo,
+  type BackupSettings,
+  type BackupStatus,
   type CellValue,
   type CommandError,
   type FilterOperator,
@@ -18,6 +21,7 @@ import {
   type ViewConfig,
   type ViewSort,
 } from '@/lib/commands';
+import { createFakeNotes, type NotesOptions } from '@/test/fakeNotes';
 
 const STORAGE_KEY = 'notiva.fake.pages';
 const BLOCKS_KEY = 'notiva.fake.blocks';
@@ -45,6 +49,8 @@ type Options = {
   views?: View[];
   /** Cell values by row id, then by property id. */
   cells?: Record<string, Cells>;
+  /** The notes folder: the chosen folder and its files by relative path. */
+  notes?: NotesOptions;
 };
 
 function byPosition(a: { position: number }, b: { position: number }) {
@@ -400,6 +406,7 @@ export function installFakeBackend({
   properties: initialProperties = [],
   views: initialViews = [],
   cells: initialCells = {},
+  notes: initialNotes,
 }: Options = {}) {
   let pages: Page[] = initial;
   let blocks: Record<string, Block[]> = initialBlocks;
@@ -417,6 +424,7 @@ export function installFakeBackend({
     if (storedDatabases !== null) databases = JSON.parse(storedDatabases) as DatabaseState;
   }
   pages = pages.map(withPageFields);
+  const notes = createFakeNotes(initialNotes);
 
   const save = (next: Page[]) => {
     pages = next;
@@ -431,6 +439,30 @@ export function installFakeBackend({
   const saveDatabases = (next: DatabaseState) => {
     databases = next;
     if (persist) window.localStorage.setItem(DATABASES_KEY, JSON.stringify(databases));
+  };
+
+  // Backups are only kept in memory; the real ones are covered by the backend tests.
+  let backupSettings: BackupSettings = { interval: 'manual', keepLast: 7, folder: null };
+  let backupStatus: BackupStatus = { running: false, lastSuccessAt: null, lastError: null };
+  type FakeBackup = BackupInfo & { passphrase: string | null };
+  const backups: FakeBackup[] = [];
+  const publicBackup = (backup: FakeBackup): BackupInfo => ({
+    name: backup.name,
+    path: backup.path,
+    sizeBytes: backup.sizeBytes,
+    createdAt: backup.createdAt,
+    encrypted: backup.encrypted,
+    kind: backup.kind,
+  });
+  const openBackup = (path: unknown, passphrase: unknown) => {
+    const backup = backups.find((entry) => entry.path === path);
+    if (!backup) fail('not_found', 'the backup file was not found');
+    if (backup.passphrase !== null) {
+      if (!passphrase)
+        fail('passphrase_required', 'this backup is encrypted; enter its passphrase');
+      if (passphrase !== backup.passphrase) fail('wrong_passphrase', 'the passphrase is wrong');
+    }
+    return backup;
   };
 
   const require = (id: string) => {
@@ -999,6 +1031,78 @@ export function installFakeBackend({
       case 'download_image':
         return undefined;
 
+      case 'get_backup_settings':
+        return backupSettings;
+
+      case 'set_backup_settings': {
+        const next = args.settings as BackupSettings;
+        if (next.keepLast < 1 || next.keepLast > 365) {
+          fail('invalid', 'keep between 1 and 365 backups');
+        }
+        if (next.folder !== null && !next.folder.startsWith('/')) {
+          fail('invalid', 'the backup folder must be an absolute path');
+        }
+        backupSettings = next;
+        return next;
+      }
+
+      case 'create_backup': {
+        if (window.localStorage.getItem('notiva.fake.backup') === 'fail') {
+          const message = 'could not read or write the backup: the disk is full';
+          backupStatus = { ...backupStatus, lastError: message };
+          fail('internal', message);
+        }
+        const createdAt = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+        const stamp = createdAt.replace(/[-:]/g, '');
+        const folder =
+          backupSettings.folder ?? '/Users/demo/Library/Application Support/Notiva/backups';
+        const name = `notiva-backup-${stamp}-${backups.length}.notiva-backup`;
+        const passphrase = (args.passphrase as string | null) || null;
+        const backup: FakeBackup = {
+          name,
+          path: `${folder}/${name}`,
+          sizeBytes: 1024,
+          createdAt,
+          encrypted: passphrase !== null,
+          kind: 'manual',
+          passphrase,
+        };
+        backups.unshift(backup);
+        backupStatus = { running: false, lastSuccessAt: createdAt, lastError: null };
+        return publicBackup(backup);
+      }
+
+      case 'list_backups':
+        return backups.map(publicBackup);
+
+      case 'inspect_backup': {
+        const backup = openBackup(args.path, args.passphrase);
+        return {
+          appVersion: '0.0.0',
+          schemaVersion: 10,
+          createdAt: backup.createdAt,
+          images: 0,
+          restorable: true,
+        };
+      }
+
+      case 'restore_backup':
+        openBackup(args.path, args.passphrase);
+        return {
+          restartRequired: true,
+          safetyBackup: '/Users/demo/backups/notiva-pre-restore.notiva-backup',
+        };
+
+      case 'restore_backup_to_folder':
+        openBackup(args.path, args.passphrase);
+        return undefined;
+
+      case 'backup_status':
+        return backupStatus;
+
+      case 'restart_app':
+        return undefined;
+
       case 'export_page':
       case 'export_all': {
         if (window.localStorage.getItem('notiva.fake.export') === 'fail') {
@@ -1029,8 +1133,11 @@ export function installFakeBackend({
         return `data:${type};base64,${btoa(binary)}`;
       }
 
-      default:
+      default: {
+        const result = notes(command, args);
+        if (result !== undefined) return result;
         return fail('internal', `the fake backend does not implement ${command}`);
+      }
     }
   });
 }
