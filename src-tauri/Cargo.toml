@@ -1,7 +1,7 @@
 [package]
 name = "notiva"
 version = "0.0.0"
-description = "Local-first Notion alternative for macOS"
+description = "Local-first notes and databases for macOS, Windows and Linux"
 edition = "2024"
 publish = false
 

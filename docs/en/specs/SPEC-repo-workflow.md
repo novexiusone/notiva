@@ -15,6 +15,15 @@ The repository enforces the agreed workflow itself instead of relying on discipl
 | `CHANGELOG.md` in Keep a Changelog format | `orhun/git-cliff-action`                                                 |
 | Branch protection                         | GitHub ruleset on `main`                                                 |
 
+## Continuous integration
+
+`ci.yml` runs on every pull request and on `main`:
+
+- `frontend` and `rust` run on a matrix of `macos-latest`, `windows-latest` and `ubuntu-latest` (#140). On Linux the Tauri system libraries (WebKitGTK 4.1 and friends) are installed first. `fail-fast` is off, so one platform failing does not hide the others.
+- The ruleset requires the checks `frontend`, `rust` and `e2e` by name. A matrix job is named `frontend (<os>)`, so one small job per check, called exactly `frontend` or `rust`, waits for the whole matrix and fails when any platform failed. It is what the ruleset sees.
+- `e2e` (Playwright WebKit against the fake backend) runs once, on Linux: it does not exercise the host system, and one run is the cheapest.
+- `.gitattributes` fixes line endings to LF, so formatting checks give the same result on Windows.
+
 ## Workflow
 
 1. Open an issue (form: bug, feature, idea or task).
@@ -40,7 +49,7 @@ Pull requests created with the `GITHUB_TOKEN` do not trigger workflows, so the r
 
 ### Release builds
 
-When a release is created, the `bundle` job builds the app on macOS and attaches the `.dmg` to the GitHub release. The build is unsigned (#27).
+When a release is created, the `bundle` job builds the app on macOS (`.dmg`), Windows (NSIS `.exe` installer) and Linux (`.AppImage` and `.deb`) and attaches every file to the GitHub release (#140). The builds are unsigned (#27).
 
 ## Commands
 
@@ -109,4 +118,4 @@ This module is verified against the real repository, not with unit tests:
 ## Open questions
 
 - The GitHub Project (board) needs the `project` token scope (#6).
-- Release builds are unsigned until #27, so macOS warns when the downloaded app is opened.
+- Release builds are unsigned until #27, so macOS Gatekeeper and Windows SmartScreen warn when a downloaded app is opened.

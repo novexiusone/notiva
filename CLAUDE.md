@@ -1,6 +1,6 @@
 # Notiva
 
-Local-first Notion alternative for macOS. Tauri 2 (Rust backend, React frontend), data in embedded SurrealDB.
+Local-first Notion alternative for macOS, Windows and Linux. Every feature has to work on all three; platform differences are handled explicitly, never assumed away. Tauri 2 (Rust backend, React frontend), data in embedded SurrealDB.
 
 ## Where things are
 

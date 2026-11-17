@@ -20,6 +20,7 @@ import { getPageLinkItems, type PageLinkItem } from '@/features/links/pageLinkIt
 import { PageLinkMenu } from '@/features/links/PageLinkMenu';
 import { useCreatePage, usePages } from '@/features/pages/api';
 import { commands, type Block, type CommandError } from '@/lib/commands';
+import { displayImageUrl } from '@/lib/imageUrl';
 import { useColorScheme } from '@/lib/useColorScheme';
 
 export type EditorHandle = { focus: () => void };
@@ -70,6 +71,8 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
   const editor = useCreateBlockNote({
     schema,
     dictionary: i18n.language === 'de' ? de : en,
+    // Stored image URLs are portable; the WebView may need another form to load them.
+    resolveFileUrl: async (url) => displayImageUrl(url),
     // Used for the file picker as well as for dropped and pasted images.
     uploadFile: async (file) => {
       setInsertError(null);
