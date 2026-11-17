@@ -14,7 +14,7 @@ use crate::domain::Block;
 
 /// A block as it is stored: flat, with a link to its parent.
 #[derive(Debug, Clone, PartialEq, SurrealValue)]
-struct BlockRow {
+pub(super) struct BlockRow {
     id: String,
     parent_id: Option<String>,
     position: f64,
@@ -109,6 +109,17 @@ fn nest(rows: Vec<BlockRow>) -> Vec<Block> {
     build(None, &mut children)
 }
 
+/// The document the stored rows make up.
+pub(super) fn document(stored: &HashMap<String, BlockRow>) -> Vec<Block> {
+    let mut rows: Vec<BlockRow> = stored.values().cloned().collect();
+    rows.sort_by(|a, b| {
+        a.position
+            .total_cmp(&b.position)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    nest(rows)
+}
+
 impl Storage {
     /// The blocks of a page as a tree, in document order.
     pub async fn load_blocks(&self, page_id: &str) -> Result<Vec<Block>, StorageError> {
@@ -118,6 +129,16 @@ impl Storage {
 
     /// Makes the stored blocks of a page equal to `blocks`.
     pub async fn save_blocks(
+        &self,
+        page_id: &str,
+        blocks: &[Block],
+    ) -> Result<SaveSummary, StorageError> {
+        let _write = self.write_gate.read().await;
+        self.write_blocks(page_id, blocks).await
+    }
+
+    /// [`Storage::save_blocks`] for a caller that holds the write gate.
+    pub(super) async fn write_blocks(
         &self,
         page_id: &str,
         blocks: &[Block],
@@ -193,6 +214,10 @@ impl Storage {
         if summary.written == 0 && summary.removed == 0 {
             return Ok(summary);
         }
+
+        // Keeps the state this save overwrites, at most once per interval.
+        self.snapshot_if_due(page_id, &stored, super::versions::SNAPSHOT_INTERVAL)
+            .await;
 
         // Writes come first: a block that moved out of a removed parent must
         // have its new parent before the removal cascades to the children.

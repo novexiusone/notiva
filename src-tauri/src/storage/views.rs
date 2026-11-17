@@ -57,6 +57,8 @@ impl Storage {
         name: &str,
         config: &ViewConfig,
     ) -> Result<View, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let is_database = self
             .find_page(database_id)
             .await?
@@ -76,6 +78,8 @@ impl Storage {
         name: Option<&str>,
         config: Option<&ViewConfig>,
     ) -> Result<View, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let row: Option<ViewRow> = self
             .db
             .query(format!(
@@ -95,6 +99,8 @@ impl Storage {
     /// Deletes a view. A database keeps at least one view, so its last view
     /// cannot be deleted.
     pub async fn delete_view(&self, id: &str) -> Result<(), StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let mut response = self
             .db
             .query(

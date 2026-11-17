@@ -36,7 +36,7 @@ A page's content is the `editor` module's job; a database's table belongs to `da
 - **Lock.** A page is `none`, `content` or `all` locked, set from the page menu and shown as a lock in the top bar that unlocks it. "Lock content" makes the title, text, icon and banner read-only and stops the page from being deleted or renamed; in a database the rows, cells, properties and views stay editable. "Lock everything" also makes a database's properties, views, rows and cells and its row pages read-only. A locked page is opened and exported as usual. The lock does not advance `updatedAt`.
 - **Restart.** The tree, favourites and appearance come from the database. The last opened page and the expanded rows are remembered locally and restored at startup; a remembered page that no longer exists is ignored.
 
-There is no trash yet (#25), so deleting is final. The confirmation says so.
+`delete_page` moves the page to the trash (`SPEC-trash.md`); it can be restored or deleted for good through the commands of that spec. The confirmation dialog still says deleting is final until the trash has a user interface (#25).
 
 ## Commands
 

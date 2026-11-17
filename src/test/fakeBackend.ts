@@ -12,6 +12,9 @@ import {
   type Database,
   type IncomingRelation,
   type Page,
+  type PageVersion,
+  type TrashSettings,
+  type TrashedPage,
   type Property,
   type PropertyType,
   type Row,
@@ -26,6 +29,12 @@ import { createFakeNotes, type NotesOptions } from '@/test/fakeNotes';
 const STORAGE_KEY = 'notiva.fake.pages';
 const BLOCKS_KEY = 'notiva.fake.blocks';
 const DATABASES_KEY = 'notiva.fake.databases';
+const TRASH_KEY = 'notiva.fake.trash';
+const VERSIONS_KEY = 'notiva.fake.versions';
+
+const DEFAULT_RETENTION_DAYS = 30;
+const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_VERSIONS = 50;
 
 const PROPERTY_TYPES: PropertyType[] = ['text', 'number', 'date', 'select', 'relation'];
 
@@ -38,6 +47,25 @@ type DatabaseState = {
   /** Cell values by row id, then by property id. Empty cells are left out. */
   cells: Record<string, Cells>;
 };
+
+/** What moving a page to the trash took out of the live data. */
+type TrashEntry = {
+  /** The page and everything below it, the page first. */
+  pages: Page[];
+  blocks: Record<string, Block[]>;
+  properties: Property[];
+  views: View[];
+  cells: Record<string, Cells>;
+  /** Relation cells of other rows that held a trashed row. */
+  incoming: { rowId: string; propertyId: string; ids: string[] }[];
+  /** The versions of the trashed pages, by page id. */
+  versions: Record<string, StoredVersion[]>;
+  deletedAt: string;
+};
+
+type StoredVersion = PageVersion & { blocks: Block[] };
+
+type TrashState = { entries: TrashEntry[]; retentionDays: number | null };
 
 type Options = {
   /** Keep the data in localStorage so that it survives a reload. */
@@ -390,6 +418,11 @@ function imageType(bytes: Uint8Array): string | null {
   return null;
 }
 
+/** The start of the text of a document, to tell versions apart. */
+function previewOf(document: Block[]): string {
+  return blockTexts(document).join(' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+
 function fail(kind: CommandError['kind'], message: string): never {
   // Commands reject with a plain object, exactly like the real backend.
   throw { kind, message } satisfies CommandError;
@@ -422,6 +455,16 @@ export function installFakeBackend({
     if (storedBlocks !== null) blocks = JSON.parse(storedBlocks) as Record<string, Block[]>;
     const storedDatabases = window.localStorage.getItem(DATABASES_KEY);
     if (storedDatabases !== null) databases = JSON.parse(storedDatabases) as DatabaseState;
+  }
+  let trash: TrashState = { entries: [], retentionDays: DEFAULT_RETENTION_DAYS };
+  let versions: Record<string, StoredVersion[]> = {};
+  if (persist) {
+    const storedTrash = window.localStorage.getItem(TRASH_KEY);
+    if (storedTrash !== null) trash = JSON.parse(storedTrash) as TrashState;
+    const storedVersions = window.localStorage.getItem(VERSIONS_KEY);
+    if (storedVersions !== null) {
+      versions = JSON.parse(storedVersions) as Record<string, StoredVersion[]>;
+    }
   }
   pages = pages.map(withPageFields);
   const notes = createFakeNotes(initialNotes);
@@ -463,6 +506,55 @@ export function installFakeBackend({
       if (passphrase !== backup.passphrase) fail('wrong_passphrase', 'the passphrase is wrong');
     }
     return backup;
+  };
+
+  const saveTrash = (next: TrashState) => {
+    trash = next;
+    if (persist) window.localStorage.setItem(TRASH_KEY, JSON.stringify(trash));
+  };
+
+  const saveVersions = (next: Record<string, StoredVersion[]>) => {
+    versions = next;
+    if (persist) window.localStorage.setItem(VERSIONS_KEY, JSON.stringify(versions));
+  };
+
+  /** Keeps the blocks that are about to be overwritten, at most once per interval. */
+  const snapshot = (pageId: string, force: boolean) => {
+    const current = blocks[pageId] ?? [];
+    if (current.length === 0) return;
+    const kept = versions[pageId] ?? [];
+    const newest = kept[0];
+    if (newest && JSON.stringify(newest.blocks) === JSON.stringify(current)) return;
+    if (!force && newest && Date.now() - Date.parse(newest.createdAt) < SNAPSHOT_INTERVAL_MS) {
+      return;
+    }
+    const countBlocks = (list: Block[]): number =>
+      list.reduce((sum, block) => sum + 1 + countBlocks(block.children), 0);
+    const version: StoredVersion = {
+      id: crypto.randomUUID(),
+      title: pages.find((page) => page.id === pageId)?.title ?? '',
+      blockCount: countBlocks(current),
+      preview: previewOf(current),
+      createdAt: new Date().toISOString(),
+      blocks: structuredClone(current),
+    };
+    saveVersions({ ...versions, [pageId]: [version, ...kept].slice(0, MAX_VERSIONS) });
+  };
+
+  const requireVersion = (pageId: string, versionId: string) =>
+    (versions[pageId] ?? []).find((version) => version.id === versionId) ??
+    fail('not_found', `version ${versionId} was not found`);
+
+  const requireEntry = (id: string) =>
+    trash.entries.find((entry) => entry.pages[0].id === id) ??
+    fail('not_found', `trashed page ${id} was not found`);
+
+  /** Pages that stayed longer than the retention are gone for good. */
+  const purgeExpired = () => {
+    if (trash.retentionDays === null) return;
+    const limit = Date.now() - trash.retentionDays * 24 * 60 * 60 * 1000;
+    const kept = trash.entries.filter((entry) => Date.parse(entry.deletedAt) >= limit);
+    if (kept.length !== trash.entries.length) saveTrash({ ...trash, entries: kept });
   };
 
   const require = (id: string) => {
@@ -697,13 +789,8 @@ export function installFakeBackend({
 
       case 'delete_page': {
         const id = args.id as string;
-        require(id);
+        const root = require(id);
         const removed = new Set([id, ...descendantIds(pages, id)]);
-        save(pages.filter((page) => !removed.has(page.id)));
-        saveBlocks(
-          Object.fromEntries(Object.entries(blocks).filter(([pageId]) => !removed.has(pageId))),
-        );
-        // A database takes its properties and views along, and the relations that point at it.
         const lostProperties = new Set(
           databases.properties
             .filter(
@@ -713,12 +800,176 @@ export function installFakeBackend({
             )
             .map((property) => property.id),
         );
+        // Everything the page takes along goes into the trash first.
+        const entry: TrashEntry = {
+          pages: [root, ...pages.filter((page) => page.id !== id && removed.has(page.id))],
+          blocks: Object.fromEntries(
+            Object.entries(blocks).filter(([pageId]) => removed.has(pageId)),
+          ),
+          properties: databases.properties.filter((property) => lostProperties.has(property.id)),
+          views: databases.views.filter((view) => removed.has(view.databaseId)),
+          cells: Object.fromEntries(
+            Object.entries(databases.cells).filter(([rowId]) => removed.has(rowId)),
+          ),
+          incoming: Object.entries(databases.cells).flatMap(([rowId, values]) =>
+            removed.has(rowId)
+              ? []
+              : Object.entries(values).flatMap(([propertyId, value]) => {
+                  const ids = Array.isArray(value) ? value.filter((v) => removed.has(v)) : [];
+                  return ids.length > 0 ? [{ rowId, propertyId, ids }] : [];
+                }),
+          ),
+          versions: Object.fromEntries(
+            Object.entries(versions).filter(([pageId]) => removed.has(pageId)),
+          ),
+          deletedAt: new Date().toISOString(),
+        };
+        saveTrash({ ...trash, entries: [entry, ...trash.entries] });
+
+        save(pages.filter((page) => !removed.has(page.id)));
+        saveBlocks(
+          Object.fromEntries(Object.entries(blocks).filter(([pageId]) => !removed.has(pageId))),
+        );
+        // A database takes its properties and views along, and the relations that point at it.
         const remaining = dropRows(dropProperties(databases, lostProperties), removed);
         saveDatabases({
           ...remaining,
           views: remaining.views.filter((view) => !removed.has(view.databaseId)),
         });
+        saveVersions(
+          Object.fromEntries(Object.entries(versions).filter(([pageId]) => !removed.has(pageId))),
+        );
         return null;
+      }
+
+      case 'list_trash': {
+        purgeExpired();
+        return trash.entries.map((entry): TrashedPage => ({
+          id: entry.pages[0].id,
+          title: entry.pages[0].title,
+          kind: entry.pages[0].kind,
+          icon: entry.pages[0].icon,
+          parentId: entry.pages[0].parentId,
+          databaseId: entry.pages[0].databaseId,
+          pageCount: entry.pages.length,
+          deletedAt: entry.deletedAt,
+        }));
+      }
+
+      case 'restore_page': {
+        const entry = requireEntry(args.id as string);
+        const [root, ...below] = entry.pages;
+        const parent = pages.find((page) => page.id === root.parentId);
+        const database = pages.find((page) => page.id === root.databaseId);
+        const lastAtTop = positionAfter(pages.filter((page) => page.parentId === null));
+        let placed: Page = root;
+        let detached = false;
+        if (root.databaseId !== null) {
+          if (database?.kind !== 'database') {
+            placed = { ...root, parentId: null, databaseId: null, position: lastAtTop };
+            detached = true;
+          }
+        } else if (root.parentId !== null && (parent === undefined || parent.kind === 'database')) {
+          placed = { ...root, parentId: null, position: lastAtTop };
+        }
+        save([...pages, placed, ...below]);
+        saveBlocks({ ...blocks, ...entry.blocks });
+        saveVersions({ ...versions, ...entry.versions });
+
+        const liveIds = new Set([
+          ...pages.map((page) => page.id),
+          placed.id,
+          ...below.map((p) => p.id),
+        ]);
+        const properties = [
+          ...databases.properties,
+          ...entry.properties.filter(
+            (property) =>
+              liveIds.has(property.databaseId) &&
+              (property.targetId === null || liveIds.has(property.targetId)),
+          ),
+        ];
+        const cells = { ...databases.cells };
+        for (const [rowId, values] of Object.entries(entry.cells)) {
+          if (rowId === root.id && detached) continue;
+          cells[rowId] = values;
+        }
+        for (const { rowId, propertyId, ids } of entry.incoming) {
+          if (!liveIds.has(rowId) || !properties.some((property) => property.id === propertyId)) {
+            continue;
+          }
+          const held = cells[rowId]?.[propertyId];
+          cells[rowId] = withCell(cells[rowId], propertyId, [
+            ...(Array.isArray(held) ? held : []),
+            ...ids.filter((target) => liveIds.has(target)),
+          ]);
+        }
+        saveDatabases({
+          properties,
+          views: [
+            ...databases.views,
+            ...entry.views.filter((view) => liveIds.has(view.databaseId)),
+          ],
+          cells,
+        });
+        saveTrash({ ...trash, entries: trash.entries.filter((candidate) => candidate !== entry) });
+        return pages.find((page) => page.id === root.id);
+      }
+
+      case 'delete_page_permanently': {
+        const entry = requireEntry(args.id as string);
+        saveTrash({ ...trash, entries: trash.entries.filter((candidate) => candidate !== entry) });
+        return null;
+      }
+
+      case 'empty_trash': {
+        const count = trash.entries.length;
+        saveTrash({ ...trash, entries: [] });
+        return count;
+      }
+
+      case 'get_trash_settings':
+        return { retentionDays: trash.retentionDays } satisfies TrashSettings;
+
+      case 'set_trash_retention': {
+        const days = (args.days as number | null | undefined) ?? null;
+        if (days !== null && (!Number.isInteger(days) || days < 1 || days > 3650)) {
+          fail('invalid', 'the trash keeps pages for 1 to 3650 days');
+        }
+        saveTrash({ ...trash, retentionDays: days });
+        return { retentionDays: days } satisfies TrashSettings;
+      }
+
+      case 'list_page_versions': {
+        const pageId = args.pageId as string;
+        require(pageId);
+        return (versions[pageId] ?? []).map((version): PageVersion => ({
+          id: version.id,
+          title: version.title,
+          blockCount: version.blockCount,
+          preview: version.preview,
+          createdAt: version.createdAt,
+        }));
+      }
+
+      case 'load_page_version': {
+        require(args.pageId as string);
+        return structuredClone(requireVersion(args.pageId as string, args.versionId as string));
+      }
+
+      case 'restore_page_version': {
+        const pageId = args.pageId as string;
+        require(pageId);
+        const version = requireVersion(pageId, args.versionId as string);
+        // The state being replaced is kept, so that restoring can be undone.
+        snapshot(pageId, true);
+        saveBlocks({ ...blocks, [pageId]: structuredClone(version.blocks) });
+        save(
+          pages.map((page) =>
+            page.id === pageId ? { ...page, updatedAt: new Date().toISOString() } : page,
+          ),
+        );
+        return structuredClone(version.blocks);
       }
 
       case 'create_database': {
@@ -995,7 +1246,11 @@ export function installFakeBackend({
       case 'save_blocks': {
         const pageId = args.pageId as string;
         require(pageId);
-        saveBlocks({ ...blocks, [pageId]: structuredClone(args.blocks as Block[]) });
+        const incoming = structuredClone(args.blocks as Block[]);
+        if (JSON.stringify(incoming) !== JSON.stringify(blocks[pageId] ?? [])) {
+          snapshot(pageId, false);
+        }
+        saveBlocks({ ...blocks, [pageId]: incoming });
         save(
           pages.map((page) =>
             page.id === pageId ? { ...page, updatedAt: new Date().toISOString() } : page,
