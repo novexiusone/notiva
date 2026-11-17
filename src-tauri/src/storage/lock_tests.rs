@@ -9,7 +9,11 @@ async fn storage() -> Storage {
 }
 
 fn is_locked<T: std::fmt::Debug>(result: Result<T, StorageError>) -> bool {
-    matches!(result, Err(StorageError::Locked(_)))
+    let locked = matches!(result, Err(StorageError::Locked(_)));
+    if !locked {
+        eprintln!("expected a lock, got {result:?}");
+    }
+    locked
 }
 
 /// A database with one text property and the rows `row_a` and `row_b`.

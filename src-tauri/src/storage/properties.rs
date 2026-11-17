@@ -18,20 +18,25 @@ pub(super) const PROPERTY_FIELDS: &str = "record::id(id) AS id, \
      record::id(database) AS database_id, name, type AS kind, position, options, \
      IF target = NONE { NONE } ELSE { record::id(target) } AS target_id";
 
+/// The condition that a row about to be written by [`WRITE_CELLS`] is locked
+/// at `all`.
+const WRITTEN_ROW_LOCKED: &str = "count(SELECT VALUE id FROM page WHERE lock = 'all'
+         AND id IN array::concat($cells, $emptied).map(|$w| type::record('page', $w.id))) > 0";
+
+/// Throws when a row that is about to be written is locked at `all`. Goes at
+/// the start of a transaction that uses [`WRITE_CELLS`]. The check is the
+/// first statement, so that the error of the transaction is the lock.
+const GUARD_ROWS: &str = "IF count(SELECT VALUE id FROM page WHERE lock = 'all'
+         AND id IN array::concat($cells, $emptied).map(|$w| type::record('page', $w.id))) > 0 {
+         THROW 'notiva:locked';
+     };";
+
 /// Writes many cells of the property `$key` in two statements, whatever the
 /// number of rows: every `{ id, value, text }` in `$cells` is set, every row
 /// in `$emptied` (`{ id, text }`) loses the key. `text` is the row's search
 /// text after the write. `UNSET props[$key]` does nothing in SurrealDB 4.0.1;
 /// setting the key to NONE removes it. A row deleted in the meantime is not
 /// written again.
-/// Throws when a row that is about to be written is locked at `all`. Goes at
-/// the start of a transaction that uses [`WRITE_CELLS`].
-const GUARD_ROWS: &str = "FOR $written IN array::concat($cells, $emptied) {
-         IF (SELECT VALUE lock FROM ONLY type::record('page', $written.id)) = 'all' {
-             THROW 'notiva:locked';
-         };
-     };";
-
 const WRITE_CELLS: &str = "FOR $cell IN $cells {
          UPDATE type::record('page', $cell.id) SET props[$key] = $cell.value,
              props_text = $cell.text WHERE id != NONE RETURN NONE;
@@ -470,10 +475,10 @@ impl Storage {
         self.db
             .query(format!(
                 "BEGIN TRANSACTION;
-                 {GUARD_ROWS}
                  -- The edges of a relation are the cells of their source rows.
-                 IF count(SELECT VALUE id FROM row_link
-                     WHERE property = type::record('property', $id) AND in.lock = 'all') > 0 {{
+                 IF {WRITTEN_ROW_LOCKED} OR count(SELECT VALUE id FROM page
+                     WHERE lock = 'all' AND id IN (SELECT VALUE in FROM row_link
+                         WHERE property = type::record('property', $id))) > 0 {{
                      THROW 'notiva:locked';
                  }};
                  DELETE type::record('property', $id);
