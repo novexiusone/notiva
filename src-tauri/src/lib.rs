@@ -1,3 +1,4 @@
+mod backup;
 mod commands;
 mod domain;
 mod export;
@@ -28,10 +29,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data = app.path().app_data_dir()?;
+            // A restore that was prepared is applied before the database opens.
+            std::fs::create_dir_all(&data)?;
+            backup::apply_pending_restore(&data)?;
             let storage = tauri::async_runtime::block_on(Storage::open(&data.join("db")))?;
             app.manage(storage);
             app.manage(ImageStore::open(&data.join("images"))?);
             app.manage(NotesSettings::open(&data.join("settings.json")));
+            app.manage(backup::BackupService::default());
+            tauri::async_runtime::spawn(commands::backup::run_scheduler(app.handle().clone()));
             Ok(())
         })
         // Serves stored images to the WebView, and nothing else.
@@ -95,6 +101,24 @@ pub fn run() {
             commands::notes::save_note,
             commands::notes::rename_note,
             commands::notes::delete_note,
+            commands::backup::get_backup_settings,
+            commands::backup::set_backup_settings,
+            commands::backup::create_backup,
+            commands::backup::list_backups,
+            commands::backup::inspect_backup,
+            commands::backup::restore_backup,
+            commands::backup::restore_backup_to_folder,
+            commands::backup::backup_status,
+            commands::backup::restart_app,
+            commands::trash::list_trash,
+            commands::trash::restore_page,
+            commands::trash::delete_page_permanently,
+            commands::trash::empty_trash,
+            commands::trash::get_trash_settings,
+            commands::trash::set_trash_retention,
+            commands::trash::list_page_versions,
+            commands::trash::load_page_version,
+            commands::trash::restore_page_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -159,10 +159,93 @@ export type NoteEntry = {
 /** A Markdown file of the notes folder with the time it was last changed on disk. */
 export type Note = { path: string; content: string; modified: number };
 
+/** How often scheduled backups are made; `manual` turns the schedule off. */
+export type BackupInterval = 'manual' | 'hourly' | 'daily' | 'weekly';
+
+export type BackupSettings = {
+  interval: BackupInterval;
+  /** How many scheduled backups are kept, 1 to 365. */
+  keepLast: number;
+  /** An absolute folder; `null` is the `backups` folder inside the app data. */
+  folder: string | null;
+};
+
+/** `pre_restore` backups are made of the current data right before a restore. */
+export type BackupKind = 'manual' | 'auto' | 'pre_restore';
+
+/** A backup file in the backup folder. */
+export type BackupInfo = {
+  name: string;
+  path: string;
+  sizeBytes: number;
+  /** RFC 3339, UTC. */
+  createdAt: string;
+  encrypted: boolean;
+  kind: BackupKind;
+};
+
+/** What a backup says about itself. `restorable` is false for a newer schema. */
+export type BackupSummary = {
+  appVersion: string;
+  schemaVersion: number;
+  createdAt: string;
+  images: number;
+  restorable: boolean;
+};
+
+/** A restore is applied when the app starts the next time. */
+export type RestoreOutcome = { restartRequired: boolean; safetyBackup: string };
+
+export type BackupStatus = {
+  running: boolean;
+  lastSuccessAt: string | null;
+  /** The last failure, until a backup succeeds again. */
+  lastError: string | null;
+};
+
 /** What a failed command rejects with. */
 export type CommandError = {
-  kind: 'not_found' | 'invalid' | 'locked' | 'conflict' | 'internal';
+  kind:
+    | 'not_found'
+    | 'invalid'
+    | 'locked'
+    | 'conflict'
+    | 'internal'
+    | 'passphrase_required'
+    | 'wrong_passphrase'
+    | 'corrupt'
+    | 'schema_too_new'
+    | 'unsupported';
   message: string;
+};
+
+/** A page in the trash. `id` is the id of the page, which is also its id in the trash. */
+export type TrashedPage = {
+  id: string;
+  title: string;
+  kind: 'page' | 'database';
+  icon: string | null;
+  /** Where the page was; it returns there if that still exists. */
+  parentId: string | null;
+  /** Set when the page was a row of a database. */
+  databaseId: string | null;
+  /** The page itself, its subpages and, for a database, its rows. */
+  pageCount: number;
+  deletedAt: string;
+};
+
+/** `retentionDays` is how long pages stay in the trash; `null` keeps them until deleted by hand. */
+export type TrashSettings = { retentionDays: number | null };
+
+/** One saved state of the blocks of a page. */
+export type PageVersion = {
+  id: string;
+  /** The title of the page when the version was taken. */
+  title: string;
+  blockCount: number;
+  /** The start of the text, to tell versions apart. */
+  preview: string;
+  createdAt: string;
 };
 
 /** The only place that calls into the Rust backend. */
@@ -180,7 +263,28 @@ export const commands = {
   setLock: (id: string, lock: PageLock) => invoke<Page>('set_lock', { id, lock }),
   movePage: (id: string, parentId: string | null, index: number) =>
     invoke<void>('move_page', { id, parentId, index }),
+  /** Moves the page with its subpages to the trash. */
   deletePage: (id: string) => invoke<void>('delete_page', { id }),
+
+  /** The trashed pages, the most recently deleted first. */
+  listTrash: () => invoke<TrashedPage[]>('list_trash'),
+  /** Brings a trashed page back to its old parent, or to the top level when that is gone. */
+  restorePage: (id: string) => invoke<Page>('restore_page', { id }),
+  deletePagePermanently: (id: string) => invoke<void>('delete_page_permanently', { id }),
+  /** Resolves to the number of pages that were deleted. */
+  emptyTrash: () => invoke<number>('empty_trash'),
+  getTrashSettings: () => invoke<TrashSettings>('get_trash_settings'),
+  /** `null` keeps trashed pages until they are deleted by hand. */
+  setTrashRetention: (days: number | null) =>
+    invoke<TrashSettings>('set_trash_retention', { days }),
+
+  /** The versions of a page, the newest first. */
+  listPageVersions: (pageId: string) => invoke<PageVersion[]>('list_page_versions', { pageId }),
+  loadPageVersion: (pageId: string, versionId: string) =>
+    invoke<PageVersion & { blocks: Block[] }>('load_page_version', { pageId, versionId }),
+  /** Replaces the blocks with those of the version, keeping the current ones as a version. */
+  restorePageVersion: (pageId: string, versionId: string) =>
+    invoke<Block[]>('restore_page_version', { pageId, versionId }),
 
   loadBlocks: (pageId: string) => invoke<Block[]>('load_blocks', { pageId }),
   saveBlocks: (pageId: string, blocks: Block[]) => invoke<void>('save_blocks', { pageId, blocks }),
@@ -250,6 +354,27 @@ export const commands = {
   renameNote: (path: string, name: string) => invoke<NoteEntry>('rename_note', { path, name }),
   /** Deletes permanently; refuses unless `confirm` is true. */
   deleteNote: (path: string, confirm: boolean) => invoke<void>('delete_note', { path, confirm }),
+  getBackupSettings: () => invoke<BackupSettings>('get_backup_settings'),
+  setBackupSettings: (settings: BackupSettings) =>
+    invoke<BackupSettings>('set_backup_settings', { settings }),
+  /** A manual backup in the backup folder; a passphrase encrypts it. */
+  createBackup: (passphrase: string | null) => invoke<BackupInfo>('create_backup', { passphrase }),
+  /** The backups in the backup folder, newest first. */
+  listBackups: () => invoke<BackupInfo[]>('list_backups'),
+  /** Rejects with `passphrase_required` or `wrong_passphrase` for an encrypted backup. */
+  inspectBackup: (path: string, passphrase: string | null) =>
+    invoke<BackupSummary>('inspect_backup', { path, passphrase }),
+  /**
+   * Checks the backup, backs up the current data and prepares the swap. The
+   * data is replaced when the app restarts; see `restartApp`.
+   */
+  restoreBackup: (path: string, passphrase: string | null) =>
+    invoke<RestoreOutcome>('restore_backup', { path, passphrase }),
+  /** Restores into a new, empty folder and leaves the app's data alone. */
+  restoreBackupToFolder: (path: string, passphrase: string | null, directory: string) =>
+    invoke<void>('restore_backup_to_folder', { path, passphrase, directory }),
+  backupStatus: () => invoke<BackupStatus>('backup_status'),
+  restartApp: () => invoke<void>('restart_app'),
 
   /** Stores an image and resolves to the URL to put into the image block. */
   downloadImage: (url: string, destination: string) =>

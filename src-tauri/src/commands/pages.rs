@@ -68,7 +68,8 @@ pub async fn move_page(
 
 #[tauri::command]
 pub async fn delete_page(storage: State<'_, Storage>, id: String) -> Result<(), CommandError> {
-    Ok(storage.delete_page(&id).await?)
+    // Deleting moves the page to the trash; `delete_page_permanently` ends it.
+    Ok(storage.trash_page(&id).await?)
 }
 
 #[tauri::command]

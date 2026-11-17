@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::backup::BackupError;
 use crate::export::ExportError;
 use crate::media::ImageError;
 use crate::notes::NotesError;
@@ -34,6 +35,26 @@ impl From<ImageError> for CommandError {
             ImageError::TooLarge | ImageError::Unsupported => "invalid",
             ImageError::Unknown => "not_found",
             ImageError::Io(_) => "internal",
+        };
+
+        Self {
+            kind,
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<BackupError> for CommandError {
+    fn from(error: BackupError) -> Self {
+        let kind = match error {
+            BackupError::NotABackup | BackupError::Invalid(_) => "invalid",
+            BackupError::NotFound(_) => "not_found",
+            BackupError::PassphraseRequired => "passphrase_required",
+            BackupError::WrongPassphrase => "wrong_passphrase",
+            BackupError::Corrupt(_) => "corrupt",
+            BackupError::SchemaTooNew { .. } => "schema_too_new",
+            BackupError::Unsupported(_) => "unsupported",
+            BackupError::Storage(_) | BackupError::Io(_) | BackupError::Internal(_) => "internal",
         };
 
         Self {

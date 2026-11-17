@@ -120,6 +120,8 @@ impl Storage {
     /// Creates an untitled page after the last child of `parent_id`. The
     /// children of a database are its rows, so a database cannot be the parent.
     pub async fn create_page(&self, parent_id: Option<&str>) -> Result<Page, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         self.insert_page(parent_id, PageKind::Page).await
     }
 
@@ -165,6 +167,8 @@ impl Storage {
     }
 
     pub async fn rename_page(&self, id: &str, title: &str) -> Result<Page, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         self.guard_content(id).await?;
         let row: Option<PageRow> = self
             .db
@@ -185,6 +189,8 @@ impl Storage {
     }
 
     pub async fn set_favorite(&self, id: &str, favorite: bool) -> Result<Page, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let row: Option<PageRow> = self
             .db
             .query(format!(
@@ -206,6 +212,8 @@ impl Storage {
         icon: Option<&str>,
         banner: Option<&str>,
     ) -> Result<Page, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         if icon == Some("") || banner == Some("") {
             return Err(StorageError::Invalid(
                 "an icon or banner must be a non-empty string or none".into(),
@@ -237,6 +245,8 @@ impl Storage {
     /// Moves the cover image inside the cover. `position` runs from 0 (the top
     /// of the image is shown) to 100 (the bottom); the page needs a cover.
     pub async fn set_banner_position(&self, id: &str, position: u8) -> Result<Page, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         if position > 100 {
             return Err(StorageError::Invalid(
                 "a cover position is between 0 and 100".into(),
@@ -276,6 +286,8 @@ impl Storage {
         parent_id: Option<&str>,
         index: usize,
     ) -> Result<(), StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let pages = self.list_pages().await?;
         let by_id: HashMap<&str, &Page> =
             pages.iter().map(|page| (page.id.as_str(), page)).collect();
@@ -340,8 +352,8 @@ impl Storage {
 
     /// Deletes a page together with its subpages, blocks and links. The rows
     /// of databases at or below the page are deleted first, in chunks.
-    pub async fn delete_page(&self, id: &str) -> Result<(), StorageError> {
-        self.guard_delete(id).await?;
+    pub(super) async fn delete_page(&self, id: &str) -> Result<(), StorageError> {
+        self.require_page(id).await?;
         self.delete_database_rows(id, super::databases::ROW_CHUNK)
             .await?;
 
@@ -419,7 +431,7 @@ impl Storage {
 
     /// Fails with `locked` when the page cannot be deleted: it is a row of a
     /// database locked at `all`, or it or a page below it is locked.
-    async fn guard_delete(&self, id: &str) -> Result<(), StorageError> {
+    pub(super) async fn guard_delete(&self, id: &str) -> Result<(), StorageError> {
         let (_, database) = self.locks_of(id).await?;
         if database == PageLock::All {
             return Err(locked(id));
@@ -450,6 +462,9 @@ impl Storage {
     /// Sets the lock of a page. This never fails because of a lock and does
     /// not advance `updated_at`.
     pub async fn set_lock(&self, id: &str, lock: PageLock) -> Result<Page, StorageError> {
+        // Shared like every writer: a move to the trash decides under the
+        // exclusive gate, so no lock can be set between its check and its copy.
+        let _write = self.write_gate.read().await;
         let row: Option<PageRow> = self
             .db
             .query(format!(

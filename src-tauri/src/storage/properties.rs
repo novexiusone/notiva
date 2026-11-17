@@ -314,6 +314,8 @@ impl Storage {
         kind: PropertyType,
         target_id: Option<&str>,
     ) -> Result<Property, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         self.require_database(database_id).await?;
         self.guard_database(database_id).await?;
         match (kind, target_id) {
@@ -365,6 +367,8 @@ impl Storage {
         name: Option<&str>,
         options: Option<&[SelectOption]>,
     ) -> Result<Property, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let property = self.find_property(id).await?.ok_or_else(|| not_found(id))?;
         self.guard_database(&property.database_id).await?;
         if let Some(options) = options {
@@ -445,6 +449,8 @@ impl Storage {
     /// transaction. Relation edges of the property go with it by the
     /// `property_deleted` event.
     pub async fn delete_property(&self, id: &str) -> Result<(), StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let property = self.find_property(id).await?.ok_or_else(|| not_found(id))?;
         self.guard_database(&property.database_id).await?;
 
@@ -507,6 +513,8 @@ impl Storage {
         property_id: &str,
         option_id: &str,
     ) -> Result<(), StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let property = self
             .find_property(property_id)
             .await?
@@ -569,6 +577,8 @@ impl Storage {
         id: &str,
         kind: PropertyType,
     ) -> Result<Property, StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
         let property = self.find_property(id).await?.ok_or_else(|| not_found(id))?;
         self.guard_database(&property.database_id).await?;
         if property.kind == kind {

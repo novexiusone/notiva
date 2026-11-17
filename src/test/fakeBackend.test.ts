@@ -1220,3 +1220,57 @@ describe('page locks and cascades', () => {
     await commands.deleteProperty(property.id);
   });
 });
+
+describe('backups', () => {
+  beforeEach(() => installFakeBackend());
+
+  it('keeps settings and refuses invalid ones', async () => {
+    const settings = { interval: 'daily' as const, keepLast: 3, folder: '/Volumes/Backups' };
+    await commands.setBackupSettings(settings);
+
+    expect(await commands.getBackupSettings()).toEqual(settings);
+    await expect(commands.setBackupSettings({ ...settings, keepLast: 0 })).rejects.toMatchObject(
+      invalid,
+    );
+    await expect(
+      commands.setBackupSettings({ ...settings, folder: 'relative' }),
+    ).rejects.toMatchObject(invalid);
+  });
+
+  it('lists the backups that were made, newest first, without their passphrase', async () => {
+    const first = await commands.createBackup(null);
+    const second = await commands.createBackup('secret');
+
+    expect((await commands.listBackups()).map((backup) => backup.path)).toEqual([
+      second.path,
+      first.path,
+    ]);
+    expect(second.encrypted).toBe(true);
+    expect(JSON.stringify(await commands.listBackups())).not.toContain('secret');
+    expect((await commands.backupStatus()).lastError).toBeNull();
+  });
+
+  it('asks for the passphrase of an encrypted backup and rejects a wrong one', async () => {
+    const backup = await commands.createBackup('secret');
+
+    await expect(commands.inspectBackup(backup.path, null)).rejects.toMatchObject({
+      kind: 'passphrase_required',
+    });
+    await expect(commands.restoreBackup(backup.path, 'nope')).rejects.toMatchObject({
+      kind: 'wrong_passphrase',
+    });
+    expect((await commands.inspectBackup(backup.path, 'secret')).restorable).toBe(true);
+    expect(await commands.restoreBackup(backup.path, 'secret')).toMatchObject({
+      restartRequired: true,
+    });
+  });
+
+  it('reports a failed backup in the status', async () => {
+    window.localStorage.setItem('notiva.fake.backup', 'fail');
+
+    await expect(commands.createBackup(null)).rejects.toMatchObject({ kind: 'internal' });
+
+    expect((await commands.backupStatus()).lastError).toContain('disk is full');
+    window.localStorage.removeItem('notiva.fake.backup');
+  });
+});

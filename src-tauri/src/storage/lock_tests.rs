@@ -160,7 +160,7 @@ async fn a_locked_page_refuses_changes_to_its_content_at_both_levels() {
                 .await
         ));
         assert!(is_locked(storage.move_page(&page.id, None, 0).await));
-        assert!(is_locked(storage.delete_page(&page.id).await));
+        assert!(is_locked(storage.trash_page(&page.id).await));
         assert_eq!(snapshot(&storage, &[&page.id], None).await, before);
 
         // Other pages, favouriting, reading and unlocking still work.
@@ -197,15 +197,15 @@ async fn a_page_cannot_be_deleted_while_it_or_a_page_below_it_is_locked() {
         .await
         .unwrap();
 
-    assert!(is_locked(storage.delete_page(&parent.id).await));
-    assert!(is_locked(storage.delete_page(&child.id).await));
+    assert!(is_locked(storage.trash_page(&parent.id).await));
+    assert!(is_locked(storage.trash_page(&child.id).await));
     assert_eq!(storage.list_pages().await.unwrap().len(), 3);
 
     storage
         .set_lock(&grandchild.id, PageLock::None)
         .await
         .unwrap();
-    storage.delete_page(&parent.id).await.unwrap();
+    storage.trash_page(&parent.id).await.unwrap();
     assert!(storage.list_pages().await.unwrap().is_empty());
 }
 
@@ -221,7 +221,7 @@ async fn a_lock_on_a_sibling_or_a_parent_does_not_block_a_page() {
     storage.rename_page(&child.id, "free").await.unwrap();
     storage.move_page(&child.id, None, 0).await.unwrap();
     storage.create_page(Some(&parent.id)).await.unwrap();
-    storage.delete_page(&child.id).await.unwrap();
+    storage.trash_page(&child.id).await.unwrap();
 }
 
 #[tokio::test]
@@ -236,7 +236,7 @@ async fn a_database_locked_at_content_can_still_be_edited() {
 
     // The page itself is read-only.
     assert!(is_locked(storage.rename_page(&database.id, "x").await));
-    assert!(is_locked(storage.delete_page(&database.id).await));
+    assert!(is_locked(storage.trash_page(&database.id).await));
 
     // Rows, cells, properties and views are not.
     let row = storage.create_row(&database.id).await.unwrap();
@@ -268,7 +268,7 @@ async fn a_database_locked_at_content_can_still_be_edited() {
         .unwrap();
     storage.delete_view(&second.id).await.unwrap();
     storage.delete_property(&property).await.unwrap();
-    storage.delete_page("row_b").await.unwrap();
+    storage.trash_page("row_b").await.unwrap();
 }
 
 #[tokio::test]
@@ -303,7 +303,7 @@ async fn a_database_locked_at_everything_refuses_every_change_but_reads() {
     assert!(is_locked(
         storage.update_appearance("row_a", Some("book"), None).await
     ));
-    assert!(is_locked(storage.delete_page("row_a").await));
+    assert!(is_locked(storage.trash_page("row_a").await));
     assert!(is_locked(
         storage
             .create_property(&database.id, "P", PropertyType::Text, None)
@@ -325,7 +325,7 @@ async fn a_database_locked_at_everything_refuses_every_change_but_reads() {
             .await
     ));
     assert!(is_locked(storage.delete_view(&view).await));
-    assert!(is_locked(storage.delete_page(&database.id).await));
+    assert!(is_locked(storage.trash_page(&database.id).await));
     assert_eq!(
         snapshot(&storage, &["row_a", "row_b"], Some(&database.id)).await,
         before
@@ -349,7 +349,7 @@ async fn a_locked_row_keeps_its_cells_at_content_and_loses_them_at_everything() 
 
     storage.set_lock("row_a", PageLock::Content).await.unwrap();
     assert!(is_locked(storage.rename_page("row_a", "x").await));
-    assert!(is_locked(storage.delete_page("row_a").await));
+    assert!(is_locked(storage.trash_page("row_a").await));
     storage
         .set_cell("row_a", &property, CellValue::Text("ok".into()))
         .await
@@ -377,7 +377,7 @@ async fn a_database_cannot_be_deleted_with_a_locked_row() {
     let (database, _) = database(&storage).await;
     storage.set_lock("row_b", PageLock::Content).await.unwrap();
 
-    assert!(is_locked(storage.delete_page(&database.id).await));
+    assert!(is_locked(storage.trash_page(&database.id).await));
     assert_eq!(storage.list_rows(&database.id).await.unwrap().len(), 2);
 }
 
@@ -394,7 +394,7 @@ async fn unknown_pages_are_still_not_found_before_any_lock_applies() {
         Err(StorageError::NotFound(_))
     ));
     assert!(matches!(
-        storage.delete_page("missing").await,
+        storage.trash_page("missing").await,
         Err(StorageError::NotFound(_))
     ));
     assert!(matches!(
@@ -513,4 +513,55 @@ async fn a_relation_cell_of_a_locked_row_is_not_rewritten_or_cascaded_away() {
         row.cells.get(&relation.id),
         Some(&CellValue::Relation(vec!["row_b".into()]))
     );
+}
+
+#[tokio::test]
+async fn a_locked_page_or_a_page_with_a_locked_subpage_is_not_moved_to_the_trash() {
+    let storage = storage().await;
+    let parent = storage.create_page(None).await.unwrap();
+    let child = storage.create_page(Some(&parent.id)).await.unwrap();
+    storage
+        .save_blocks(&child.id, &[paragraph("kept", "text")])
+        .await
+        .unwrap();
+    storage
+        .set_lock(&child.id, PageLock::Content)
+        .await
+        .unwrap();
+    let before = snapshot(&storage, &[&child.id], None).await;
+
+    assert!(is_locked(storage.trash_page(&child.id).await));
+    assert!(is_locked(storage.trash_page(&parent.id).await));
+
+    // Nothing was copied or deleted.
+    assert_eq!(snapshot(&storage, &[&child.id], None).await, before);
+    assert!(storage.list_trash().await.unwrap().is_empty());
+
+    storage.set_lock(&child.id, PageLock::None).await.unwrap();
+    storage.trash_page(&parent.id).await.unwrap();
+    assert_eq!(storage.list_trash().await.unwrap().len(), 1);
+    // A trashed page cannot be locked, and it comes back unlocked.
+    assert!(matches!(
+        storage.set_lock(&parent.id, PageLock::All).await,
+        Err(StorageError::NotFound(_))
+    ));
+    let restored = storage.restore_page(&parent.id).await.unwrap();
+    assert_eq!(restored.lock, PageLock::None);
+}
+
+#[tokio::test]
+async fn a_row_is_not_moved_to_the_trash_or_restored_into_a_database_locked_at_everything() {
+    let storage = storage().await;
+    let (database, _) = database(&storage).await;
+    storage.trash_page("row_a").await.unwrap();
+
+    storage.set_lock(&database.id, PageLock::All).await.unwrap();
+    assert!(is_locked(storage.restore_page("row_a").await));
+    assert!(is_locked(storage.trash_page("row_b").await));
+
+    storage
+        .set_lock(&database.id, PageLock::None)
+        .await
+        .unwrap();
+    storage.restore_page("row_a").await.unwrap();
 }

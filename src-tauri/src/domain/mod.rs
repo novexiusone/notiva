@@ -4,6 +4,7 @@ pub mod block;
 pub mod database;
 pub mod page;
 pub mod search;
+pub mod trash;
 pub mod view;
 
 pub use block::Block;
@@ -12,4 +13,5 @@ pub use database::{
 };
 pub use page::{Page, PageKind, PageLock, PageRef};
 pub use search::SearchHit;
+pub use trash::{PageVersion, PageVersionContent, TrashSettings, TrashedPage};
 pub use view::{View, ViewConfig};
