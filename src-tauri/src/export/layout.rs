@@ -35,7 +35,8 @@ pub fn file_name(title: &str) -> String {
         .chars()
         .take(MAX_NAME)
         .collect();
-    let trimmed = trimmed.trim_end().to_owned();
+    // Cutting may leave a dot or a space at the end again.
+    let trimmed = trimmed.trim_end_matches(['.', ' ']).to_owned();
 
     if trimmed.is_empty() {
         "Untitled".into()
@@ -59,8 +60,13 @@ fn is_reserved_on_windows(name: &str) -> bool {
 
     DEVICES.contains(&stem.as_str())
         || ["COM", "LPT"].iter().any(|prefix| {
-            stem.strip_prefix(prefix)
-                .is_some_and(|number| matches!(number.as_bytes(), [b'1'..=b'9']))
+            stem.strip_prefix(prefix).is_some_and(|number| {
+                let mut digits = number.chars();
+                matches!(
+                    (digits.next(), digits.next()),
+                    (Some('1'..='9' | '¹' | '²' | '³'), None)
+                )
+            })
         })
 }
 
@@ -265,6 +271,16 @@ mod tests {
         ] {
             assert_eq!(file_name(title), title, "{title}");
         }
+    }
+
+    #[test]
+    fn cutting_a_long_title_never_leaves_a_trailing_dot_or_space() {
+        let dot = format!("{}.x", "a".repeat(99));
+        assert_eq!(file_name(&dot), "a".repeat(99));
+        let spaces = format!("{} . .b", "a".repeat(97));
+        assert_eq!(file_name(&spaces), "a".repeat(97));
+        assert_eq!(file_name("COM\u{b9}"), "COM\u{b9}_");
+        assert_eq!(file_name("lpt\u{b3}.md"), "lpt\u{b3}_.md");
     }
 
     #[test]
