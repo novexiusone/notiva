@@ -15,4 +15,10 @@ just dev        # run the desktop app with hot reload
 just check      # build, lint and run every test, as CI does
 ```
 
+## License
+
+Notiva is licensed under the [Apache License 2.0](LICENSE).
+
+It embeds [SurrealDB](https://surrealdb.com), which is published under the Business Source License 1.1. Its additional use grant allows any use except offering it as a database service to third parties. It becomes Apache-2.0 on 2030-11-03.
+
 Documentation: [English](docs/en/README.md) · [Deutsch](docs/de/README.md)

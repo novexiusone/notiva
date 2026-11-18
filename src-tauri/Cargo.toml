@@ -2,6 +2,7 @@
 name = "notiva"
 version = "0.0.0"
 description = "Local-first notes and databases for macOS, Windows and Linux"
+license = "Apache-2.0"
 edition = "2024"
 publish = false
 
