@@ -83,7 +83,13 @@ export function PageView({ pageId }: { pageId: string }) {
           onUpload={banner.choose}
         />
       ) : null}
-      <div className={cn(column, 'group/appearance', page.banner === null ? 'pt-12' : 'pt-6')}>
+      <div
+        className={cn(
+          column,
+          'group/appearance',
+          page.banner === null ? 'pt-12' : page.icon === null ? 'pt-6' : 'pt-0',
+        )}
+      >
         {databaseId !== null ? <DatabaseLink databaseId={databaseId} /> : null}
         <AppearanceRow
           page={page}

@@ -6,6 +6,7 @@ import { IconPicker } from '@/features/pages/IconPicker';
 import { PageIcon } from '@/features/pages/PageIcon';
 import { useUpdateAppearance } from '@/features/pages/api';
 import type { Page } from '@/lib/commands';
+import { cn } from '@/lib/utils';
 
 export function AppearanceMenuItems({
   page,
@@ -90,18 +91,34 @@ export function AppearanceRow({
 
   return (
     <IconPicker page={page} open={pickerOpen} onOpenChange={onPickerOpenChange}>
-      <div className="flex min-h-8 items-end gap-1">
+      <div className="flex flex-col items-start">
         {page.icon !== null ? (
           <button
             type="button"
             aria-label={t('pages.changeIcon')}
             onClick={() => onPickerOpenChange(true)}
-            className="hover:bg-accent focus-visible:ring-ring/50 mb-4 rounded-md p-1 outline-none focus-visible:ring-2"
+            // Over a cover, the icon sits across its lower edge, half on it and half below.
+            className={cn(
+              'focus-visible:ring-ring/50 relative -ml-1 rounded-md p-1 transition-transform outline-none hover:scale-105 focus-visible:ring-2 motion-reduce:transition-none',
+              page.banner !== null && '-mt-12 rounded-xl p-2',
+            )}
           >
-            <PageIcon page={page} size={40} />
+            <PageIcon
+              page={page}
+              size={80}
+              // A soft shadow behind the glyph keeps it readable on any cover.
+              className={
+                page.banner !== null ? 'drop-shadow-[0_2px_12px_rgb(0_0_0/0.55)]' : undefined
+              }
+            />
           </button>
         ) : null}
-        <div className="mb-1 flex gap-1 opacity-0 transition-opacity group-focus-within/appearance:opacity-100 group-hover/appearance:opacity-100">
+        <div
+          className={cn(
+            'mb-2 flex min-h-7 gap-1 opacity-0 transition-opacity group-focus-within/appearance:opacity-100 group-hover/appearance:opacity-100',
+            page.icon !== null && 'mt-3',
+          )}
+        >
           {page.icon === null ? (
             <AddButton
               icon={SmilePlus}
