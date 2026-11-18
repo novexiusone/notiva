@@ -16,8 +16,9 @@ jobs:
   pr-title:
     name: pr-title
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: amannn/action-semantic-pull-request@v6
+      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -39,24 +40,26 @@ jobs:
   branch-name:
     name: branch-name
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check branch name against Conventional Branch
         env:
           BRANCH: ${{ github.head_ref }}
         run: |
-          pattern='^((feat|fix|hotfix|release|chore)/[a-z0-9]+([.-][a-z0-9]+)*|release-please--.+)$'
+          pattern='^((feat|fix|hotfix|release|chore)/[a-z0-9]+([.-][a-z0-9]+)*|release-please--.+|dependabot/.+)$'
           if [[ "$BRANCH" =~ $pattern ]]; then
             echo "Branch name ok: $BRANCH"
           else
-            echo "::error::Branch '$BRANCH' does not match type/short-description (feat, fix, hotfix, release, chore; lowercase letters, digits, hyphens, dots)."
+            echo "::error::Branch '$BRANCH' must use type/short-description or be an allowed release-please/Dependabot branch."
             exit 1
           fi
 
   commits:
     name: commits
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: wagoid/commitlint-github-action@v6
+      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6
