@@ -20,7 +20,18 @@ export default defineConfig({
     baseURL: url,
     trace: 'on-first-retry',
   },
-  projects: [{ name: 'webkit', use: { ...devices['Desktop Safari'] } }],
+  projects: [
+    {
+      name: 'webkit',
+      testIgnore: '**/smoke.spec.ts',
+      use: { ...devices['Desktop Safari'] },
+    },
+    {
+      name: 'chromium-smoke',
+      testMatch: '**/smoke.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
   webServer: {
     command: `VITE_FAKE_BACKEND=1 pnpm exec vite --port ${port} --strictPort`,
     url,

@@ -15,25 +15,38 @@ jobs:
   release-please:
     name: release-please
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
+      actions: write
       contents: write
       pull-requests: write
       issues: write
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@v5
+      - name: Create the release app token
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        id: release-app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         id: release
+        with:
+          token: ${{ steps.release-app.outputs.token || github.token }}
 
       # release-please computes the version and keeps the release pull request
       # up to date. The changelog is written by git-cliff into that pull request.
       - name: Check out the release pull request
         if: steps.release.outputs.pr
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
           fetch-depth: 0
+          token: ${{ steps.release-app.outputs.token || github.token }}
 
       - name: Read the next version
         if: steps.release.outputs.pr
@@ -42,7 +55,7 @@ jobs:
 
       - name: Write the changelog
         if: steps.release.outputs.pr
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4
         with:
           config: cliff.toml
           args: --tag v${{ steps.version.outputs.version }} --output CHANGELOG.md
@@ -56,52 +69,11 @@ jobs:
           git diff --cached --quiet || git commit -m "chore: update changelog"
           git push
 
-  # Unsigned on every platform until #27: macOS Gatekeeper and Windows
-  # SmartScreen warn when a downloaded bundle is opened for the first time.
-  bundle:
-    name: bundle (${{ matrix.os }})
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
-      - name: Install the Tauri system libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev \
-            libayatana-appindicator3-dev librsvg2-dev
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm tauri build
-      - name: Attach the bundles to the release
-        shell: bash
+      # GITHUB_TOKEN-created releases do not emit release events, so hand off
+      # explicitly. workflow_dispatch is exempt from that recursion guard.
+      - name: Start the bundle workflow
+        if: steps.release.outputs.release_created == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: |
-          shopt -s nullglob
-          files=(
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/deb/*.deb
-          )
-          test ${#files[@]} -gt 0
-          gh release upload "$TAG" "${files[@]}" --clobber
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh workflow run bundle.yml --repo "$GITHUB_REPOSITORY" -f "tag_name=$TAG"
