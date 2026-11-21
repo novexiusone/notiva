@@ -101,7 +101,7 @@ export function PageCover({
     drag.current = null;
   };
 
-  const repositioning = draft !== null;
+  const repositioning = !readOnly && draft !== null;
 
   return (
     <div ref={cover} className="group/cover relative h-70 w-full overflow-hidden">
@@ -171,7 +171,7 @@ export function PageCover({
                 {t('pages.cover.savePosition')}
               </Button>
             </>
-          ) : (
+          ) : !readOnly || isImage ? (
             <div role="toolbar" aria-label={t('pages.cover.controls')} className={bar}>
               {!readOnly ? (
                 <CoverPicker
@@ -216,7 +216,7 @@ export function PageCover({
                 </>
               ) : null}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

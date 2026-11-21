@@ -25,7 +25,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const titleInput = useRef<HTMLInputElement>(null);
   const page = pages.data?.find((candidate) => candidate.id === pageId);
   const database = pages.data?.find((candidate) => candidate.id === page?.databaseId);
-  const contentReadOnly = page?.lock !== 'none' || database?.lock === 'all';
+  const contentReadOnly = (page?.lock ?? 'none') !== 'none' || database?.lock === 'all';
   const cellsReadOnly = page?.lock === 'all' || database?.lock === 'all';
   const [pickerOpen, setPickerOpen] = useState(false);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);

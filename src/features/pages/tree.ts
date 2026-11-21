@@ -35,7 +35,7 @@ export function buildTree(pages: readonly Page[]): PageNode[] {
         title: page.title,
         kind: page.kind,
         icon: page.icon,
-        lock: page.lock,
+        lock: page.lock ?? 'none',
         children: [],
       },
     ]),

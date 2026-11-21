@@ -9,8 +9,9 @@ type State<T> = {
 };
 
 /**
- * Saves a value a moment after it last changed, and right away when the
- * window loses focus, the page is hidden or the component goes away.
+ * While enabled, saves a value a moment after it last changed, and right away
+ * when the window loses focus, the page is hidden or the component goes away.
+ * Disabling drops a pending change without saving it.
  *
  * A failed save keeps the change pending: it goes out again with the next
  * change or the next flush.

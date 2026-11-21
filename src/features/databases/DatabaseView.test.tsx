@@ -177,6 +177,9 @@ describe('a database page', () => {
     expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveAttribute('readonly');
     await user.click(await cell('Build it', 'Notes'));
     expect(screen.queryByRole('textbox', { name: 'Notes' })).toBeNull();
+    (await cell('Build it', 'Notes')).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('textbox', { name: 'Notes' })).toBeNull();
     await user.click(await cell('Build it', 'Name'));
     expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
 

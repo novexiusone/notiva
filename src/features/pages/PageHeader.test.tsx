@@ -111,11 +111,13 @@ describe('page locking', () => {
       path: '/page/a',
     });
     const main = await screen.findByRole('main');
+    await within(main).findByRole('button', { name: 'Unlock page' });
 
     expect(within(main).queryByRole('button', { name: 'Change icon' })).toBeNull();
     expect(within(main).queryByRole('button', { name: 'Add cover' })).toBeNull();
     expect(within(main).queryByRole('button', { name: 'Change' })).toBeNull();
     expect(within(main).queryByRole('button', { name: 'Reposition' })).toBeNull();
+    expect(within(main).queryByRole('toolbar', { name: 'Cover' })).toBeNull();
 
     await user.click(await within(main).findByRole('button', { name: 'Page actions' }));
     expect(screen.getByRole('menuitem', { name: 'Export' })).toBeEnabled();

@@ -247,6 +247,8 @@ test.describe('the page header in light mode and German', () => {
     await page.getByRole('main').getByRole('button', { name: 'Seitenaktionen' }).click();
     await expect(page.getByRole('menuitem', { name: 'Icon hinzufügen' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Cover hinzufügen' })).toBeVisible();
+    await page.getByRole('menuitemcheckbox', { name: 'Inhalt sperren' }).click();
+    await expect(page.getByRole('button', { name: 'Seite entsperren' })).toBeVisible();
   });
 });
 

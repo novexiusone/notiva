@@ -32,7 +32,7 @@ export function PageLockButton({ page, className }: { page: Page; className: str
   const { t } = useTranslation();
   const setLock = useSetLock();
 
-  if (page.lock === 'none') return null;
+  if ((page.lock ?? 'none') === 'none') return null;
 
   return (
     <button

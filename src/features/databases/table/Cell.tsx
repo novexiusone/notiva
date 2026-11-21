@@ -48,7 +48,7 @@ const arrows: Record<string, [rows: number, columns: number]> = {
 
 /**
  * A grid cell that can be focused, moved through with the arrow keys and
- * opened for editing with a click or Enter. Events from the editor's popovers
+ * opened for editing with a click or Enter unless it is read-only. Events from the editor's popovers
  * reach the cell through React's portals; they are left alone.
  */
 function GridCell({

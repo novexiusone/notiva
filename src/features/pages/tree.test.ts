@@ -96,6 +96,7 @@ describe('buildTree', () => {
 
     expect(isRow(old)).toBe(false);
     expect(buildTree([old]).map((node) => node.id)).toEqual(['old']);
+    expect(buildTree([old])[0]?.lock).toBe('none');
   });
 });
 
