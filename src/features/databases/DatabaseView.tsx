@@ -101,6 +101,7 @@ function DatabaseViews({
   const { change: changeView, flush: flushViews } = useUpdateView(databaseId);
   const deleteView = useDeleteView(databaseId);
   const { views } = database;
+  const readOnly = database.page.lock === 'all';
   const active = activeViewOf(views, databaseId, search.view);
   const activeId = active?.id ?? null;
 
@@ -149,7 +150,8 @@ function DatabaseViews({
     show(id);
   };
 
-  const add = (type: ViewType) =>
+  const add = (type: ViewType) => {
+    if (readOnly) return;
     createView.mutate(
       {
         name: newViewName(views, t(`databases.views.types.${type}`)),
@@ -157,8 +159,10 @@ function DatabaseViews({
       },
       { onSuccess: (view) => select(view.id) },
     );
+  };
 
   const remove = (id: string) => {
+    if (readOnly) return;
     if (id === activeId) {
       const index = views.findIndex((view) => view.id === id);
       const neighbour = views[index + 1] ?? views[index - 1];
@@ -168,7 +172,7 @@ function DatabaseViews({
   };
 
   const setConfig = (config: ViewConfig) => {
-    if (activeId !== null) changeView(activeId, { config });
+    if (!readOnly && activeId !== null) changeView(activeId, { config });
   };
 
   const definition = active ? viewTypeDefinition(active.config.type) : viewTypeDefinition('table');
@@ -180,12 +184,14 @@ function DatabaseViews({
       activeId={activeId}
       onSelect={select}
       onAdd={add}
+      readOnly={readOnly}
       toolbar={
         active && definition ? (
           <ViewToolbar
             config={active.config}
             properties={database.properties}
             onChange={setConfig}
+            readOnly={readOnly}
             grouping={definition.grouping}
             onNewRow={() => createRow.mutate()}
             view={active}
@@ -203,6 +209,7 @@ function DatabaseViews({
           database={database}
           rows={rows}
           view={active}
+          readOnly={readOnly}
           onConfigChange={setConfig}
         />
       ) : (

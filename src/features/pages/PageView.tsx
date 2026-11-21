@@ -26,6 +26,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const page = pages.data?.find((candidate) => candidate.id === pageId);
   const database = pages.data?.find((candidate) => candidate.id === page?.databaseId);
   const contentReadOnly = page?.lock !== 'none' || database?.lock === 'all';
+  const cellsReadOnly = page?.lock === 'all' || database?.lock === 'all';
   const [pickerOpen, setPickerOpen] = useState(false);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const banner = useBannerChooser(pageId);
@@ -115,7 +116,12 @@ export function PageView({ pageId }: { pageId: string }) {
         <div className={column}>
           {databaseId !== null ? (
             // Fresh per row, so an open editor does not carry over to the next one.
-            <RowProperties key={`properties-${page.id}`} rowId={page.id} databaseId={databaseId} />
+            <RowProperties
+              key={`properties-${page.id}`}
+              rowId={page.id}
+              databaseId={databaseId}
+              readOnly={cellsReadOnly}
+            />
           ) : null}
           <Editor pageId={page.id} readOnly={contentReadOnly} ref={editor} />
           <Backlinks pageId={page.id} />

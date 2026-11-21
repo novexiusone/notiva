@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TableColumn } from '@/features/databases/useDatabaseTable';
-import type { Row } from '@/lib/commands';
+import type { PageLock, Row } from '@/lib/commands';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { PropertyCell, TitleCell } from './Cell';
@@ -20,6 +20,8 @@ type TableRowProps = {
   selected: boolean;
   /** Whether any row is selected; the boxes of all rows then stay in sight. */
   selecting: boolean;
+  lock: PageLock;
+  readOnly: boolean;
 };
 
 /**
@@ -35,9 +37,13 @@ export const TableRow = memo(function TableRow({
   width,
   selected,
   selecting,
+  lock,
+  readOnly,
 }: TableRowProps) {
   const { t } = useTranslation();
   const { toggleRow } = useTableActions();
+  const contentReadOnly = readOnly || lock !== 'none';
+  const cellsReadOnly = readOnly || lock === 'all';
 
   return (
     <div
@@ -63,6 +69,7 @@ export const TableRow = memo(function TableRow({
       >
         <Checkbox
           checked={selected}
+          disabled={contentReadOnly}
           aria-label={t('databases.table.selectRow', { title: row.title || t('pages.untitled') })}
           onCheckedChange={() => toggleRow(row.id)}
         />
@@ -82,9 +89,10 @@ export const TableRow = memo(function TableRow({
             property={column.property}
             definition={column.definition}
             value={row.cells[column.id] ?? null}
+            readOnly={cellsReadOnly}
           />
         ) : (
-          <TitleCell key={column.id} {...position} title={row.title} />
+          <TitleCell key={column.id} {...position} title={row.title} readOnly={contentReadOnly} />
         );
       })}
     </div>

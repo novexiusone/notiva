@@ -10,6 +10,7 @@ export type ViewRendererProps = {
   database: Database;
   rows: Row[];
   view: View | null;
+  readOnly?: boolean;
   onConfigChange: (config: ViewConfig) => void;
 };
 

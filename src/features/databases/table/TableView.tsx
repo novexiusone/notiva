@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useCreateRow, useSetCell } from '@/features/databases/api';
 import { useCellStore } from '@/features/databases/uiStore';
 import { TITLE_COLUMN_ID, useDatabaseTable } from '@/features/databases/useDatabaseTable';
-import { useDeletePage, useRenamePage } from '@/features/pages/api';
+import { useDeletePage, usePages, useRenamePage } from '@/features/pages/api';
 import { DeletePageDialog } from '@/features/pages/DeletePageDialog';
 import type { Database, Row, View, ViewConfig } from '@/lib/commands';
 import { AddPropertyMenu } from './AddPropertyMenu';
@@ -32,6 +32,7 @@ type TableViewProps = {
   rows: Row[];
   /** The view whose filters, sorts, grouping and columns apply; `null` shows everything. */
   view?: View | null;
+  readOnly?: boolean;
   onConfigChange?: (config: ViewConfig) => void;
 };
 
@@ -43,9 +44,20 @@ const noRowsKept: ReadonlySet<string> = new Set();
  * than it. Grouped, the header of each group is a line of the body as tall as
  * a row.
  */
-export function TableView({ database, rows, view = null, onConfigChange }: TableViewProps) {
+export function TableView({
+  database,
+  rows,
+  view = null,
+  readOnly = false,
+  onConfigChange,
+}: TableViewProps) {
   const { t } = useTranslation();
   const databaseId = database.page.id;
+  const pages = usePages().data;
+  const rowLocks = useMemo(
+    () => new Map((pages ?? []).map((page) => [page.id, page.lock])),
+    [pages],
+  );
   const tableId = useId();
   // A row added here stays in sight although it may not pass the view's filters.
   const [keepRowIds, setKeepRowIds] = useState(noRowsKept);
@@ -140,7 +152,8 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
     virtualizer.scrollToIndex(index);
   }, [activeRowId, items, virtualizer]);
 
-  const addRow = () =>
+  const addRow = () => {
+    if (readOnly) return;
     createRow.mutate(undefined, {
       onSuccess: (row) => {
         setKeepRowIds((kept) => new Set([...kept, row.id]));
@@ -149,6 +162,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
           .activate({ tableId, rowId: row.id, columnId: TITLE_COLUMN_ID }, true);
       },
     });
+  };
 
   const width = tableWidth(columns);
   const visibleRowIds = useMemo(
@@ -156,9 +170,12 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
     [items],
   );
   const rowsShown = visibleRowIds.length;
-  // Rows that were filtered away or deleted drop out of the selection.
-  const selection = visibleRowIds.filter((id) => chosen.has(id));
-  const allChosen = rowsShown > 0 && selection.length === rowsShown;
+  const selectableRowIds = visibleRowIds.filter(
+    (id) => !readOnly && (rowLocks.get(id) ?? 'none') === 'none',
+  );
+  // Rows that were filtered away, deleted or locked drop out of the selection.
+  const selection = selectableRowIds.filter((id) => chosen.has(id));
+  const allChosen = selectableRowIds.length > 0 && selection.length === selectableRowIds.length;
   const pendingRow = rows.find((row) => row.id === rowToDelete);
 
   return (
@@ -221,10 +238,10 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                 >
                   <Checkbox
                     checked={allChosen ? true : selection.length > 0 ? 'indeterminate' : false}
-                    disabled={rowsShown === 0}
+                    disabled={selectableRowIds.length === 0}
                     aria-label={t('databases.table.selectAll')}
                     onCheckedChange={() =>
-                      setChosen(allChosen ? noRowsKept : new Set(visibleRowIds))
+                      setChosen(allChosen ? noRowsKept : new Set(selectableRowIds))
                     }
                   />
                 </div>
@@ -236,6 +253,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                       definition={column.definition}
                       columnIndex={columnIndex}
                       width={columnWidth(column)}
+                      readOnly={readOnly}
                     />
                   ) : (
                     <TitleHeaderCell key={column.id} width={columnWidth(column)} />
@@ -247,7 +265,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                   style={{ width: ADD_COLUMN_WIDTH }}
                   className="h-full shrink-0"
                 >
-                  <AddPropertyMenu databaseId={databaseId} />
+                  <AddPropertyMenu databaseId={databaseId} readOnly={readOnly} />
                 </div>
               </div>
             </div>
@@ -283,6 +301,8 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                     width={width}
                     selected={chosen.has(item.row.id)}
                     selecting={selection.length > 0}
+                    lock={rowLocks.get(item.row.id) ?? 'none'}
+                    readOnly={readOnly}
                   />
                 );
               })}
@@ -295,6 +315,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
           ) : null}
           <button
             type="button"
+            disabled={readOnly}
             onClick={addRow}
             style={{ minWidth: width }}
             className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 flex h-8 w-full items-center gap-2 px-2 text-sm outline-none focus-visible:ring-2"

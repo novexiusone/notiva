@@ -9,7 +9,13 @@ import { propertyTypeDefinition, propertyTypes } from '@/features/databases/prop
 import type { PropertyType } from '@/lib/commands';
 
 /** The `+` at the end of the header: choose a type, then type a name. */
-export function AddPropertyMenu({ databaseId }: { databaseId: string }) {
+export function AddPropertyMenu({
+  databaseId,
+  readOnly = false,
+}: {
+  databaseId: string;
+  readOnly?: boolean;
+}) {
   const { t } = useTranslation();
   const createProperty = useCreateProperty(databaseId);
   const [open, setOpen] = useState(false);
@@ -22,11 +28,15 @@ export function AddPropertyMenu({ databaseId }: { databaseId: string }) {
   };
 
   return (
-    <Popover open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
+    <Popover
+      open={!readOnly && open}
+      onOpenChange={(next) => (next && !readOnly ? setOpen(true) : close())}
+    >
       <PopoverTrigger asChild>
         <button
           type="button"
           aria-label={t('databases.table.addProperty')}
+          disabled={readOnly}
           className="text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent focus-visible:ring-ring/60 flex h-full w-full items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-inset"
         >
           <Plus size={16} aria-hidden />

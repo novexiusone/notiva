@@ -1,4 +1,4 @@
-import { Lock, LockOpen } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu';
 import { useSetLock } from '@/features/pages/api';
@@ -42,7 +42,7 @@ export function PageLockButton({ page, className }: { page: Page; className: str
       className={className}
       onClick={() => setLock(page.id, 'none')}
     >
-      <LockOpen size={18} aria-hidden />
+      <Lock size={18} aria-hidden />
     </button>
   );
 }

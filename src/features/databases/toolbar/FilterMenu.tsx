@@ -289,6 +289,7 @@ export function FilterMenu(props: ToolbarMenuProps) {
           icon={ListFilter}
           label={t('databases.toolbar.filter')}
           badge={filters.length > 0 ? filters.length : undefined}
+          disabled={props.readOnly}
         />
       </PopoverTrigger>
       <PopoverContent
