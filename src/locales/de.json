@@ -16,6 +16,10 @@
   },
   "pages": {
     "fullWidth": "Volle Breite",
+    "lockContent": "Inhalt sperren",
+    "lockEverything": "Alles sperren",
+    "unlock": "Seite entsperren",
+    "lockedError": "Diese Seite ist gesperrt. Entsperre sie, bevor du Änderungen vornimmst.",
     "untitled": "Ohne Titel",
     "new": "Neue Seite",
     "addSubpage": "Unterseite hinzufügen",

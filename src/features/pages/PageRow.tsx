@@ -23,6 +23,7 @@ export function PageRow({ node, style, dragHandle }: NodeRendererProps<PageNode>
   const hasChildren = node.data.children.length > 0;
   // The children of a database are its rows, which it shows itself.
   const isDatabase = node.data.kind === 'database';
+  const locked = node.data.lock !== 'none';
   const movedFocus = useRef(false);
   const isOpenPage = actions?.openPageId === node.id;
   // The indent comes from the tree; the rest lines the icon up with the sidebar items.
@@ -99,6 +100,7 @@ export function PageRow({ node, style, dragHandle }: NodeRendererProps<PageNode>
             }}
           >
             <DropdownMenuItem
+              disabled={locked}
               onSelect={() => {
                 movedFocus.current = true;
                 void node.edit();
@@ -119,7 +121,11 @@ export function PageRow({ node, style, dragHandle }: NodeRendererProps<PageNode>
             <DropdownMenuItem onSelect={() => actions?.exportMarkdown(node.id)}>
               {t('export.page')}
             </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onSelect={() => actions?.remove(node.id)}>
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={locked}
+              onSelect={() => actions?.remove(node.id)}
+            >
               {t('pages.delete')}
             </DropdownMenuItem>
           </DropdownMenuContent>

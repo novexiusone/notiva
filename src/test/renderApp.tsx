@@ -1,8 +1,9 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, RouterProvider } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CellValue, Page, Property, View } from '@/lib/commands';
+import { createQueryClient } from '@/lib/queryClient';
 import { createAppRouter } from '@/router';
 import { installFakeBackend } from '@/test/fakeBackend';
 
@@ -19,7 +20,7 @@ type Options = {
 export function renderApp({ path = '/', ...data }: Options = {}) {
   installFakeBackend(data);
 
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = createQueryClient({ queries: { retry: false } });
   const router = createAppRouter(createMemoryHistory({ initialEntries: [path] }));
 
   render(

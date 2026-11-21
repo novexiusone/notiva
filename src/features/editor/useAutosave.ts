@@ -15,10 +15,11 @@ type State<T> = {
  * A failed save keeps the change pending: it goes out again with the next
  * change or the next flush.
  */
-export function useAutosave<T>(save: (value: T) => Promise<void>, delay = 500) {
+export function useAutosave<T>(save: (value: T) => Promise<void>, delay = 500, enabled = true) {
   const [failed, setFailed] = useState(false);
   const state = useRef<State<T>>({ pending: null, timer: undefined, queue: Promise.resolve() });
   const latestSave = useRef(save);
+  const latestEnabled = useRef(enabled);
 
   useEffect(() => {
     latestSave.current = save;
@@ -27,6 +28,10 @@ export function useAutosave<T>(save: (value: T) => Promise<void>, delay = 500) {
   const flush = useCallback(() => {
     const current = state.current;
     clearTimeout(current.timer);
+    if (!latestEnabled.current) {
+      current.pending = null;
+      return current.queue;
+    }
 
     const read = current.pending;
     if (read === null) return current.queue;
@@ -47,6 +52,7 @@ export function useAutosave<T>(save: (value: T) => Promise<void>, delay = 500) {
 
   const schedule = useCallback(
     (read: () => T) => {
+      if (!latestEnabled.current) return;
       const current = state.current;
       current.pending = read;
       clearTimeout(current.timer);
@@ -54,6 +60,13 @@ export function useAutosave<T>(save: (value: T) => Promise<void>, delay = 500) {
     },
     [delay, flush],
   );
+
+  useEffect(() => {
+    latestEnabled.current = enabled;
+    if (enabled) return;
+    clearTimeout(state.current.timer);
+    state.current.pending = null;
+  }, [enabled]);
 
   useEffect(() => {
     const flushNow = () => void flush();
@@ -72,5 +85,5 @@ export function useAutosave<T>(save: (value: T) => Promise<void>, delay = 500) {
     };
   }, [flush]);
 
-  return { schedule, flush, failed };
+  return { schedule, flush, failed: enabled && failed };
 }

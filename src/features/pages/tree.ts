@@ -5,6 +5,7 @@ export type PageNode = {
   title: string;
   kind: Page['kind'];
   icon: Page['icon'];
+  lock: Page['lock'];
   children: PageNode[];
 };
 
@@ -29,7 +30,14 @@ export function buildTree(pages: readonly Page[]): PageNode[] {
   const nodes = new Map<string, PageNode>(
     pages.map((page) => [
       page.id,
-      { id: page.id, title: page.title, kind: page.kind, icon: page.icon, children: [] },
+      {
+        id: page.id,
+        title: page.title,
+        kind: page.kind,
+        icon: page.icon,
+        lock: page.lock,
+        children: [],
+      },
     ]),
   );
   const roots: PageNode[] = [];

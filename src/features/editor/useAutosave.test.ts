@@ -61,6 +61,24 @@ describe('useAutosave', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  it('drops a pending change when saving is disabled and ignores changes while disabled', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const { result, rerender, unmount } = renderHook(
+      ({ enabled }) => useAutosave(save, 500, enabled),
+      { initialProps: { enabled: true } },
+    );
+
+    act(() => result.current.schedule(() => 'before lock'));
+    rerender({ enabled: false });
+    act(() => result.current.schedule(() => 'while locked'));
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    act(() => void window.dispatchEvent(new Event('blur')));
+    unmount();
+    await settle();
+
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it('runs saves one after another', async () => {
     const finished: string[] = [];
     let release!: () => void;

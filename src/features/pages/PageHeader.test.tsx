@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { page, renderApp } from '@/test/renderApp';
 
 const precedes = (a: Element, b: Element) =>
@@ -78,6 +78,72 @@ describe('page header', () => {
     const panel = await screen.findByRole('dialog');
     expect(within(panel).getByText('Markdown')).toBeInTheDocument();
     expect(within(panel).getByRole('button', { name: 'Export' })).toBeInTheDocument();
+  });
+});
+
+describe('page locking', () => {
+  it('locks and unlocks content from the menu and top bar', async () => {
+    const { user } = renderApp({ pages: [page('a', 'Alpha')], path: '/page/a' });
+    const main = await screen.findByRole('main');
+
+    await user.click(await within(main).findByRole('button', { name: 'Page actions' }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: 'Lock content' }));
+
+    expect(await within(main).findByRole('button', { name: 'Unlock page' })).toBeInTheDocument();
+    expect(within(main).getByRole('textbox', { name: 'Page title' })).toHaveAttribute('readonly');
+    await waitFor(() =>
+      expect(document.querySelector('.bn-editor')).toHaveAttribute('contenteditable', 'false'),
+    );
+
+    await user.click(within(main).getByRole('button', { name: 'Unlock page' }));
+
+    await waitFor(() =>
+      expect(within(main).getByRole('textbox', { name: 'Page title' })).not.toHaveAttribute(
+        'readonly',
+      ),
+    );
+    expect(within(main).queryByRole('button', { name: 'Unlock page' })).toBeNull();
+  });
+
+  it('makes appearance and deletion read-only while preserving export', async () => {
+    const { user } = renderApp({
+      pages: [{ ...page('a', 'Alpha'), icon: '🚀', banner: 'gallery:azure', lock: 'all' }],
+      path: '/page/a',
+    });
+    const main = await screen.findByRole('main');
+
+    expect(within(main).queryByRole('button', { name: 'Change icon' })).toBeNull();
+    expect(within(main).queryByRole('button', { name: 'Add cover' })).toBeNull();
+    expect(within(main).queryByRole('button', { name: 'Change' })).toBeNull();
+    expect(within(main).queryByRole('button', { name: 'Reposition' })).toBeNull();
+
+    await user.click(await within(main).findByRole('button', { name: 'Page actions' }));
+    expect(screen.getByRole('menuitem', { name: 'Export' })).toBeEnabled();
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('shows a locked error when a locked subpage prevents deletion', async () => {
+    const { user } = renderApp({
+      pages: [page('a', 'Alpha'), { ...page('b', 'Beta', 'a'), lock: 'content' }],
+      path: '/page/a',
+    });
+    const tree = await screen.findByRole('tree');
+    const parent = await within(tree).findByRole('treeitem', { name: /Alpha/ });
+
+    await user.hover(parent);
+    await user.click(within(parent).getByRole('button', { name: 'Page actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
+    );
+
+    expect(
+      await screen.findByText('This page is locked. Unlock it before making changes.'),
+    ).toBeInTheDocument();
+    expect(within(tree).getByRole('treeitem', { name: /Alpha/ })).toBeInTheDocument();
   });
 });
 
