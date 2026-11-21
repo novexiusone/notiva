@@ -163,6 +163,54 @@ test('icon, banner and page actions work from the page menu and survive a reload
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
 });
 
+test('content locking persists, blocks editing without autosaving and unlocks from the top bar', async ({
+  page,
+}) => {
+  await createPage(page, 'Locked notes');
+  const main = page.getByRole('main');
+  const editor = main.locator('.bn-editor');
+  const actions = main.getByRole('button', { name: 'Page actions' });
+  await title(page).press('Enter');
+  await page.keyboard.type('Keep this text');
+  await expect(editor).toContainText('Keep this text');
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem('notiva.fake.blocks') ?? ''))
+    .toContain('Keep this text');
+  const editedBefore = await main.locator('time').getAttribute('datetime');
+
+  await actions.focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('menuitemcheckbox', { name: 'Lock content' }).press('Enter');
+  await page.keyboard.press('Escape');
+
+  const unlock = main.getByRole('button', { name: 'Unlock page' });
+  await expect(unlock).toBeVisible();
+  await expect(title(page)).toHaveAttribute('readonly', '');
+  await expect(editor).toHaveAttribute('contenteditable', 'false');
+  await expect(main.getByRole('button', { name: 'Add icon' })).toHaveCount(0);
+  await expect(main.locator('time')).toHaveAttribute('datetime', editedBefore!);
+
+  await title(page).click();
+  await page.keyboard.type('Must not be saved');
+  await expect(title(page)).toHaveValue('Locked notes');
+  await expect(editor).not.toContainText('Must not be saved');
+  await page.waitForTimeout(600);
+  expect(
+    await page.evaluate(() => window.localStorage.getItem('notiva.fake.blocks') ?? ''),
+  ).not.toContain('Must not be saved');
+
+  await page.reload();
+  await expect(title(page)).toHaveAttribute('readonly', '');
+  await expect(editor).toHaveAttribute('contenteditable', 'false');
+  await expect(editor).toContainText('Keep this text');
+
+  await unlock.focus();
+  await page.keyboard.press('Enter');
+  await expect(title(page)).toBeEditable();
+  await expect(editor).toHaveAttribute('contenteditable', 'true');
+  await expect(unlock).toHaveCount(0);
+});
+
 test('the top bar shows the path to the page and links to its parents', async ({ page }) => {
   await createPage(page, 'Parent');
   await row(page, 'Parent').getByRole('button', { name: 'Add a subpage' }).click();
