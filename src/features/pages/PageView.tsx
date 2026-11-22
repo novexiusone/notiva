@@ -1,7 +1,7 @@
 import { Navigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DatabaseView } from '@/features/databases/DatabaseView';
+import { DatabaseView, type DatabaseViewHandle } from '@/features/databases/DatabaseView';
 import { DatabaseLink, RowProperties } from '@/features/databases/RowProperties';
 import { Editor, type EditorHandle } from '@/features/editor/Editor';
 import { Backlinks } from '@/features/links/Backlinks';
@@ -22,6 +22,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const pages = usePages();
   const renamePage = useRenamePage();
   const editor = useRef<EditorHandle>(null);
+  const databaseView = useRef<DatabaseViewHandle>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const page = pages.data?.find((candidate) => candidate.id === pageId);
   const database = pages.data?.find((candidate) => candidate.id === page?.databaseId);
@@ -75,7 +76,10 @@ export function PageView({ pageId }: { pageId: string }) {
         page={page}
         pages={pages.data ?? []}
         readOnly={contentReadOnly}
-        beforeLock={async () => (await editor.current?.flush()) ?? true}
+        beforeLock={async () => {
+          if (!((await editor.current?.flush()) ?? true)) return false;
+          return (await databaseView.current?.flush()) ?? true;
+        }}
         onChooseIcon={() => setPickerOpen(true)}
         onChooseBanner={() => setCoverPickerOpen(true)}
       />
@@ -112,7 +116,7 @@ export function PageView({ pageId }: { pageId: string }) {
       {page.kind === 'database' ? (
         // A database shows its rows where a page has its text. Only the title
         // keeps the reading width; what is below it decides for itself.
-        <DatabaseView databaseId={page.id} />
+        <DatabaseView databaseId={page.id} ref={databaseView} />
       ) : (
         <div className={column}>
           {databaseId !== null ? (

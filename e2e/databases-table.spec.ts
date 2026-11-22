@@ -284,6 +284,27 @@ test('database content and everything locks enforce their different editing rule
   await typeIntoCell(page, 'Write spec', 'Notes', 'Editable after unlock');
 });
 
+test('locking immediately after a view change saves its configuration first', async ({ page }) => {
+  await createDatabase(page, 'Tasks');
+  await addProperty(page, 'Text', 'Notes');
+  await addProperty(page, 'Number', 'Hours');
+
+  await page.getByRole('button', { name: /^View settings/ }).click();
+  const settings = page.getByRole('dialog', { name: 'View settings' });
+  await settings.getByRole('button', { name: /^Property visibility/ }).click();
+  await settings.getByRole('checkbox', { name: 'Hours' }).click();
+  await expect(header(page, 'Hours')).toHaveCount(0);
+
+  const main = page.getByRole('main');
+  await main.getByRole('button', { name: 'Page actions' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Lock everything' }).click();
+  await expect(main.getByRole('button', { name: 'Unlock page' })).toBeVisible();
+
+  await restart(page);
+  await expect(header(page, 'Hours')).toHaveCount(0);
+  await expect(header(page, 'Notes')).toBeVisible();
+});
+
 test('the keyboard reaches the header and edits cells', async ({ page }) => {
   await createDatabase(page, 'Tasks');
   await addProperty(page, 'Text', 'Notes');

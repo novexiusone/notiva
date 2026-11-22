@@ -456,6 +456,57 @@ describe('the view hooks', () => {
     ]);
   });
 
+  it('reports false when a flushed view change cannot be saved', async () => {
+    vi.spyOn(commands, 'updateView').mockRejectedValue({ kind: 'internal', message: 'disk full' });
+    const { current } = await renderDatabase(() => ({ update: useUpdateView('db') }));
+
+    act(() => current().update.change('v1', { config: sorted('asc') }));
+    await act(async () => {
+      await expect(current().update.flush()).resolves.toBe(false);
+    });
+  });
+
+  it('reports false when a newer view save is queued during a flush', async () => {
+    const updateView = commands.updateView;
+    let releaseFirst!: () => void;
+    let releaseSecond!: () => void;
+    const first = vi
+      .spyOn(commands, 'updateView')
+      .mockImplementationOnce(async (...args) => {
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
+        return updateView(...args);
+      })
+      .mockImplementationOnce(async (...args) => {
+        await new Promise<void>((resolve) => {
+          releaseSecond = resolve;
+        });
+        return updateView(...args);
+      });
+    const { current } = await renderDatabase(() => ({ update: useUpdateView('db') }));
+
+    act(() => current().update.change('v1', { config: sorted('asc') }));
+    let firstFlush!: Promise<boolean>;
+    act(() => {
+      firstFlush = current().update.flush();
+    });
+    await waitFor(() => expect(first).toHaveBeenCalledTimes(1));
+
+    act(() => current().update.change('v1', { config: sorted('desc') }));
+    act(() => void current().update.flush());
+    act(() => releaseFirst());
+    await act(async () => {
+      await expect(firstFlush).resolves.toBe(false);
+    });
+
+    act(() => releaseSecond());
+    await act(async () => {
+      await expect(current().update.flush()).resolves.toBe(true);
+    });
+    expect(first).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps a change that is still being saved when the database is fetched again', async () => {
     const { current, loaded, queryClient } = await renderDatabase(() => ({
       update: useUpdateView('db'),
@@ -465,7 +516,9 @@ describe('the view hooks', () => {
     await act(() => queryClient.refetchQueries({ queryKey: databaseKeys.database('db') }));
 
     expect(views(loaded)[1]!.config).toEqual(sorted('asc'));
-    act(() => current().update.flush());
+    act(() => {
+      void current().update.flush();
+    });
     await waitFor(async () => expect((await stored())[1]!.config).toEqual(sorted('asc')));
   });
 

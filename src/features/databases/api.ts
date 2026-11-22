@@ -402,9 +402,10 @@ export function useUpdateView(databaseId: string) {
   });
 
   // Timers outlive a render, so they call the mutation of the latest one.
-  const latest = useRef(mutation.mutate);
+  const latest = useRef(mutation.mutateAsync);
+  const queue = useRef<Promise<boolean>>(Promise.resolve(true));
   useLayoutEffect(() => {
-    latest.current = mutation.mutate;
+    latest.current = mutation.mutateAsync;
   });
 
   return useMemo(() => {
@@ -416,13 +417,24 @@ export function useUpdateView(databaseId: string) {
       clearTimeout(entry.timer);
       entry.timer = null;
       const { name, config, version } = entry;
-      latest.current({ id, name, config, version });
+      queue.current = queue.current.then(() =>
+        latest.current({ id, name, config, version }).then(
+          () => true,
+          () => false,
+        ),
+      );
     };
 
-    const flush = (id?: string) => {
+    const flush = async (id?: string) => {
       for (const [viewId, entry] of pending) {
         if (entry.databaseId === databaseId && (id === undefined || id === viewId)) sendNow(viewId);
       }
+      const queued = queue.current;
+      const saved = await queued;
+      const hasNewerWork = [...pending].some(
+        ([viewId, entry]) => entry.databaseId === databaseId && (id === undefined || id === viewId),
+      );
+      return saved && queue.current === queued && !hasNewerWork;
     };
 
     const change = (
