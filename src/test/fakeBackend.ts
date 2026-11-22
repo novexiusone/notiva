@@ -1274,6 +1274,36 @@ export function installFakeBackend({
         return { id: page.id, title: page.title, position: page.position, cells: {} } satisfies Row;
       }
 
+      case 'move_row': {
+        const row = requireRow(args.rowId as string);
+        guardContent(row.id);
+        const afterRowId = args.afterRowId as string | null;
+        const after = afterRowId === null ? null : requireRow(afterRowId);
+        if (after !== null && after.databaseId !== row.databaseId) {
+          fail('invalid', 'the rows do not belong to the same database');
+        }
+        if (after?.id === row.id) return null;
+
+        const remaining = rowsOf(row.databaseId!).filter((candidate) => candidate.id !== row.id);
+        const index =
+          after === null ? 0 : remaining.findIndex((candidate) => candidate.id === after.id) + 1;
+        const previous = remaining[index - 1];
+        const next = remaining[index];
+        const position = previous
+          ? next
+            ? (previous.position + next.position) / 2
+            : previous.position + 1
+          : next
+            ? next.position - 1
+            : 0;
+        save(
+          pages.map((page) =>
+            page.id === row.id ? { ...page, position, updatedAt: new Date().toISOString() } : page,
+          ),
+        );
+        return null;
+      }
+
       case 'set_cell': {
         const row = requireRow(args.rowId as string);
         const property = requireProperty(args.propertyId as string);

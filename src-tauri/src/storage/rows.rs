@@ -305,6 +305,76 @@ impl Storage {
         })
     }
 
+    /// Moves a row after another row of the same database, or to the start
+    /// when `after_row_id` is none. Only the moved row gets a new position.
+    pub async fn move_row(
+        &self,
+        row_id: &str,
+        after_row_id: Option<&str>,
+    ) -> Result<(), StorageError> {
+        // Writers wait while a page is moved to or from the trash.
+        let _write = self.write_gate.read().await;
+        let row = self
+            .find_page(row_id)
+            .await?
+            .ok_or_else(|| StorageError::NotFound(format!("page {row_id}")))?;
+        let Some(database_id) = row.database_id else {
+            return Err(StorageError::Invalid(format!(
+                "page {row_id} is not a row of a database"
+            )));
+        };
+        self.guard_content(row_id).await?;
+
+        if let Some(after_id) = after_row_id {
+            let after = self
+                .find_page(after_id)
+                .await?
+                .ok_or_else(|| StorageError::NotFound(format!("page {after_id}")))?;
+            if after.database_id.as_deref() != Some(database_id.as_str()) {
+                return Err(StorageError::Invalid(
+                    "the rows do not belong to the same database".into(),
+                ));
+            }
+            if after_id == row_id {
+                return Ok(());
+            }
+        }
+
+        let rows = self.list_rows(&database_id).await?;
+        let remaining: Vec<Row> = rows.into_iter().filter(|row| row.id != row_id).collect();
+        let index = match after_row_id {
+            Some(after_id) => remaining
+                .iter()
+                .position(|row| row.id == after_id)
+                .map(|index| index + 1)
+                .ok_or_else(|| StorageError::NotFound(format!("page {after_id}")))?,
+            None => 0,
+        };
+        let previous = index.checked_sub(1).and_then(|index| remaining.get(index));
+        let next = remaining.get(index);
+        let position = match (previous, next) {
+            (Some(previous), Some(next)) => (previous.position + next.position) / 2.0,
+            (Some(previous), None) => previous.position + 1.0,
+            (None, Some(next)) => next.position - 1.0,
+            (None, None) => 0.0,
+        };
+
+        self.db
+            .query(format!(
+                "BEGIN TRANSACTION;
+                 {guard}
+                 UPDATE ONLY type::record('page', $id)
+                     SET position = $position, updated_at = time::now();
+                 COMMIT TRANSACTION;",
+                guard = super::pages::guard_content_sql()
+            ))
+            .bind(("id", row_id.to_owned()))
+            .bind(("position", position))
+            .await?
+            .check()?;
+        Ok(())
+    }
+
     /// Writes one cell of a row. [`CellValue::Empty`] empties it.
     pub async fn set_cell(
         &self,
@@ -488,7 +558,7 @@ mod tests {
 
     use super::super::tests::run_with_pages;
     use super::*;
-    use crate::domain::{Block, PageKind, SelectOption};
+    use crate::domain::{Block, PageKind, PageLock, SelectOption};
 
     async fn storage() -> Storage {
         Storage::open_in_memory().await.unwrap()
@@ -647,6 +717,107 @@ mod tests {
         assert_eq!(after[..2], before[..]);
         assert_eq!(after[2], added);
         assert_eq!(added.position, 8.5);
+    }
+
+    #[tokio::test]
+    async fn a_row_moves_between_new_neighbours_without_renumbering_the_others() {
+        let storage = storage().await;
+        let (database, rows) = database_with_rows(&storage, &["One", "Two", "Three", "Four"]).await;
+        let before = storage.list_rows(&database).await.unwrap();
+
+        storage
+            .move_row(&rows[2].id, Some(&rows[0].id))
+            .await
+            .unwrap();
+
+        let moved = storage.list_rows(&database).await.unwrap();
+        assert_eq!(
+            moved
+                .iter()
+                .map(|row| row.title.as_str())
+                .collect::<Vec<_>>(),
+            ["One", "Three", "Two", "Four"]
+        );
+        assert_eq!(moved[1].position, 0.5);
+        for row in [&moved[0], &moved[2], &moved[3]] {
+            assert_eq!(
+                row,
+                before
+                    .iter()
+                    .find(|candidate| candidate.id == row.id)
+                    .unwrap()
+            );
+        }
+
+        storage.move_row(&rows[2].id, None).await.unwrap();
+        let first = storage.list_rows(&database).await.unwrap();
+        assert_eq!(first[0].id, rows[2].id);
+        assert_eq!(first[0].position, -1.0);
+
+        storage
+            .move_row(&rows[2].id, Some(&rows[3].id))
+            .await
+            .unwrap();
+        let last = storage.list_rows(&database).await.unwrap();
+        assert_eq!(last[3].id, rows[2].id);
+        assert_eq!(last[3].position, 4.0);
+    }
+
+    #[tokio::test]
+    async fn move_row_refuses_pages_and_rows_of_another_database() {
+        let storage = storage().await;
+        let (database, rows) = database_with_rows(&storage, &["One", "Two"]).await;
+        let (_, other) = database_with_rows(&storage, &["Other"]).await;
+        let page = storage.create_page(None).await.unwrap();
+
+        for (row, after) in [
+            (page.id.as_str(), None),
+            (rows[0].id.as_str(), Some(page.id.as_str())),
+            (rows[0].id.as_str(), Some(other[0].id.as_str())),
+            (rows[0].id.as_str(), Some("missing")),
+        ] {
+            let error = storage.move_row(row, after).await.unwrap_err();
+            if after == Some("missing") {
+                assert!(matches!(error, StorageError::NotFound(_)));
+            } else {
+                assert!(matches!(error, StorageError::Invalid(_)), "{error}");
+            }
+        }
+        assert_eq!(storage.list_rows(&database).await.unwrap(), rows);
+    }
+
+    #[tokio::test]
+    async fn move_row_obeys_the_row_and_database_locks() {
+        let storage = storage().await;
+        let (database, rows) = database_with_rows(&storage, &["One", "Two"]).await;
+
+        for lock in [PageLock::Content, PageLock::All] {
+            storage.set_lock(&rows[0].id, lock).await.unwrap();
+            let error = storage.move_row(&rows[0].id, None).await.unwrap_err();
+            assert!(matches!(error, StorageError::Locked(_)));
+        }
+        storage.set_lock(&rows[0].id, PageLock::None).await.unwrap();
+
+        storage
+            .set_lock(&database, PageLock::Content)
+            .await
+            .unwrap();
+        storage
+            .move_row(&rows[0].id, Some(&rows[1].id))
+            .await
+            .unwrap();
+        assert_eq!(
+            storage.list_rows(&database).await.unwrap()[1].id,
+            rows[0].id
+        );
+
+        storage.set_lock(&database, PageLock::All).await.unwrap();
+        let error = storage.move_row(&rows[1].id, None).await.unwrap_err();
+        assert!(matches!(error, StorageError::Locked(_)));
+        assert_eq!(
+            storage.list_rows(&database).await.unwrap()[0].id,
+            rows[1].id
+        );
     }
 
     #[tokio::test]
