@@ -75,6 +75,7 @@ export function PageView({ pageId }: { pageId: string }) {
         page={page}
         pages={pages.data ?? []}
         readOnly={contentReadOnly}
+        beforeLock={async () => (await editor.current?.flush()) ?? true}
         onChooseIcon={() => setPickerOpen(true)}
         onChooseBanner={() => setCoverPickerOpen(true)}
       />

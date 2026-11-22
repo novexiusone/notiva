@@ -26,16 +26,20 @@ export function useAutosave<T>(save: (value: T) => Promise<void>, delay = 500, e
     latestSave.current = save;
   }, [save]);
 
-  const flush = useCallback(() => {
+  const flush = useCallback(async () => {
     const current = state.current;
     clearTimeout(current.timer);
     if (!latestEnabled.current) {
       current.pending = null;
-      return current.queue;
+      await current.queue;
+      return true;
     }
 
     const read = current.pending;
-    if (read === null) return current.queue;
+    if (read === null) {
+      await current.queue;
+      return current.pending === null;
+    }
     current.pending = null;
 
     const value = read();
@@ -48,7 +52,8 @@ export function useAutosave<T>(save: (value: T) => Promise<void>, delay = 500, e
           setFailed(true);
         },
       );
-    return current.queue;
+    await current.queue;
+    return current.pending === null;
   }, []);
 
   const schedule = useCallback(

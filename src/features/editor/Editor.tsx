@@ -23,7 +23,7 @@ import { commands, type Block, type CommandError } from '@/lib/commands';
 import { displayImageUrl } from '@/lib/imageUrl';
 import { useColorScheme } from '@/lib/useColorScheme';
 
-export type EditorHandle = { focus: () => void };
+export type EditorHandle = { focus: () => void; flush: () => Promise<boolean> };
 
 type EditorProps = { pageId: string; readOnly?: boolean; ref?: Ref<EditorHandle> };
 
@@ -125,7 +125,10 @@ function LoadedEditor({
     initialContent: initialBlocks.length > 0 ? (initialBlocks as never) : undefined,
   });
 
-  useImperativeHandle(ref, () => ({ focus: () => editor.focus() }), [editor]);
+  useImperativeHandle(ref, () => ({ focus: () => editor.focus(), flush: autosave.flush }), [
+    editor,
+    autosave.flush,
+  ]);
 
   // A block that was selected through its handle stays selected until the
   // selection moves; a click anywhere else on the page ends it too.

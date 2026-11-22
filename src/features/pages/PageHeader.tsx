@@ -31,12 +31,14 @@ export function PageHeader({
   page,
   pages,
   readOnly = false,
+  beforeLock,
   onChooseIcon,
   onChooseBanner,
 }: {
   page: Page;
   pages: Page[];
   readOnly?: boolean;
+  beforeLock: () => Promise<boolean>;
   onChooseIcon: () => void;
   onChooseBanner: () => void;
 }) {
@@ -106,7 +108,7 @@ export function PageHeader({
                 onChooseIcon={later(onChooseIcon)}
                 onChooseBanner={later(onChooseBanner)}
               />
-              <PageLockMenuItems page={page} />
+              <PageLockMenuItems page={page} beforeLock={beforeLock} />
               <DropdownMenuCheckboxItem
                 checked={fullWidth}
                 onCheckedChange={(checked) => setFullWidth(page.id, checked === true)}

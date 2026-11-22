@@ -163,6 +163,20 @@ test('icon, banner and page actions work from the page menu and survive a reload
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
 });
 
+test('locking immediately after typing saves the pending edit first', async ({ page }) => {
+  await createPage(page, 'Immediate lock');
+  const editor = page.getByRole('main').locator('.bn-editor');
+  await title(page).press('Enter');
+  await page.keyboard.type('Do not lose this pending edit');
+
+  await page.getByRole('main').getByRole('button', { name: 'Page actions' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Lock content' }).click();
+  await expect(page.getByRole('main').getByRole('button', { name: 'Unlock page' })).toBeVisible();
+
+  await page.reload();
+  await expect(editor).toContainText('Do not lose this pending edit');
+});
+
 test('content locking persists, blocks editing without autosaving and unlocks from the top bar', async ({
   page,
 }) => {

@@ -79,6 +79,29 @@ describe('useAutosave', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  it('reports whether an explicit flush saved the pending change', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useAutosave(save, 500));
+    act(() => result.current.schedule(() => 'pending'));
+
+    await act(async () => {
+      await expect(result.current.flush()).resolves.toBe(true);
+    });
+    expect(save).toHaveBeenCalledWith('pending');
+    await expect(result.current.flush()).resolves.toBe(true);
+  });
+
+  it('reports an unsuccessful flush and keeps the change pending', async () => {
+    const save = vi.fn().mockRejectedValue(new Error('disk full'));
+    const { result } = renderHook(() => useAutosave(save, 500));
+    act(() => result.current.schedule(() => 'important'));
+
+    await act(async () => {
+      await expect(result.current.flush()).resolves.toBe(false);
+    });
+    expect(result.current.failed).toBe(true);
+  });
+
   it('runs saves one after another', async () => {
     const finished: string[] = [];
     let release!: () => void;
