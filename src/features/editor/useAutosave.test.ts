@@ -102,6 +102,46 @@ describe('useAutosave', () => {
     expect(result.current.failed).toBe(true);
   });
 
+  it('reports false when a newer save is queued while a flush waits', async () => {
+    let releaseFirst!: () => void;
+    let releaseSecond!: () => void;
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseSecond = resolve;
+          }),
+      );
+    const { result } = renderHook(() => useAutosave(save, 500));
+
+    act(() => result.current.schedule(() => 'first'));
+    let firstFlush!: Promise<boolean>;
+    act(() => {
+      firstFlush = result.current.flush();
+    });
+    await settle();
+    expect(save).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.schedule(() => 'second'));
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(save).toHaveBeenCalledTimes(1);
+
+    act(() => releaseFirst());
+    await act(async () => {
+      await expect(firstFlush).resolves.toBe(false);
+    });
+
+    act(() => releaseSecond());
+    await settle();
+  });
+
   it('runs saves one after another', async () => {
     const finished: string[] = [];
     let release!: () => void;

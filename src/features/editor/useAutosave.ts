@@ -37,8 +37,9 @@ export function useAutosave<T>(save: (value: T) => Promise<void>, delay = 500, e
 
     const read = current.pending;
     if (read === null) {
-      await current.queue;
-      return current.pending === null;
+      const queued = current.queue;
+      await queued;
+      return current.pending === null && current.queue === queued;
     }
     current.pending = null;
 
@@ -52,8 +53,9 @@ export function useAutosave<T>(save: (value: T) => Promise<void>, delay = 500, e
           setFailed(true);
         },
       );
-    await current.queue;
-    return current.pending === null;
+    const queued = current.queue;
+    await queued;
+    return current.pending === null && current.queue === queued;
   }, []);
 
   const schedule = useCallback(
