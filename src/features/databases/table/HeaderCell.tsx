@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, GripVertical, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -17,6 +17,7 @@ import {
   useUpdateProperty,
 } from '@/features/databases/api';
 import { InlineInput } from '@/features/databases/properties/InlineInput';
+import { useTableSortable } from '@/features/databases/dnd/useTableSortable';
 import {
   propertyTypeDefinition,
   propertyTypes,
@@ -25,19 +26,32 @@ import {
 import type { Property, PropertyType } from '@/lib/commands';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ColumnResizeHandle } from './ColumnResize';
 
 const headerCell =
-  'border-border text-muted-foreground flex h-full shrink-0 items-center border-r text-sm';
+  'border-border text-muted-foreground relative flex h-full shrink-0 items-center border-r text-sm';
 const headerContent = 'flex h-full w-full min-w-0 items-center gap-1.5 px-2';
 
-/** The header of the title column. The title cannot be renamed, retyped or deleted. */
-export function TitleHeaderCell({ width }: { width: number }) {
+type WidthChange = (width: number, done: boolean) => void;
+
+/** The header of the title column. The title cannot be renamed, retyped, deleted or moved. */
+export function TitleHeaderCell({
+  width,
+  onWidthChange,
+}: {
+  width: number;
+  onWidthChange?: WidthChange;
+}) {
   const { t } = useTranslation();
+  const name = t('databases.table.titleColumn');
   return (
     <div role="columnheader" aria-colindex={1} style={{ width }} className={headerCell}>
       <span className={headerContent}>
-        <span className="truncate">{t('databases.table.titleColumn')}</span>
+        <span className="truncate">{name}</span>
       </span>
+      {onWidthChange ? (
+        <ColumnResizeHandle name={name} width={width} onChange={onWidthChange} />
+      ) : null}
     </div>
   );
 }
@@ -47,6 +61,9 @@ type PropertyHeaderCellProps = {
   definition: PropertyTypeDefinition;
   columnIndex: number;
   width: number;
+  sortIndex: number;
+  sortingDisabled: boolean;
+  onWidthChange?: WidthChange;
 };
 
 /** The name of a property with its type's icon, and a menu to rename, retype or delete it. */
@@ -55,8 +72,17 @@ export function PropertyHeaderCell({
   definition,
   columnIndex,
   width,
+  sortIndex,
+  sortingDisabled,
+  onWidthChange,
 }: PropertyHeaderCellProps) {
   const { t } = useTranslation();
+  const { ref, handleRef, isDragging } = useTableSortable({
+    id: property.id,
+    index: sortIndex,
+    kind: 'column',
+    disabled: sortingDisabled,
+  });
   const updateProperty = useUpdateProperty(property.databaseId);
   const changeType = useChangePropertyType(property.databaseId);
   const deleteProperty = useDeleteProperty(property.databaseId);
@@ -85,10 +111,11 @@ export function PropertyHeaderCell({
 
   return (
     <div
+      ref={ref}
       role="columnheader"
       aria-colindex={columnIndex + 1}
       style={{ width }}
-      className={headerCell}
+      className={cn(headerCell, isDragging && 'opacity-50')}
     >
       {renaming ? (
         <div className="flex h-full w-full min-w-0 items-center px-1">
@@ -105,63 +132,75 @@ export function PropertyHeaderCell({
           />
         </div>
       ) : (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <>
+          {!sortingDisabled ? (
             <button
-              ref={trigger}
+              ref={handleRef}
               type="button"
-              className={cn(
-                headerContent,
-                'hover:bg-accent hover:text-foreground data-[state=open]:bg-accent focus-visible:ring-ring/60 outline-none focus-visible:ring-2 focus-visible:ring-inset',
-              )}
+              aria-label={t('databases.table.dragColumn', { name: property.name })}
+              className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 flex h-full w-6 shrink-0 cursor-grab items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset active:cursor-grabbing"
             >
-              <Icon size={16} aria-hidden className="shrink-0" />
-              <span className="truncate">{property.name}</span>
+              <GripVertical size={14} aria-hidden />
             </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="w-max min-w-44"
-            onCloseAutoFocus={(event) => {
-              if (renameChosen.current) event.preventDefault();
-              renameChosen.current = false;
-            }}
-          >
-            <DropdownMenuItem
-              onSelect={() => {
-                renameChosen.current = true;
-                setRenaming(true);
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                ref={trigger}
+                type="button"
+                className={cn(
+                  headerContent,
+                  'hover:bg-accent hover:text-foreground data-[state=open]:bg-accent focus-visible:ring-ring/60 outline-none focus-visible:ring-2 focus-visible:ring-inset',
+                )}
+              >
+                <Icon size={16} aria-hidden className="shrink-0" />
+                <span className="truncate">{property.name}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="w-max min-w-44"
+              onCloseAutoFocus={(event) => {
+                if (renameChosen.current) event.preventDefault();
+                renameChosen.current = false;
               }}
             >
-              <Pencil aria-hidden />
-              {t('databases.table.rename')}
-            </DropdownMenuItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <ArrowLeftRight aria-hidden />
-                {t('databases.table.changeType')}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-max min-w-36">
-                {propertyTypes
-                  .filter((type) => type !== property.type)
-                  .map((type) => {
-                    const TypeIcon = propertyTypeDefinition(type)?.icon;
-                    return (
-                      <DropdownMenuItem key={type} onSelect={() => setNewType(type)}>
-                        {TypeIcon ? <TypeIcon aria-hidden /> : null}
-                        {t(`databases.table.types.${type}`)}
-                      </DropdownMenuItem>
-                    );
-                  })}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
-              <Trash2 aria-hidden />
-              {t('databases.table.deleteProperty')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <DropdownMenuItem
+                onSelect={() => {
+                  renameChosen.current = true;
+                  setRenaming(true);
+                }}
+              >
+                <Pencil aria-hidden />
+                {t('databases.table.rename')}
+              </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <ArrowLeftRight aria-hidden />
+                  {t('databases.table.changeType')}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-max min-w-36">
+                  {propertyTypes
+                    .filter((type) => type !== property.type)
+                    .map((type) => {
+                      const TypeIcon = propertyTypeDefinition(type)?.icon;
+                      return (
+                        <DropdownMenuItem key={type} onSelect={() => setNewType(type)}>
+                          {TypeIcon ? <TypeIcon aria-hidden /> : null}
+                          {t(`databases.table.types.${type}`)}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
+                <Trash2 aria-hidden />
+                {t('databases.table.deleteProperty')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
       )}
 
       <ConfirmDialog
@@ -189,6 +228,9 @@ export function PropertyHeaderCell({
         }}
         onCancel={() => setDeleting(false)}
       />
+      {onWidthChange ? (
+        <ColumnResizeHandle name={property.name} width={width} onChange={onWidthChange} />
+      ) : null}
     </div>
   );
 }
