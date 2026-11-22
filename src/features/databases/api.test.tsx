@@ -466,6 +466,27 @@ describe('the view hooks', () => {
     });
   });
 
+  it('reports a failed save even when a later save succeeds, then resets', async () => {
+    const updateView = commands.updateView;
+    vi.spyOn(commands, 'updateView')
+      .mockRejectedValueOnce({ kind: 'internal', message: 'disk full' })
+      .mockImplementation(updateView);
+    const { current } = await renderDatabase(() => ({ update: useUpdateView('db') }));
+
+    act(() => {
+      current().update.change('v1', { config: sorted('asc') }, { immediately: true });
+      current().update.change('v2', { config: sorted('desc') }, { immediately: true });
+    });
+    await act(async () => {
+      await expect(current().update.flush()).resolves.toBe(false);
+    });
+    expect((await stored())[1]!.config).toEqual(sorted('desc'));
+
+    await act(async () => {
+      await expect(current().update.flush()).resolves.toBe(true);
+    });
+  });
+
   it('reports false when a newer view save is queued during a flush', async () => {
     const updateView = commands.updateView;
     let releaseFirst!: () => void;
