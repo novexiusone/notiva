@@ -48,7 +48,15 @@ type Shown = { property: Property; definition: PropertyTypeDefinition };
  * with the editor its type uses in the table. It reads and writes the same
  * cached rows as the table, so both always show the same values.
  */
-export function RowProperties({ rowId, databaseId }: { rowId: string; databaseId: string }) {
+export function RowProperties({
+  rowId,
+  databaseId,
+  readOnly = false,
+}: {
+  rowId: string;
+  databaseId: string;
+  readOnly?: boolean;
+}) {
   const { t } = useTranslation();
   const database = useDatabase(databaseId);
   const rows = useRows(databaseId);
@@ -92,7 +100,8 @@ export function RowProperties({ rowId, databaseId }: { rowId: string; databaseId
             definition={definition}
             // While the rows load, the names are there and the values follow.
             value={row ? (row.cells[property.id] ?? null) : undefined}
-            editing={editing === property.id}
+            editing={!readOnly && editing === property.id}
+            readOnly={readOnly}
             onEdit={() => setEditing(property.id)}
             onClose={() => setEditing(null)}
             onCommit={(next, current) => {
@@ -109,6 +118,7 @@ type PropertyLineProps = Shown & {
   /** `undefined` while the rows are still loading. */
   value: CellValue | undefined;
   editing: boolean;
+  readOnly: boolean;
   onEdit: () => void;
   onClose: () => void;
   onCommit: (next: CellValue, current: CellValue) => void;
@@ -124,6 +134,7 @@ function PropertyLine({
   definition: { icon: Icon, Display, Editor, isEmpty },
   value,
   editing,
+  readOnly,
   onEdit,
   onClose,
   onCommit,
@@ -146,12 +157,13 @@ function PropertyLine({
   }, [editing]);
 
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (editing || !loaded || !event.currentTarget.contains(event.target as Node)) return;
+    if (readOnly || editing || !loaded || !event.currentTarget.contains(event.target as Node))
+      return;
     onEdit();
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget || editing || !loaded) return;
+    if (readOnly || event.target !== event.currentTarget || editing || !loaded) return;
     if (event.key === 'Enter' || event.key === ' ' || event.key === 'F2') {
       event.preventDefault();
       onEdit();
@@ -172,9 +184,9 @@ function PropertyLine({
         <div
           ref={ref}
           // Nothing to press while the value is loading or being edited.
-          role={loaded && !editing ? 'button' : undefined}
-          tabIndex={loaded ? (editing ? -1 : 0) : undefined}
-          aria-labelledby={loaded && !editing ? `${nameId} ${valueId}` : undefined}
+          role={loaded && !editing && !readOnly ? 'button' : undefined}
+          tabIndex={loaded && !readOnly ? (editing ? -1 : 0) : undefined}
+          aria-labelledby={loaded && !editing && !readOnly ? `${nameId} ${valueId}` : undefined}
           data-editing={editing || undefined}
           onClick={onClick}
           onKeyDown={onKeyDown}
@@ -182,7 +194,7 @@ function PropertyLine({
             'flex h-8 w-full min-w-0 items-center rounded-sm text-sm outline-none',
             'hover:bg-accent/60 focus-visible:ring-ring/60 focus-visible:ring-2',
             'data-editing:ring-ring/60 data-editing:ring-2 data-editing:hover:bg-transparent',
-            !loaded && 'hover:bg-transparent',
+            (!loaded || readOnly) && 'hover:bg-transparent',
           )}
         >
           {editing && loaded ? (

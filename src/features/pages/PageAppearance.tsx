@@ -10,15 +10,19 @@ import { cn } from '@/lib/utils';
 
 export function AppearanceMenuItems({
   page,
+  readOnly = false,
   onChooseIcon,
   onChooseBanner,
 }: {
   page: Page;
+  readOnly?: boolean;
   onChooseIcon: () => void;
   onChooseBanner: () => void;
 }) {
   const { t } = useTranslation();
   const { change } = useUpdateAppearance();
+
+  if (readOnly) return null;
 
   return (
     <>
@@ -74,6 +78,7 @@ function AddButton({
  */
 export function AppearanceRow({
   page,
+  readOnly = false,
   pickerOpen,
   onPickerOpenChange,
   coverPickerOpen,
@@ -81,6 +86,7 @@ export function AppearanceRow({
   onUpload,
 }: {
   page: Page;
+  readOnly?: boolean;
   pickerOpen: boolean;
   onPickerOpenChange: (open: boolean) => void;
   coverPickerOpen: boolean;
@@ -88,6 +94,25 @@ export function AppearanceRow({
   onUpload: () => void;
 }) {
   const { t } = useTranslation();
+
+  if (readOnly) {
+    return (
+      <div className="flex flex-col items-start">
+        {page.icon !== null ? (
+          <div className={cn('relative -ml-1 p-1', page.banner !== null && '-mt-12 p-2')}>
+            <PageIcon
+              page={page}
+              size={80}
+              className={
+                page.banner !== null ? 'drop-shadow-[0_2px_12px_rgb(0_0_0/0.55)]' : undefined
+              }
+            />
+          </div>
+        ) : null}
+        <div className="mb-2 min-h-7" />
+      </div>
+    );
+  }
 
   return (
     <IconPicker page={page} open={pickerOpen} onOpenChange={onPickerOpenChange}>

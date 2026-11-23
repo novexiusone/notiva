@@ -47,6 +47,7 @@ type PropertyHeaderCellProps = {
   definition: PropertyTypeDefinition;
   columnIndex: number;
   width: number;
+  readOnly?: boolean;
 };
 
 /** The name of a property with its type's icon, and a menu to rename, retype or delete it. */
@@ -55,6 +56,7 @@ export function PropertyHeaderCell({
   definition,
   columnIndex,
   width,
+  readOnly = false,
 }: PropertyHeaderCellProps) {
   const { t } = useTranslation();
   const updateProperty = useUpdateProperty(property.databaseId);
@@ -90,7 +92,7 @@ export function PropertyHeaderCell({
       style={{ width }}
       className={headerCell}
     >
-      {renaming ? (
+      {renaming && !readOnly ? (
         <div className="flex h-full w-full min-w-0 items-center px-1">
           <InlineInput
             initialText={property.name}
@@ -110,6 +112,7 @@ export function PropertyHeaderCell({
             <button
               ref={trigger}
               type="button"
+              disabled={readOnly}
               className={cn(
                 headerContent,
                 'hover:bg-accent hover:text-foreground data-[state=open]:bg-accent focus-visible:ring-ring/60 outline-none focus-visible:ring-2 focus-visible:ring-inset',

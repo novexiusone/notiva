@@ -48,7 +48,7 @@ const arrows: Record<string, [rows: number, columns: number]> = {
 
 /**
  * A grid cell that can be focused, moved through with the arrow keys and
- * opened for editing with a click or Enter. Events from the editor's popovers
+ * opened for editing with a click or Enter unless it is read-only. Events from the editor's popovers
  * reach the cell through React's portals; they are left alone.
  */
 function GridCell({
@@ -58,10 +58,12 @@ function GridCell({
   columnIndex,
   width,
   columnId,
+  readOnly = false,
   className,
   children,
 }: Position & {
   columnId: string;
+  readOnly?: boolean;
   className?: string;
   children: (mode: CellMode, close: () => void) => ReactNode;
 }) {
@@ -89,13 +91,14 @@ function GridCell({
   const close = () => useCellStore.getState().stopEditing(address);
 
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (mode === 'editing' || !event.currentTarget.contains(event.target as Node)) return;
+    if (readOnly || mode === 'editing' || !event.currentTarget.contains(event.target as Node))
+      return;
     activate(true);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
-    if (event.key === 'Enter' || event.key === 'F2') {
+    if ((event.key === 'Enter' || event.key === 'F2') && !readOnly) {
       event.preventDefault();
       activate(true);
       return;
@@ -113,6 +116,7 @@ function GridCell({
       role="gridcell"
       aria-colindex={columnIndex + 1}
       aria-selected={mode !== null}
+      aria-readonly={readOnly || undefined}
       tabIndex={mode !== null || isTabStop ? 0 : -1}
       data-editing={mode === 'editing' || undefined}
       style={{ width }}
@@ -127,12 +131,13 @@ function GridCell({
         className,
       )}
     >
-      {children(mode, close)}
+      {children(readOnly ? null : mode, close)}
     </div>
   );
 }
 
 type PropertyCellProps = Position & {
+  readOnly?: boolean;
   property: Property;
   definition: PropertyTypeDefinition;
   value: CellValue;
@@ -183,7 +188,7 @@ export const PropertyCell = memo(function PropertyCell({
 export const TitleCell = memo(function TitleCell({
   title,
   ...position
-}: Position & { title: string }) {
+}: Position & { title: string; readOnly?: boolean }) {
   const { t } = useTranslation();
   const { renameRow, deleteRow } = useTableActions();
 
@@ -217,6 +222,7 @@ export const TitleCell = memo(function TitleCell({
               rowId={position.rowId}
               // Reached with Tab from the title, so that rows add no Tab stops of their own.
               tabbable={mode !== null}
+              deleteDisabled={position.readOnly}
               onDelete={() => deleteRow(position.rowId)}
             />
           </>
@@ -232,10 +238,12 @@ const rowButton =
 function RowButtons({
   rowId,
   tabbable,
+  deleteDisabled = false,
   onDelete,
 }: {
   rowId: string;
   tabbable: boolean;
+  deleteDisabled?: boolean;
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
@@ -270,7 +278,7 @@ function RowButtons({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-max min-w-40">
-          <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+          <DropdownMenuItem variant="destructive" disabled={deleteDisabled} onSelect={onDelete}>
             <Trash2 aria-hidden />
             {t('databases.table.deleteRow')}
           </DropdownMenuItem>

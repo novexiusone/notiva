@@ -18,6 +18,7 @@ import { ExportPanel } from '@/features/export/ExportPanel';
 import { Breadcrumbs } from '@/features/pages/Breadcrumbs';
 import { AppearanceMenuItems } from '@/features/pages/PageAppearance';
 import { DeletePageDialog } from '@/features/pages/DeletePageDialog';
+import { PageLockButton, PageLockMenuItems } from '@/features/pages/PageLock';
 import { useDeletePage, useSetFavorite } from '@/features/pages/api';
 import { countDescendants } from '@/features/pages/tree';
 import type { Page } from '@/lib/commands';
@@ -29,11 +30,15 @@ const barButton =
 export function PageHeader({
   page,
   pages,
+  readOnly = false,
+  beforeLock,
   onChooseIcon,
   onChooseBanner,
 }: {
   page: Page;
   pages: Page[];
+  readOnly?: boolean;
+  beforeLock: () => Promise<boolean>;
   onChooseIcon: () => void;
   onChooseBanner: () => void;
 }) {
@@ -80,6 +85,7 @@ export function PageHeader({
           >
             <Star size={18} className={page.isFavorite ? 'text-favorite' : undefined} aria-hidden />
           </button>
+          <PageLockButton page={page} className={barButton} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button type="button" aria-label={t('pages.actions')} className={barButton}>
@@ -98,9 +104,11 @@ export function PageHeader({
             >
               <AppearanceMenuItems
                 page={page}
+                readOnly={readOnly}
                 onChooseIcon={later(onChooseIcon)}
                 onChooseBanner={later(onChooseBanner)}
               />
+              <PageLockMenuItems page={page} beforeLock={beforeLock} />
               <DropdownMenuCheckboxItem
                 checked={fullWidth}
                 onCheckedChange={(checked) => setFullWidth(page.id, checked === true)}
@@ -113,7 +121,11 @@ export function PageHeader({
                 <Download aria-hidden />
                 {t('export.menu')}
               </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onSelect={() => setPendingDelete(true)}>
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={readOnly}
+                onSelect={() => setPendingDelete(true)}
+              >
                 <Trash2 aria-hidden />
                 {t('pages.delete')}
               </DropdownMenuItem>
@@ -132,7 +144,7 @@ export function PageHeader({
         onCancel={() => setPendingDelete(false)}
         onConfirm={() => {
           setPendingDelete(false);
-          void deletePage.mutateAsync(page.id).then(() => navigate({ to: '/' }));
+          deletePage.mutate(page.id, { onSuccess: () => void navigate({ to: '/' }) });
         }}
       />
     </TopBar>

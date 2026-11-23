@@ -1,7 +1,7 @@
 import { Navigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DatabaseView } from '@/features/databases/DatabaseView';
+import { DatabaseView, type DatabaseViewHandle } from '@/features/databases/DatabaseView';
 import { DatabaseLink, RowProperties } from '@/features/databases/RowProperties';
 import { Editor, type EditorHandle } from '@/features/editor/Editor';
 import { Backlinks } from '@/features/links/Backlinks';
@@ -22,8 +22,12 @@ export function PageView({ pageId }: { pageId: string }) {
   const pages = usePages();
   const renamePage = useRenamePage();
   const editor = useRef<EditorHandle>(null);
+  const databaseView = useRef<DatabaseViewHandle>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const page = pages.data?.find((candidate) => candidate.id === pageId);
+  const database = pages.data?.find((candidate) => candidate.id === page?.databaseId);
+  const contentReadOnly = (page?.lock ?? 'none') !== 'none' || database?.lock === 'all';
+  const cellsReadOnly = page?.lock === 'all' || database?.lock === 'all';
   const [pickerOpen, setPickerOpen] = useState(false);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const banner = useBannerChooser(pageId);
@@ -47,6 +51,7 @@ export function PageView({ pageId }: { pageId: string }) {
       aria-label={t('pages.title')}
       placeholder={t('pages.untitled')}
       value={page.title}
+      readOnly={contentReadOnly}
       onChange={(event) => renamePage(page.id, event.currentTarget.value)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
@@ -70,6 +75,11 @@ export function PageView({ pageId }: { pageId: string }) {
       <PageHeader
         page={page}
         pages={pages.data ?? []}
+        readOnly={contentReadOnly}
+        beforeLock={async () => {
+          if (!((await editor.current?.flush()) ?? true)) return false;
+          return (await databaseView.current?.flush()) ?? true;
+        }}
         onChooseIcon={() => setPickerOpen(true)}
         onChooseBanner={() => setCoverPickerOpen(true)}
       />
@@ -78,6 +88,7 @@ export function PageView({ pageId }: { pageId: string }) {
         <PageCover
           page={page}
           banner={page.banner}
+          readOnly={contentReadOnly}
           pickerOpen={coverPickerOpen}
           onPickerOpenChange={setCoverPickerOpen}
           onUpload={banner.choose}
@@ -93,6 +104,7 @@ export function PageView({ pageId }: { pageId: string }) {
         {databaseId !== null ? <DatabaseLink databaseId={databaseId} /> : null}
         <AppearanceRow
           page={page}
+          readOnly={contentReadOnly}
           pickerOpen={pickerOpen}
           onPickerOpenChange={setPickerOpen}
           coverPickerOpen={coverPickerOpen}
@@ -104,14 +116,19 @@ export function PageView({ pageId }: { pageId: string }) {
       {page.kind === 'database' ? (
         // A database shows its rows where a page has its text. Only the title
         // keeps the reading width; what is below it decides for itself.
-        <DatabaseView databaseId={page.id} />
+        <DatabaseView databaseId={page.id} ref={databaseView} />
       ) : (
         <div className={column}>
           {databaseId !== null ? (
             // Fresh per row, so an open editor does not carry over to the next one.
-            <RowProperties key={`properties-${page.id}`} rowId={page.id} databaseId={databaseId} />
+            <RowProperties
+              key={`properties-${page.id}`}
+              rowId={page.id}
+              databaseId={databaseId}
+              readOnly={cellsReadOnly}
+            />
           ) : null}
-          <Editor pageId={page.id} ref={editor} />
+          <Editor pageId={page.id} readOnly={contentReadOnly} ref={editor} />
           <Backlinks pageId={page.id} />
         </div>
       )}

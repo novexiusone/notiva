@@ -100,8 +100,12 @@ export function PageTree() {
       (openPageId === id || descendantIds(list, id).includes(openPageId));
 
     setPendingDelete(null);
-    await deletePage.mutateAsync(id);
-    if (removesOpenPage) await navigate({ to: '/' });
+    try {
+      await deletePage.mutateAsync(id);
+      if (removesOpenPage) await navigate({ to: '/' });
+    } catch {
+      // The mutation cache reports command errors, including a locked subpage.
+    }
   };
 
   const actions = {
@@ -181,7 +185,9 @@ export function PageTree() {
               onRename={({ id, name }) => renamePage(id, name.trim())}
               disableDrop={({ parentNode, dragNodes }) =>
                 dragNodes.some(
-                  (node) => !canMove(list, node.id, parentNode.isRoot ? null : parentNode.id),
+                  (node) =>
+                    node.data.lock !== 'none' ||
+                    !canMove(list, node.id, parentNode.isRoot ? null : parentNode.id),
                 )
               }
               onMove={({ dragIds, parentId, index }) => {

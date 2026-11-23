@@ -163,6 +163,68 @@ test('icon, banner and page actions work from the page menu and survive a reload
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
 });
 
+test('locking immediately after typing saves the pending edit first', async ({ page }) => {
+  await createPage(page, 'Immediate lock');
+  const editor = page.getByRole('main').locator('.bn-editor');
+  await title(page).press('Enter');
+  await page.keyboard.type('Do not lose this pending edit');
+
+  await page.getByRole('main').getByRole('button', { name: 'Page actions' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Lock content' }).click();
+  await expect(page.getByRole('main').getByRole('button', { name: 'Unlock page' })).toBeVisible();
+
+  await page.reload();
+  await expect(editor).toContainText('Do not lose this pending edit');
+});
+
+test('content locking persists, blocks editing without autosaving and unlocks from the top bar', async ({
+  page,
+}) => {
+  await createPage(page, 'Locked notes');
+  const main = page.getByRole('main');
+  const editor = main.locator('.bn-editor');
+  const actions = main.getByRole('button', { name: 'Page actions' });
+  await title(page).press('Enter');
+  await page.keyboard.type('Keep this text');
+  await expect(editor).toContainText('Keep this text');
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem('notiva.fake.blocks') ?? ''))
+    .toContain('Keep this text');
+  const editedBefore = await main.locator('time').getAttribute('datetime');
+
+  await actions.focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('menuitemcheckbox', { name: 'Lock content' }).press('Enter');
+  await page.keyboard.press('Escape');
+
+  const unlock = main.getByRole('button', { name: 'Unlock page' });
+  await expect(unlock).toBeVisible();
+  await expect(title(page)).toHaveAttribute('readonly', '');
+  await expect(editor).toHaveAttribute('contenteditable', 'false');
+  await expect(main.getByRole('button', { name: 'Add icon' })).toHaveCount(0);
+  await expect(main.locator('time')).toHaveAttribute('datetime', editedBefore!);
+
+  await title(page).click();
+  await page.keyboard.type('Must not be saved');
+  await expect(title(page)).toHaveValue('Locked notes');
+  await expect(editor).not.toContainText('Must not be saved');
+  await page.waitForTimeout(600);
+  expect(
+    await page.evaluate(() => window.localStorage.getItem('notiva.fake.blocks') ?? ''),
+  ).not.toContain('Must not be saved');
+
+  await page.reload();
+  await expect(title(page)).toHaveAttribute('readonly', '');
+  await expect(editor).toHaveAttribute('contenteditable', 'false');
+  await expect(editor).toContainText('Keep this text');
+
+  await unlock.focus();
+  await page.keyboard.press('Enter');
+  await expect(title(page)).toBeEditable();
+  await expect(editor).toHaveAttribute('contenteditable', 'true');
+  await expect(unlock).toHaveCount(0);
+});
+
 test('the top bar shows the path to the page and links to its parents', async ({ page }) => {
   await createPage(page, 'Parent');
   await row(page, 'Parent').getByRole('button', { name: 'Add a subpage' }).click();
@@ -199,6 +261,8 @@ test.describe('the page header in light mode and German', () => {
     await page.getByRole('main').getByRole('button', { name: 'Seitenaktionen' }).click();
     await expect(page.getByRole('menuitem', { name: 'Icon hinzufügen' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Cover hinzufügen' })).toBeVisible();
+    await page.getByRole('menuitemcheckbox', { name: 'Inhalt sperren' }).click();
+    await expect(page.getByRole('button', { name: 'Seite entsperren' })).toBeVisible();
   });
 });
 

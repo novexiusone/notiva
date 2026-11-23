@@ -166,6 +166,7 @@ export function SortMenu(props: ToolbarMenuProps) {
           icon={ArrowUpDown}
           label={t('databases.toolbar.sort')}
           badge={sorts.length > 0 ? sorts.length : undefined}
+          disabled={props.readOnly}
         />
       </PopoverTrigger>
       <PopoverContent

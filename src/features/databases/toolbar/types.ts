@@ -5,4 +5,5 @@ export type ToolbarMenuProps = {
   config: ViewConfig;
   properties: Property[];
   onChange: (config: ViewConfig) => void;
+  readOnly?: boolean;
 };

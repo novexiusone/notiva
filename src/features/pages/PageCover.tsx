@@ -32,12 +32,14 @@ function extensionOf(url: string): string {
 export function PageCover({
   page,
   banner,
+  readOnly = false,
   pickerOpen,
   onPickerOpenChange,
   onUpload,
 }: {
   page: Page;
   banner: string;
+  readOnly?: boolean;
   pickerOpen: boolean;
   onPickerOpenChange: (open: boolean) => void;
   onUpload: () => void;
@@ -99,7 +101,7 @@ export function PageCover({
     drag.current = null;
   };
 
-  const repositioning = draft !== null;
+  const repositioning = !readOnly && draft !== null;
 
   return (
     <div ref={cover} className="group/cover relative h-70 w-full overflow-hidden">
@@ -169,33 +171,39 @@ export function PageCover({
                 {t('pages.cover.savePosition')}
               </Button>
             </>
-          ) : (
+          ) : !readOnly || isImage ? (
             <div role="toolbar" aria-label={t('pages.cover.controls')} className={bar}>
-              <CoverPicker
-                page={page}
-                open={pickerOpen}
-                onOpenChange={onPickerOpenChange}
-                onUpload={onUpload}
-              >
-                <button
-                  type="button"
-                  className={barButton}
-                  onClick={() => onPickerOpenChange(true)}
+              {!readOnly ? (
+                <CoverPicker
+                  page={page}
+                  open={pickerOpen}
+                  onOpenChange={onPickerOpenChange}
+                  onUpload={onUpload}
                 >
-                  {t('pages.cover.change')}
-                </button>
-              </CoverPicker>
-              {isImage ? (
-                <>
-                  <span aria-hidden className="bg-border h-3 w-px" />
                   <button
                     type="button"
                     className={barButton}
-                    onClick={() => setDraft(page.bannerPosition)}
+                    onClick={() => onPickerOpenChange(true)}
                   >
-                    {t('pages.cover.reposition')}
+                    {t('pages.cover.change')}
                   </button>
-                  <span aria-hidden className="bg-border h-3 w-px" />
+                </CoverPicker>
+              ) : null}
+              {isImage ? (
+                <>
+                  {!readOnly ? (
+                    <>
+                      <span aria-hidden className="bg-border h-3 w-px" />
+                      <button
+                        type="button"
+                        className={barButton}
+                        onClick={() => setDraft(page.bannerPosition)}
+                      >
+                        {t('pages.cover.reposition')}
+                      </button>
+                      <span aria-hidden className="bg-border h-3 w-px" />
+                    </>
+                  ) : null}
                   <button
                     type="button"
                     aria-label={t('pages.cover.download')}
@@ -208,7 +216,7 @@ export function PageCover({
                 </>
               ) : null}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
