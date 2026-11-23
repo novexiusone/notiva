@@ -24,6 +24,7 @@ type TableRowProps = {
   selecting: boolean;
   sortIndex: number;
   canDrag: boolean;
+  onKeyboardMove: (by: number) => void;
 };
 
 /**
@@ -41,6 +42,7 @@ export const TableRow = memo(function TableRow({
   selecting,
   sortIndex,
   canDrag,
+  onKeyboardMove,
 }: TableRowProps) {
   const { t } = useTranslation();
   const { toggleRow } = useTableActions();
@@ -83,6 +85,14 @@ export const TableRow = memo(function TableRow({
             aria-label={t('databases.table.dragRow', {
               title: row.title || t('pages.untitled'),
             })}
+            onKeyDown={(event) => {
+              const by = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+              if (by !== 0) {
+                event.preventDefault();
+                event.stopPropagation();
+                onKeyboardMove(by);
+              }
+            }}
             className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 flex h-6 w-6 cursor-grab items-center justify-center rounded-sm outline-none focus-visible:ring-2 active:cursor-grabbing"
           >
             <GripVertical size={16} aria-hidden />

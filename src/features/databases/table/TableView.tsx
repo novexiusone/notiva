@@ -358,6 +358,13 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                       selecting={selection.length > 0}
                       sortIndex={visibleRowIndices.get(item.id) ?? 0}
                       canDrag={canDragRows && unlockedRowIds.has(item.id)}
+                      onKeyboardMove={(by) =>
+                        reorder({
+                          kind: 'row',
+                          from: visibleRowIndices.get(item.id) ?? 0,
+                          to: (visibleRowIndices.get(item.id) ?? 0) + by,
+                        })
+                      }
                     />
                   );
                 })}

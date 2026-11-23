@@ -176,9 +176,7 @@ test('a row dragged by its handle shares its manual order and survives reload', 
 test('a row handle reorders with the keyboard', async ({ page }) => {
   const handle = grid(page).getByRole('button', { name: 'Drag Build it' });
   await handle.focus();
-  await page.keyboard.press('Space');
   await page.keyboard.press('ArrowUp');
-  await page.keyboard.press('Space');
 
   await expect.poll(() => rowTitles(page)).toEqual(['Build it', 'Write spec', 'Test it']);
 });

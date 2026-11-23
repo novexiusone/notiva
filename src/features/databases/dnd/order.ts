@@ -26,7 +26,7 @@ export function rowMoveAfterReorder(
   to: number,
 ): { rowId: string; afterRowId: string | null } | null {
   const rowId = visible[from];
-  if (rowId === undefined || from === to) return null;
+  if (rowId === undefined || from === to || to < 0 || to >= visible.length) return null;
   const reordered = arrayMove([...visible], from, to);
   return { rowId, afterRowId: reordered[to - 1] ?? null };
 }
