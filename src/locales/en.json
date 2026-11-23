@@ -129,6 +129,17 @@
       "createOption": "Create “{{name}}”",
       "noOptions": "No options yet"
     },
+    "calendar": {
+      "dateProperty": "Date property",
+      "chooseDate": "Choose a date property",
+      "noDateProperties": "Add a date property in the table to use the calendar.",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
+      "today": "Today",
+      "createOn": "Create a row on {{date}}",
+      "withoutDate_one": "{{count}} row without a date",
+      "withoutDate_other": "{{count}} rows without a date"
+    },
     "table": {
       "selectRow": "Select {{title}}",
       "selectAll": "Select all rows",
