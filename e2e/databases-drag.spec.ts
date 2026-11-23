@@ -169,6 +169,52 @@ test('a row dragged by its handle shares its manual order and survives reload', 
   await expect.poll(() => rowTitles(page)).toEqual(['Build it', 'Write spec', 'Test it']);
 });
 
+test('an unlocked row can drop onto a content-locked neighbour without modifying it', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const pages = JSON.parse(window.localStorage.getItem('notiva.fake.pages') ?? '[]') as {
+      id: string;
+      lock?: string;
+    }[];
+    const locked = pages.find((page) => page.id === 'two')!;
+    Object.assign(locked, {
+      lock: 'content',
+      banner: null,
+      bannerPosition: 50,
+      icon: null,
+      isFavorite: false,
+      updatedAt: '2026-01-01T00:00:00Z',
+    });
+    window.localStorage.setItem('notiva.fake.pages', JSON.stringify(pages));
+  });
+  await page.reload();
+  await expect(grid(page)).toBeVisible();
+  await expect(grid(page).getByRole('button', { name: 'Drag Build it' })).toHaveCount(0);
+  const beforeLocked = await page.evaluate(() => {
+    const pages = JSON.parse(window.localStorage.getItem('notiva.fake.pages') ?? '[]') as {
+      id: string;
+    }[];
+    return pages.find((page) => page.id === 'two');
+  });
+
+  const target = grid(page).getByRole('row', { name: 'Build it' });
+  const targetBox = (await target.boundingBox())!;
+  await dragToPoint(page, grid(page).getByRole('button', { name: 'Drag Write spec' }), {
+    x: targetBox.x + 40,
+    y: targetBox.y + targetBox.height / 2,
+  });
+
+  await expect.poll(() => rowTitles(page)).toEqual(['Build it', 'Write spec', 'Test it']);
+  const afterLocked = await page.evaluate(() => {
+    const pages = JSON.parse(window.localStorage.getItem('notiva.fake.pages') ?? '[]') as {
+      id: string;
+    }[];
+    return pages.find((page) => page.id === 'two');
+  });
+  expect(afterLocked).toEqual(beforeLocked);
+});
+
 test('a row handle reorders with the keyboard and stops at the boundaries', async ({ page }) => {
   const before = await storedRows(page);
   const first = grid(page).getByRole('button', { name: 'Drag Write spec' });

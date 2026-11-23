@@ -13,7 +13,7 @@ export function useTableSortable({
   index: number;
   kind: TableDragKind;
   group: string;
-  disabled?: boolean;
+  disabled?: boolean | { draggable?: boolean; droppable?: boolean };
 }) {
   return useSortable({
     id,

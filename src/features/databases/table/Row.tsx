@@ -57,7 +57,7 @@ export const TableRow = memo(function TableRow({
     index: sortIndex,
     kind: 'row',
     group,
-    disabled: !canDrag,
+    disabled: { draggable: !canDrag, droppable: false },
   });
   const contentReadOnly = readOnly || lock !== 'none';
   const cellsReadOnly = readOnly || lock === 'all';
