@@ -134,14 +134,15 @@ export function PropertyHeaderCell({
       ) : (
         <>
           {!sortingDisabled ? (
-            <button
+            <span
               ref={handleRef}
-              type="button"
+              role="img"
+              tabIndex={-1}
               aria-label={t('databases.table.dragColumn', { name: property.name })}
-              className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 flex h-full w-6 shrink-0 cursor-grab items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset active:cursor-grabbing"
+              className="text-muted-foreground hover:bg-accent hover:text-foreground flex h-full w-6 shrink-0 cursor-grab items-center justify-center rounded-sm active:cursor-grabbing"
             >
               <GripVertical size={14} aria-hidden />
-            </button>
+            </span>
           ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

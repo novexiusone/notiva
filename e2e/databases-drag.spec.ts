@@ -117,11 +117,7 @@ test.afterEach(async ({ page }) => {
 test('column order and width persist per view after real pointer drags', async ({ page }) => {
   await expect(headers(page)).toHaveText(['Name', 'Notes', 'Hours', '']);
 
-  await dragBefore(
-    page,
-    grid(page).getByRole('button', { name: 'Drag Hours column' }),
-    headers(page).nth(1),
-  );
+  await dragBefore(page, grid(page).getByLabel('Drag Hours column'), headers(page).nth(1));
   await expect(headers(page)).toHaveText(['Name', 'Hours', 'Notes', '']);
 
   const resize = grid(page).getByRole('separator', { name: 'Resize Notes column' });
@@ -185,11 +181,9 @@ test('sidebar page dragging still works while a database is open', async ({ page
   const treeItems = page.getByRole('treeitem');
   await expect(treeItems).toHaveText(['Alpha', 'Tasks', 'Beta']);
 
-  await dragBefore(
-    page,
-    treeItems.filter({ hasText: 'Beta' }),
-    treeItems.filter({ hasText: 'Alpha' }),
-  );
+  await treeItems
+    .filter({ hasText: 'Beta' })
+    .dragTo(treeItems.filter({ hasText: 'Alpha' }), { targetPosition: { x: 60, y: 2 } });
 
   await expect(treeItems).toHaveText(['Beta', 'Alpha', 'Tasks']);
   await expect(grid(page)).toBeVisible();
