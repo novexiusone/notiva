@@ -207,6 +207,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
     if (kind === 'column') {
       if (!canConfigureColumns) return;
       const visible = storedColumns.flatMap((column) => (column.property ? [column.id] : []));
+      if (to < 0 || to >= visible.length) return;
       table.setColumnOrder((current) => mergeVisibleColumnOrder(current, visible, from, to));
       return;
     }
@@ -308,6 +309,13 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                         width={columnWidth(column)}
                         sortIndex={columnIndex - 1}
                         sortingDisabled={!canConfigureColumns}
+                        onKeyboardMove={(by) =>
+                          reorder({
+                            kind: 'column',
+                            from: columnIndex - 1,
+                            to: columnIndex - 1 + by,
+                          })
+                        }
                         onWidthChange={
                           canConfigureColumns
                             ? (width, done) => widthChange(column.id, width, done)

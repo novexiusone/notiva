@@ -63,6 +63,7 @@ type PropertyHeaderCellProps = {
   width: number;
   sortIndex: number;
   sortingDisabled: boolean;
+  onKeyboardMove: (by: number) => void;
   onWidthChange?: WidthChange;
 };
 
@@ -74,6 +75,7 @@ export function PropertyHeaderCell({
   width,
   sortIndex,
   sortingDisabled,
+  onKeyboardMove,
   onWidthChange,
 }: PropertyHeaderCellProps) {
   const { t } = useTranslation();
@@ -135,15 +137,22 @@ export function PropertyHeaderCell({
       ) : (
         <>
           {!sortingDisabled ? (
-            <span
+            <button
               ref={handleRef}
-              role="img"
-              tabIndex={-1}
+              type="button"
               aria-label={t('databases.table.dragColumn', { name: property.name })}
+              onKeyDown={(event) => {
+                const by = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+                if (by !== 0) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onKeyboardMove(by);
+                }
+              }}
               className="text-muted-foreground hover:bg-accent hover:text-foreground flex h-full w-6 shrink-0 cursor-grab items-center justify-center rounded-sm active:cursor-grabbing"
             >
               <GripVertical size={14} aria-hidden />
-            </span>
+            </button>
           ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

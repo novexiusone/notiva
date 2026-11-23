@@ -251,7 +251,11 @@ test('the keyboard reaches the header and edits cells', async ({ page }) => {
   await tab();
   await expect(page.getByRole('separator', { name: 'Resize Name column' })).toBeFocused();
   await tab();
-  await expect(header(page, 'Notes').getByRole('button')).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Drag Notes column' })).toBeFocused();
+  await tab();
+  await expect(
+    header(page, 'Notes').getByRole('button', { name: 'Notes', exact: true }),
+  ).toBeFocused();
   await tab();
   await expect(page.getByRole('separator', { name: 'Resize Notes column' })).toBeFocused();
   await tab();

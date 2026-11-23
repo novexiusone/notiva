@@ -169,12 +169,48 @@ test('a row dragged by its handle shares its manual order and survives reload', 
   await expect.poll(() => rowTitles(page)).toEqual(['Build it', 'Write spec', 'Test it']);
 });
 
-test('a row handle reorders with the keyboard', async ({ page }) => {
+test('a row handle reorders with the keyboard and stops at the boundaries', async ({ page }) => {
+  const before = await storedRows(page);
+  const first = grid(page).getByRole('button', { name: 'Drag Write spec' });
+  await first.focus();
+  await page.keyboard.press('ArrowUp');
+  const last = grid(page).getByRole('button', { name: 'Drag Test it' });
+  await last.focus();
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(700);
+  expect(await storedRows(page)).toEqual(before);
+
   const handle = grid(page).getByRole('button', { name: 'Drag Build it' });
   await handle.focus();
   await page.keyboard.press('ArrowUp');
-
   await expect.poll(() => rowTitles(page)).toEqual(['Build it', 'Write spec', 'Test it']);
+});
+
+test('a column handle reorders with the keyboard and stops at the boundaries', async ({ page }) => {
+  const handle = grid(page).getByRole('button', { name: 'Drag Hours column' });
+  const initial = await storedConfig(page, 'all');
+  await handle.focus();
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(700);
+  expect(await storedConfig(page, 'all')).toEqual(initial);
+
+  await page.keyboard.press('ArrowLeft');
+  await expect(headers(page)).toHaveText(['Name', 'Hours', 'Notes', '']);
+  await expect
+    .poll(() => storedConfig(page, 'all'))
+    .toMatchObject({
+      properties: [
+        { propertyId: 'hours', width: null },
+        { propertyId: 'notes', width: null },
+      ],
+    });
+
+  const reordered = await storedConfig(page, 'all');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(700);
+  expect(await storedConfig(page, 'all')).toEqual(reordered);
+  await page.reload();
+  await expect(headers(page)).toHaveText(['Name', 'Hours', 'Notes', '']);
 });
 
 test('sidebar page dragging still works while a database is open', async ({ page }) => {
