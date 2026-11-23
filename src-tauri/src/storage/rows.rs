@@ -358,6 +358,19 @@ impl Storage {
             (None, Some(next)) => next.position - 1.0,
             (None, None) => 0.0,
         };
+        let fits = match (previous, next) {
+            (Some(previous), Some(next)) => {
+                position.is_finite() && position > previous.position && position < next.position
+            }
+            (Some(previous), None) => position.is_finite() && position > previous.position,
+            (None, Some(next)) => position.is_finite() && position < next.position,
+            (None, None) => position.is_finite(),
+        };
+        if !fits {
+            return Err(StorageError::Invalid(
+                "there is no finite position between the new neighbours".into(),
+            ));
+        }
 
         self.db
             .query(format!(
@@ -761,6 +774,31 @@ mod tests {
         let last = storage.list_rows(&database).await.unwrap();
         assert_eq!(last[3].id, rows[2].id);
         assert_eq!(last[3].position, 4.0);
+    }
+
+    #[tokio::test]
+    async fn an_exhausted_midpoint_is_refused_without_renumbering_any_row() {
+        let storage = storage().await;
+        let (database, rows) = database_with_rows(&storage, &["One", "Two", "Three"]).await;
+
+        let mut refused = false;
+        for index in 0..100 {
+            let before = storage.list_rows(&database).await.unwrap();
+            let (row, after) = if index % 2 == 0 {
+                (&rows[0].id, &rows[1].id)
+            } else {
+                (&rows[1].id, &rows[0].id)
+            };
+            if let Err(error) = storage.move_row(row, Some(after)).await {
+                assert!(matches!(error, StorageError::Invalid(_)), "{error}");
+                assert_eq!(storage.list_rows(&database).await.unwrap(), before);
+                refused = true;
+                break;
+            }
+        }
+
+        assert!(refused, "repeated swaps must exhaust the midpoint");
+        assert_eq!(storage.list_rows(&database).await.unwrap()[2].position, 2.0);
     }
 
     #[tokio::test]

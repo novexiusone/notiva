@@ -1296,6 +1296,14 @@ export function installFakeBackend({
           : next
             ? next.position - 1
             : 0;
+        const fits = previous
+          ? next
+            ? Number.isFinite(position) && position > previous.position && position < next.position
+            : Number.isFinite(position) && position > previous.position
+          : next
+            ? Number.isFinite(position) && position < next.position
+            : Number.isFinite(position);
+        if (!fits) fail('invalid', 'there is no finite position between the new neighbours');
         save(
           pages.map((page) =>
             page.id === row.id ? { ...page, position, updatedAt: new Date().toISOString() } : page,

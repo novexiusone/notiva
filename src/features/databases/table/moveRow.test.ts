@@ -35,6 +35,27 @@ describe('move_row', () => {
     ]);
   });
 
+  it('refuses an exhausted midpoint without renumbering any row', async () => {
+    const { database, rows } = await databaseWithRows('One', 'Two', 'Three');
+
+    let refused = false;
+    for (let index = 0; index < 100; index += 1) {
+      const before = await commands.listRows(database.id);
+      const [row, after] = index % 2 === 0 ? [rows[0]!, rows[1]!] : [rows[1]!, rows[0]!];
+      try {
+        await commands.moveRow(row.id, after.id);
+      } catch (error) {
+        expect(error).toMatchObject({ kind: 'invalid' });
+        expect(await commands.listRows(database.id)).toEqual(before);
+        refused = true;
+        break;
+      }
+    }
+
+    expect(refused).toBe(true);
+    expect((await commands.listRows(database.id))[2]!.position).toBe(2);
+  });
+
   it('refuses rows of another database and locked moves', async () => {
     const first = await databaseWithRows('One', 'Two');
     const second = await databaseWithRows('Other');
