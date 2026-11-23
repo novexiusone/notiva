@@ -6,19 +6,23 @@ export function useTableSortable({
   id,
   index,
   kind,
+  group,
   disabled = false,
 }: {
   id: string;
   index: number;
   kind: TableDragKind;
+  group: string;
   disabled?: boolean;
 }) {
   return useSortable({
     id,
     index,
-    group: 'database-table',
+    group,
     type: kind,
-    accept: kind,
+    accept: (source) =>
+      source.type === kind &&
+      (source as typeof source & { sortable?: { group?: unknown } }).sortable?.group === group,
     disabled,
     transition: null,
   });

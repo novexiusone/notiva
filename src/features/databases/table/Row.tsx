@@ -23,6 +23,7 @@ type TableRowProps = {
   /** Whether any row is selected; the boxes of all rows then stay in sight. */
   selecting: boolean;
   sortIndex: number;
+  group: string;
   canDrag: boolean;
   onKeyboardMove: (by: number) => void;
 };
@@ -41,6 +42,7 @@ export const TableRow = memo(function TableRow({
   selected,
   selecting,
   sortIndex,
+  group,
   canDrag,
   onKeyboardMove,
 }: TableRowProps) {
@@ -50,6 +52,7 @@ export const TableRow = memo(function TableRow({
     id: row.id,
     index: sortIndex,
     kind: 'row',
+    group,
     disabled: !canDrag,
   });
 

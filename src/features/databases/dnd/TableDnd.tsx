@@ -16,28 +16,59 @@ export function TableDragProvider({
 }) {
   return (
     <DragDropProvider
+      onDragOver={(event) => {
+        const { source, target } = event.operation;
+        if (
+          isSortable(source) &&
+          isSortable(target) &&
+          source.id !== target.id &&
+          (source.type !== target.type || source.sortable.group !== target.sortable.group)
+        ) {
+          event.preventDefault();
+        }
+      }}
       onDragEnd={(event) => {
         if (event.canceled) return;
         const { source, target } = event.operation;
         if (!isSortable(source)) return;
         const kind = source.type;
         let targetIndex =
-          isSortable(target) && target.id !== source.id ? target.sortable.initialIndex : null;
+          isSortable(target) &&
+          target.id !== source.id &&
+          !target.disabled &&
+          target.accepts(source)
+            ? target.sortable.initialIndex
+            : null;
         if (targetIndex === null && source.manager && event.nativeEvent instanceof PointerEvent) {
           const pointer = event.nativeEvent;
           const elements = document.elementsFromPoint(pointer.clientX, pointer.clientY);
-          const beneathPointer = [...source.manager.registry.droppables].find(
+          const accepted = [...source.manager.registry.droppables].filter(
             (candidate) =>
-              candidate.id !== source.id &&
+              !candidate.disabled &&
+              candidate.accepts(source) &&
               candidate.element &&
               elements.some((element) => candidate.element!.contains(element)),
           );
+          const beneathPointer = accepted.find((candidate) => candidate.id !== source.id);
           const sortableBeneath = beneathPointer ?? null;
           if (isSortable(sortableBeneath)) {
             targetIndex = sortableBeneath.sortable.initialIndex;
+          } else if (accepted.length > 0 && source.index !== source.initialIndex) {
+            targetIndex = source.index;
           }
         }
-        const to = source.index !== source.initialIndex ? source.index : targetIndex;
+        const useSourceIndex =
+          isSortable(target) &&
+          target.id === source.id &&
+          !target.disabled &&
+          target.accepts(source) &&
+          source.index !== source.initialIndex;
+        const to =
+          event.nativeEvent instanceof PointerEvent
+            ? targetIndex
+            : useSourceIndex
+              ? source.index
+              : targetIndex;
         if ((kind === 'column' || kind === 'row') && to !== null && source.initialIndex !== to) {
           onReorder({ kind, from: source.initialIndex, to });
         }

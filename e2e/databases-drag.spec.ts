@@ -264,3 +264,89 @@ async function seedEditor(page: Page) {
   await page.goto('/#/page/notes');
   await expect(page.locator('.bn-editor')).toBeVisible();
 }
+
+test('same-group rows reorder but a cross-group drop leaves storage unchanged', async ({
+  page,
+}) => {
+  await seedGroups(page);
+  const target = grid(page).getByRole('row', { name: 'Build it' });
+  const targetBox = (await target.boundingBox())!;
+  await dragToPoint(page, grid(page).getByRole('button', { name: 'Drag Test it' }), {
+    x: targetBox.x + 40,
+    y: targetBox.y + targetBox.height / 2,
+  });
+  await expect.poll(() => rowTitles(page)).toEqual(['A', 'Write spec', 'B', 'Test it', 'Build it']);
+
+  const before = await storedRows(page);
+  const crossGroupTarget = grid(page).getByRole('row', { name: 'Write spec' });
+  const crossGroupBox = (await crossGroupTarget.boundingBox())!;
+  await dragToPoint(page, grid(page).getByRole('button', { name: 'Drag Build it' }), {
+    x: crossGroupBox.x + 40,
+    y: crossGroupBox.y + crossGroupBox.height / 2,
+  });
+  await page.waitForTimeout(700);
+
+  expect(await storedRows(page)).toEqual(before);
+  await expect.poll(() => rowTitles(page)).toEqual(['A', 'Write spec', 'B', 'Test it', 'Build it']);
+});
+
+test('a row dropped on a column header leaves rows and view config unchanged', async ({ page }) => {
+  const beforeRows = await storedRows(page);
+  const beforeConfig = await storedConfig(page, 'all');
+  const target = headers(page).nth(1);
+  const targetBox = (await target.boundingBox())!;
+  await dragToPoint(page, grid(page).getByRole('button', { name: 'Drag Build it' }), {
+    x: targetBox.x + targetBox.width / 2,
+    y: targetBox.y + targetBox.height / 2,
+  });
+  await page.waitForTimeout(700);
+
+  expect(await storedRows(page)).toEqual(beforeRows);
+  expect(await storedConfig(page, 'all')).toEqual(beforeConfig);
+});
+
+test('a column dropped on a row leaves rows and view config unchanged', async ({ page }) => {
+  const beforeRows = await storedRows(page);
+  const beforeConfig = await storedConfig(page, 'all');
+  const target = grid(page).getByRole('row', { name: 'Write spec' });
+  const targetBox = (await target.boundingBox())!;
+  await dragToPoint(page, grid(page).getByLabel('Drag Hours column'), {
+    x: targetBox.x + 40,
+    y: targetBox.y + targetBox.height / 2,
+  });
+  await page.waitForTimeout(700);
+
+  expect(await storedRows(page)).toEqual(beforeRows);
+  expect(await storedConfig(page, 'all')).toEqual(beforeConfig);
+});
+
+async function seedGroups(page: Page) {
+  await page.evaluate(() => {
+    const stored = JSON.parse(window.localStorage.getItem('notiva.fake.databases') ?? '{}') as {
+      properties: Record<string, unknown>[];
+      views: { id: string; config: { groupBy: unknown } }[];
+      cells: Record<string, Record<string, string>>;
+    };
+    stored.properties.push({
+      id: 'status',
+      databaseId: 'db',
+      name: 'Status',
+      type: 'select',
+      position: 2,
+      options: [
+        { id: 'a', name: 'A', color: 'gray' },
+        { id: 'b', name: 'B', color: 'blue' },
+      ],
+      targetId: null,
+    });
+    stored.views.find((view) => view.id === 'all')!.config.groupBy = {
+      propertyId: 'status',
+      collapsed: [],
+    };
+    stored.cells = { one: { status: 'a' }, two: { status: 'b' }, three: { status: 'b' } };
+    window.localStorage.setItem('notiva.fake.databases', JSON.stringify(stored));
+  });
+  await page.reload();
+  await expect(grid(page).getByRole('row', { name: 'A', exact: true })).toBeVisible();
+  await expect(grid(page).getByRole('row', { name: 'B', exact: true })).toBeVisible();
+}

@@ -193,6 +193,15 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
     () => new Map(visibleRowIds.map((id, index) => [id, index])),
     [visibleRowIds],
   );
+  const visibleRowGroups = useMemo(() => {
+    const groups = new Map<string, string>();
+    let group = 'rows';
+    for (const item of items) {
+      if (item.kind === 'group') group = item.id;
+      else groups.set(item.id, group);
+    }
+    return groups;
+  }, [items]);
   const rowsShown = visibleRowIds.length;
   const reorder = ({ kind, from, to }: TableReorder) => {
     if (kind === 'column') {
@@ -201,6 +210,9 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
       table.setColumnOrder((current) => mergeVisibleColumnOrder(current, visible, from, to));
       return;
     }
+    const sourceGroup = visibleRowGroups.get(visibleRowIds[from] ?? '');
+    const targetGroup = visibleRowGroups.get(visibleRowIds[to] ?? '');
+    if (sourceGroup !== targetGroup) return;
     const request = rowMoveAfterReorder(visibleRowIds, from, to);
     if (request && canDragRows && unlockedRowIds.has(request.rowId)) moveRow.mutate(request);
   };
@@ -357,6 +369,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                       selected={chosen.has(item.row.id)}
                       selecting={selection.length > 0}
                       sortIndex={visibleRowIndices.get(item.id) ?? 0}
+                      group={visibleRowGroups.get(item.id) ?? 'rows'}
                       canDrag={canDragRows && unlockedRowIds.has(item.id)}
                       onKeyboardMove={(by) =>
                         reorder({

@@ -81,6 +81,7 @@ export function PropertyHeaderCell({
     id: property.id,
     index: sortIndex,
     kind: 'column',
+    group: 'columns',
     disabled: sortingDisabled,
   });
   const updateProperty = useUpdateProperty(property.databaseId);
