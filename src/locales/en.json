@@ -131,6 +131,9 @@
     },
     "table": {
       "selectRow": "Select {{title}}",
+      "dragRow": "Drag {{title}}",
+      "resizeColumn": "Resize {{name}} column",
+      "dragColumn": "Drag {{name}} column",
       "selectAll": "Select all rows",
       "selection": "Selected rows",
       "selected": "{{count}} selected",

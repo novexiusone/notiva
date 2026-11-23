@@ -131,6 +131,9 @@
     },
     "table": {
       "selectRow": "{{title}} auswählen",
+      "dragRow": "{{title}} ziehen",
+      "resizeColumn": "Spalte {{name}} in der Breite ändern",
+      "dragColumn": "Spalte {{name}} ziehen",
       "selectAll": "Alle Zeilen auswählen",
       "selection": "Ausgewählte Zeilen",
       "selected": "{{count}} ausgewählt",
