@@ -206,6 +206,9 @@ test('an unlocked row can drop onto a content-locked neighbour without modifying
   });
 
   await expect.poll(() => rowTitles(page)).toEqual(['Build it', 'Write spec', 'Test it']);
+  await expect
+    .poll(async () => (await storedRows(page)).map((row) => row.id))
+    .toEqual(['two', 'one', 'three']);
   const afterLocked = await page.evaluate(() => {
     const pages = JSON.parse(window.localStorage.getItem('notiva.fake.pages') ?? '[]') as {
       id: string;
