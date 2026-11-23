@@ -126,6 +126,57 @@ describe('the page of a row', () => {
     ).toHaveAttribute('href', '/page/db');
   });
 
+  it('keeps cells editable when only the row content is locked', async () => {
+    const { user } = renderApp({
+      ...tasks,
+      pages: tasks.pages.map((entry) =>
+        entry.id === 'r1' ? { ...entry, lock: 'content' as const } : entry,
+      ),
+    });
+
+    expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveAttribute('readonly');
+    await waitFor(() =>
+      expect(document.querySelector('.bn-editor')).toHaveAttribute('contenteditable', 'false'),
+    );
+    await user.click(await value('Notes'));
+    const input = await screen.findByRole('textbox', { name: 'Notes' });
+    await user.clear(input);
+    await user.type(input, 'Still editable{Enter}');
+
+    await waitFor(async () => expect((await storedCells('r1'))?.notes).toBe('Still editable'));
+  });
+
+  it('makes row properties read-only when the row is locked at everything', async () => {
+    renderApp({
+      ...tasks,
+      pages: tasks.pages.map((entry) =>
+        entry.id === 'r1' ? { ...entry, lock: 'all' as const } : entry,
+      ),
+    });
+
+    expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveAttribute('readonly');
+    const properties = await list();
+    await waitFor(() => expect(within(properties).getByText('First draft')).toBeInTheDocument());
+    expect(within(properties).queryByRole('button', { name: /^Notes/ })).toBeNull();
+  });
+
+  it('makes row content and properties read-only when its database is locked at everything', async () => {
+    renderApp({
+      ...tasks,
+      pages: tasks.pages.map((entry) =>
+        entry.id === 'db' ? { ...entry, lock: 'all' as const } : entry,
+      ),
+    });
+
+    expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveAttribute('readonly');
+    await waitFor(() =>
+      expect(document.querySelector('.bn-editor')).toHaveAttribute('contenteditable', 'false'),
+    );
+    const properties = await list();
+    await waitFor(() => expect(within(properties).getByText('First draft')).toBeInTheDocument());
+    expect(within(properties).queryByRole('button', { name: /^Notes/ })).toBeNull();
+  });
+
   it('edits a text value in place and saves it on Enter', async () => {
     const { user } = renderApp(tasks);
 

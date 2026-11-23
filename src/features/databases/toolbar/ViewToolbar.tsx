@@ -40,6 +40,7 @@ export function ViewToolbar({
   canDelete,
   onRename,
   onDelete,
+  readOnly = false,
   ...props
 }: ToolbarMenuProps & {
   grouping: boolean;
@@ -76,10 +77,11 @@ export function ViewToolbar({
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
       <Collapsible hidden={minimized}>
-        <FilterMenu {...props} />
-        <SortMenu {...props} />
+        <FilterMenu {...props} readOnly={readOnly} />
+        <SortMenu {...props} readOnly={readOnly} />
       </Collapsible>
       <SettingsMenu
+        readOnly={readOnly}
         grouping={grouping}
         view={view}
         canDelete={canDelete}
@@ -88,7 +90,7 @@ export function ViewToolbar({
         {...props}
       />
       <Collapsible hidden={minimized}>
-        <NewRowButton onNewRow={onNewRow} />
+        <NewRowButton onNewRow={onNewRow} readOnly={readOnly} />
       </Collapsible>
     </div>
   );

@@ -20,6 +20,7 @@ type ViewTabsProps = {
   activeId: string | null;
   onSelect: (id: string) => void;
   onAdd: (type: ViewType) => void;
+  readOnly?: boolean;
   /** The settings of the active view, at the end of the line of tabs. */
   toolbar?: ReactNode;
   /** What the active view shows. */
@@ -34,7 +35,15 @@ const iconButton =
  * view of a type this version can show. Renaming and deleting a view are in
  * its settings.
  */
-export function ViewTabs({ views, activeId, onSelect, onAdd, toolbar, children }: ViewTabsProps) {
+export function ViewTabs({
+  views,
+  activeId,
+  onSelect,
+  onAdd,
+  readOnly = false,
+  toolbar,
+  children,
+}: ViewTabsProps) {
   const { t } = useTranslation();
   return (
     <Tabs value={activeId ?? ''} onValueChange={onSelect} className="gap-0">
@@ -52,7 +61,11 @@ export function ViewTabs({ views, activeId, onSelect, onAdd, toolbar, children }
             ))}
           </TabsList>
           <DropdownMenu>
-            <DropdownMenuTrigger className={iconButton} aria-label={t('databases.views.add')}>
+            <DropdownMenuTrigger
+              className={iconButton}
+              aria-label={t('databases.views.add')}
+              disabled={readOnly}
+            >
               <Plus size={16} aria-hidden />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-max min-w-40">

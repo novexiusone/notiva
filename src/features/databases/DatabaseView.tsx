@@ -1,5 +1,5 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useImperativeHandle, useState, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -20,8 +20,11 @@ import type { Database, Row, View, ViewConfig } from '@/lib/commands';
 import { lastActiveView, rememberActiveView } from '@/lib/localState';
 import { cn } from '@/lib/utils';
 
+export type DatabaseViewHandle = { flush: () => Promise<boolean> };
+
 type DatabaseViewProps = {
   databaseId: string;
+  ref?: Ref<DatabaseViewHandle>;
   /**
    * Shown inside another page. The address then belongs to that page, so the
    * active view is the one remembered for the database on this machine.
@@ -34,7 +37,7 @@ type DatabaseViewProps = {
  * the active view shows. It sets its own width, so that the table can use the
  * whole main area without a change to the page around it.
  */
-export function DatabaseView({ databaseId, embedded = false }: DatabaseViewProps) {
+export function DatabaseView({ databaseId, embedded = false, ref }: DatabaseViewProps) {
   const { t } = useTranslation();
   const database = useDatabase(databaseId);
   const rows = useRows(databaseId);
@@ -54,7 +57,7 @@ export function DatabaseView({ databaseId, embedded = false }: DatabaseViewProps
   }
   if (!database.isSuccess || !rows.isSuccess) return null;
 
-  return <DatabaseViews database={database.data} rows={rows.data} embedded={embedded} />;
+  return <DatabaseViews database={database.data} rows={rows.data} embedded={embedded} ref={ref} />;
 }
 
 /**
@@ -82,10 +85,12 @@ function DatabaseViews({
   database,
   rows,
   embedded,
+  ref,
 }: {
   database: Database;
   rows: Row[];
   embedded: boolean;
+  ref?: Ref<DatabaseViewHandle>;
 }) {
   const { t } = useTranslation();
   const databaseId = database.page.id;
@@ -99,8 +104,10 @@ function DatabaseViews({
   const createView = useCreateView(databaseId);
   const createRow = useCreateRow(databaseId);
   const { change: changeView, flush: flushViews } = useUpdateView(databaseId);
+  useImperativeHandle(ref, () => ({ flush: flushViews }), [flushViews]);
   const deleteView = useDeleteView(databaseId);
   const { views } = database;
+  const readOnly = database.page.lock === 'all';
   const active = activeViewOf(views, databaseId, search.view);
   const activeId = active?.id ?? null;
 
@@ -133,7 +140,9 @@ function DatabaseViews({
   // when the database is left, and when the page goes away.
   useEffect(() => {
     if (activeId === null) return;
-    return () => flushViews(activeId);
+    return () => {
+      void flushViews(activeId);
+    };
   }, [activeId, flushViews]);
   useEffect(() => {
     const flush = () => flushViews();
@@ -149,7 +158,8 @@ function DatabaseViews({
     show(id);
   };
 
-  const add = (type: ViewType) =>
+  const add = (type: ViewType) => {
+    if (readOnly) return;
     createView.mutate(
       {
         name: newViewName(views, t(`databases.views.types.${type}`)),
@@ -157,8 +167,10 @@ function DatabaseViews({
       },
       { onSuccess: (view) => select(view.id) },
     );
+  };
 
   const remove = (id: string) => {
+    if (readOnly) return;
     if (id === activeId) {
       const index = views.findIndex((view) => view.id === id);
       const neighbour = views[index + 1] ?? views[index - 1];
@@ -168,7 +180,7 @@ function DatabaseViews({
   };
 
   const setConfig = (config: ViewConfig) => {
-    if (activeId !== null) changeView(activeId, { config });
+    if (!readOnly && activeId !== null) changeView(activeId, { config });
   };
 
   const definition = active ? viewTypeDefinition(active.config.type) : viewTypeDefinition('table');
@@ -180,12 +192,14 @@ function DatabaseViews({
       activeId={activeId}
       onSelect={select}
       onAdd={add}
+      readOnly={readOnly}
       toolbar={
         active && definition ? (
           <ViewToolbar
             config={active.config}
             properties={database.properties}
             onChange={setConfig}
+            readOnly={readOnly}
             grouping={definition.grouping}
             onNewRow={() => createRow.mutate()}
             view={active}
@@ -203,6 +217,7 @@ function DatabaseViews({
           database={database}
           rows={rows}
           view={active}
+          readOnly={readOnly}
           onConfigChange={setConfig}
         />
       ) : (

@@ -42,6 +42,21 @@ const tasks = {
   path: '/page/db',
 };
 
+const allView: View = {
+  id: 'v1',
+  databaseId: 'db',
+  name: 'All',
+  position: 0,
+  config: {
+    version: 1,
+    type: 'table',
+    filters: [],
+    sorts: [],
+    properties: [],
+    groupBy: null,
+  },
+};
+
 const grid = () => screen.findByRole('grid', { name: 'Tasks' });
 
 async function headerNames() {
@@ -124,6 +139,89 @@ describe('a database page', () => {
     expect(await screen.findByText('No rows yet')).toBeInTheDocument();
     expect(await headerNames()).toEqual(['Name', '']);
     expect((await commands.loadDatabase('db')).views).toEqual([]);
+  });
+
+  it('keeps rows, cells, properties and views editable when database content is locked', async () => {
+    const { user } = renderApp({
+      ...tasks,
+      pages: tasks.pages.map((entry) =>
+        entry.id === 'db' ? { ...entry, lock: 'content' as const } : entry,
+      ),
+      views: [allView],
+    });
+
+    expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveAttribute('readonly');
+    await user.click(await cell('Build it', 'Notes'));
+    await user.type(await screen.findByRole('textbox', { name: 'Notes' }), 'Editable{Enter}');
+    await waitFor(async () =>
+      expect((await commands.listRows('db'))[1].cells.notes).toBe('Editable'),
+    );
+
+    expect(screen.getByRole('button', { name: 'Add a property' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Add a view' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'New row' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^Notes$/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^Filter/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^View settings/ })).toBeEnabled();
+  });
+
+  it('makes every database editing control read-only when everything is locked', async () => {
+    const { user } = renderApp({
+      ...tasks,
+      pages: tasks.pages.map((entry) =>
+        entry.id === 'db' ? { ...entry, lock: 'all' as const } : entry,
+      ),
+      views: [allView],
+    });
+
+    expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveAttribute('readonly');
+    await user.click(await cell('Build it', 'Notes'));
+    expect(screen.queryByRole('textbox', { name: 'Notes' })).toBeNull();
+    (await cell('Build it', 'Notes')).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('textbox', { name: 'Notes' })).toBeNull();
+    await user.click(await cell('Build it', 'Name'));
+    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
+
+    expect(screen.getByRole('button', { name: 'Add a property' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add a view' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'New row' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^New$/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Notes$/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Filter/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Sort/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^View settings/ })).toBeDisabled();
+
+    const line = await within(await grid()).findByRole('row', { name: 'Build it' });
+    await user.click(within(line).getByRole('button', { name: 'Row actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Delete' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('separates a row content lock from a row everything lock in the table', async () => {
+    const { user } = renderApp({
+      ...tasks,
+      pages: tasks.pages.map((entry) => {
+        if (entry.id === 'r1') return { ...entry, lock: 'content' as const };
+        if (entry.id === 'r2') return { ...entry, lock: 'all' as const };
+        return entry;
+      }),
+    });
+
+    await user.click(await cell('Write spec', 'Name'));
+    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
+    await user.click(await cell('Write spec', 'Notes'));
+    await user.type(await screen.findByRole('textbox', { name: 'Notes' }), ' edited{Enter}');
+    await waitFor(async () =>
+      expect((await commands.listRows('db'))[0].cells.notes).toBe('First draft edited'),
+    );
+
+    await user.click(await cell('Build it', 'Name'));
+    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
+    await user.click(await cell('Build it', 'Notes'));
+    expect(screen.queryByRole('textbox', { name: 'Notes' })).toBeNull();
   });
 
   it('edits a text cell in place and saves it on Enter', async () => {

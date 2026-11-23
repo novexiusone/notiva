@@ -163,7 +163,11 @@ export function SettingsMenu({
         }}
       >
         <PopoverTrigger asChild>
-          <ToolbarButton icon={SlidersHorizontal} label={t('databases.toolbar.settings')} />
+          <ToolbarButton
+            icon={SlidersHorizontal}
+            label={t('databases.toolbar.settings')}
+            disabled={props.readOnly}
+          />
         </PopoverTrigger>
         <PopoverContent
           align="end"

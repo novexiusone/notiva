@@ -61,6 +61,87 @@ describe('useAutosave', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  it('drops a pending change when saving is disabled and ignores changes while disabled', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const { result, rerender, unmount } = renderHook(
+      ({ enabled }) => useAutosave(save, 500, enabled),
+      { initialProps: { enabled: true } },
+    );
+
+    act(() => result.current.schedule(() => 'before lock'));
+    rerender({ enabled: false });
+    act(() => result.current.schedule(() => 'while locked'));
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    act(() => void window.dispatchEvent(new Event('blur')));
+    unmount();
+    await settle();
+
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('reports whether an explicit flush saved the pending change', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useAutosave(save, 500));
+    act(() => result.current.schedule(() => 'pending'));
+
+    await act(async () => {
+      await expect(result.current.flush()).resolves.toBe(true);
+    });
+    expect(save).toHaveBeenCalledWith('pending');
+    await expect(result.current.flush()).resolves.toBe(true);
+  });
+
+  it('reports an unsuccessful flush and keeps the change pending', async () => {
+    const save = vi.fn().mockRejectedValue(new Error('disk full'));
+    const { result } = renderHook(() => useAutosave(save, 500));
+    act(() => result.current.schedule(() => 'important'));
+
+    await act(async () => {
+      await expect(result.current.flush()).resolves.toBe(false);
+    });
+    expect(result.current.failed).toBe(true);
+  });
+
+  it('reports false when a newer save is queued while a flush waits', async () => {
+    let releaseFirst!: () => void;
+    let releaseSecond!: () => void;
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseSecond = resolve;
+          }),
+      );
+    const { result } = renderHook(() => useAutosave(save, 500));
+
+    act(() => result.current.schedule(() => 'first'));
+    let firstFlush!: Promise<boolean>;
+    act(() => {
+      firstFlush = result.current.flush();
+    });
+    await settle();
+    expect(save).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.schedule(() => 'second'));
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(save).toHaveBeenCalledTimes(1);
+
+    act(() => releaseFirst());
+    await act(async () => {
+      await expect(firstFlush).resolves.toBe(false);
+    });
+
+    act(() => releaseSecond());
+    await settle();
+  });
+
   it('runs saves one after another', async () => {
     const finished: string[] = [];
     let release!: () => void;

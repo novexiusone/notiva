@@ -16,6 +16,10 @@
   },
   "pages": {
     "fullWidth": "Full width",
+    "lockContent": "Lock content",
+    "lockEverything": "Lock everything",
+    "unlock": "Unlock page",
+    "lockedError": "This page is locked. Unlock it before making changes.",
     "untitled": "Untitled",
     "new": "New page",
     "addSubpage": "Add a subpage",

@@ -65,6 +65,7 @@ type PropertyHeaderCellProps = {
   sortingDisabled: boolean;
   onKeyboardMove: (by: number) => void;
   onWidthChange?: WidthChange;
+  readOnly?: boolean;
 };
 
 /** The name of a property with its type's icon, and a menu to rename, retype or delete it. */
@@ -77,6 +78,7 @@ export function PropertyHeaderCell({
   sortingDisabled,
   onKeyboardMove,
   onWidthChange,
+  readOnly = false,
 }: PropertyHeaderCellProps) {
   const { t } = useTranslation();
   const { ref, handleRef, isDragging } = useTableSortable({
@@ -120,7 +122,7 @@ export function PropertyHeaderCell({
       style={{ width }}
       className={cn(headerCell, isDragging && 'opacity-50')}
     >
-      {renaming ? (
+      {renaming && !readOnly ? (
         <div className="flex h-full w-full min-w-0 items-center px-1">
           <InlineInput
             initialText={property.name}
@@ -140,6 +142,7 @@ export function PropertyHeaderCell({
             <button
               ref={handleRef}
               type="button"
+              disabled={readOnly}
               aria-label={t('databases.table.dragColumn', { name: property.name })}
               onKeyDown={(event) => {
                 const by = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
@@ -159,6 +162,7 @@ export function PropertyHeaderCell({
               <button
                 ref={trigger}
                 type="button"
+                disabled={readOnly}
                 className={cn(
                   headerContent,
                   'hover:bg-accent hover:text-foreground data-[state=open]:bg-accent focus-visible:ring-ring/60 outline-none focus-visible:ring-2 focus-visible:ring-inset',

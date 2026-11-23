@@ -37,6 +37,7 @@ type TableViewProps = {
   rows: Row[];
   /** The view whose filters, sorts, grouping and columns apply; `null` shows everything. */
   view?: View | null;
+  readOnly?: boolean;
   onConfigChange?: (config: ViewConfig) => void;
 };
 
@@ -48,10 +49,21 @@ const noRowsKept: ReadonlySet<string> = new Set();
  * than it. Grouped, the header of each group is a line of the body as tall as
  * a row.
  */
-export function TableView({ database, rows, view = null, onConfigChange }: TableViewProps) {
+export function TableView({
+  database,
+  rows,
+  view = null,
+  readOnly = false,
+  onConfigChange,
+}: TableViewProps) {
   const { t } = useTranslation();
   const databaseId = database.page.id;
+  const pages = usePages();
   const tableId = useId();
+  const rowLocks = useMemo(
+    () => new Map((pages.data ?? []).map((page) => [page.id, page.lock])),
+    [pages.data],
+  );
   // A row added here stays in sight although it may not pass the view's filters.
   const [keepRowIds, setKeepRowIds] = useState(noRowsKept);
   const {
@@ -80,7 +92,6 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
   const deletePage = useDeletePage();
   const createRow = useCreateRow(databaseId);
   const queryClient = useQueryClient();
-  const pages = usePages();
   const unlockedRowIds = useMemo(
     () => new Set(pages.data?.filter((page) => page.lock === 'none').map((page) => page.id)),
     [pages.data],
@@ -95,9 +106,9 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
       ]),
   });
   const canConfigureColumns =
-    view !== null && onConfigChange !== undefined && database.page.lock !== 'all';
+    !readOnly && view !== null && onConfigChange !== undefined && database.page.lock !== 'all';
   const hasSort = view ? readSorts(view.config, database.properties).length > 0 : false;
-  const canDragRows = database.page.lock !== 'all' && !hasSort;
+  const canDragRows = !readOnly && database.page.lock !== 'all' && !hasSort;
 
   // The app does not use the React Compiler; rows are memoised by hand instead.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -174,7 +185,8 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
     virtualizer.scrollToIndex(index);
   }, [activeRowId, items, virtualizer]);
 
-  const addRow = () =>
+  const addRow = () => {
+    if (readOnly) return;
     createRow.mutate(undefined, {
       onSuccess: (row) => {
         setKeepRowIds((kept) => new Set([...kept, row.id]));
@@ -183,6 +195,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
           .activate({ tableId, rowId: row.id, columnId: TITLE_COLUMN_ID }, true);
       },
     });
+  };
 
   const width = tableWidth(columns);
   const visibleRowIds = useMemo(
@@ -225,9 +238,12 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
       setPreviewWidth({ id, width });
     }
   };
-  // Rows that were filtered away or deleted drop out of the selection.
-  const selection = visibleRowIds.filter((id) => chosen.has(id));
-  const allChosen = rowsShown > 0 && selection.length === rowsShown;
+  const selectableRowIds = visibleRowIds.filter(
+    (id) => !readOnly && (rowLocks.get(id) ?? 'none') === 'none',
+  );
+  // Rows that were filtered away, deleted or locked drop out of the selection.
+  const selection = selectableRowIds.filter((id) => chosen.has(id));
+  const allChosen = selectableRowIds.length > 0 && selection.length === selectableRowIds.length;
   const pendingRow = rows.find((row) => row.id === rowToDelete);
 
   return (
@@ -292,10 +308,10 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                   >
                     <Checkbox
                       checked={allChosen ? true : selection.length > 0 ? 'indeterminate' : false}
-                      disabled={rowsShown === 0}
+                      disabled={selectableRowIds.length === 0}
                       aria-label={t('databases.table.selectAll')}
                       onCheckedChange={() =>
-                        setChosen(allChosen ? noRowsKept : new Set(visibleRowIds))
+                        setChosen(allChosen ? noRowsKept : new Set(selectableRowIds))
                       }
                     />
                   </div>
@@ -309,6 +325,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                         width={columnWidth(column)}
                         sortIndex={columnIndex - 1}
                         sortingDisabled={!canConfigureColumns}
+                        readOnly={readOnly}
                         onKeyboardMove={(by) =>
                           reorder({
                             kind: 'column',
@@ -340,7 +357,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                     style={{ width: ADD_COLUMN_WIDTH }}
                     className="h-full shrink-0"
                   >
-                    <AddPropertyMenu databaseId={databaseId} />
+                    <AddPropertyMenu databaseId={databaseId} readOnly={readOnly} />
                   </div>
                 </div>
               </div>
@@ -379,6 +396,8 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
                       sortIndex={visibleRowIndices.get(item.id) ?? 0}
                       group={visibleRowGroups.get(item.id) ?? 'rows'}
                       canDrag={canDragRows && unlockedRowIds.has(item.id)}
+                      lock={rowLocks.get(item.row.id) ?? 'none'}
+                      readOnly={readOnly}
                       onKeyboardMove={(by) =>
                         reorder({
                           kind: 'row',
@@ -398,6 +417,7 @@ export function TableView({ database, rows, view = null, onConfigChange }: Table
             ) : null}
             <button
               type="button"
+              disabled={readOnly}
               onClick={addRow}
               style={{ minWidth: width }}
               className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 flex h-8 w-full items-center gap-2 px-2 text-sm outline-none focus-visible:ring-2"

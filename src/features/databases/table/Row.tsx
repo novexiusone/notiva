@@ -3,7 +3,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TableColumn } from '@/features/databases/useDatabaseTable';
 import { useTableSortable } from '@/features/databases/dnd/useTableSortable';
-import type { Row } from '@/lib/commands';
+import type { PageLock, Row } from '@/lib/commands';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { PropertyCell, TitleCell } from './Cell';
@@ -26,6 +26,8 @@ type TableRowProps = {
   group: string;
   canDrag: boolean;
   onKeyboardMove: (by: number) => void;
+  lock: PageLock;
+  readOnly: boolean;
 };
 
 /**
@@ -45,6 +47,8 @@ export const TableRow = memo(function TableRow({
   group,
   canDrag,
   onKeyboardMove,
+  lock,
+  readOnly,
 }: TableRowProps) {
   const { t } = useTranslation();
   const { toggleRow } = useTableActions();
@@ -55,6 +59,8 @@ export const TableRow = memo(function TableRow({
     group,
     disabled: !canDrag,
   });
+  const contentReadOnly = readOnly || lock !== 'none';
+  const cellsReadOnly = readOnly || lock === 'all';
 
   return (
     <div
@@ -103,6 +109,7 @@ export const TableRow = memo(function TableRow({
         ) : null}
         <Checkbox
           checked={selected}
+          disabled={contentReadOnly}
           aria-label={t('databases.table.selectRow', { title: row.title || t('pages.untitled') })}
           onCheckedChange={() => toggleRow(row.id)}
         />
@@ -122,9 +129,10 @@ export const TableRow = memo(function TableRow({
             property={column.property}
             definition={column.definition}
             value={row.cells[column.id] ?? null}
+            readOnly={cellsReadOnly}
           />
         ) : (
-          <TitleCell key={column.id} {...position} title={row.title} />
+          <TitleCell key={column.id} {...position} title={row.title} readOnly={contentReadOnly} />
         );
       })}
     </div>

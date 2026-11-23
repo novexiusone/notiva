@@ -234,6 +234,83 @@ test('rows are added, edited in every type, opened and deleted', async ({ page }
   await expect(page.getByRole('treeitem')).toHaveText(['Tasks']);
 });
 
+test('database content and everything locks enforce their different editing rules', async ({
+  page,
+}) => {
+  await createDatabase(page, 'Tasks');
+  await addProperty(page, 'Text', 'Notes');
+  await addRow(page, 'Write spec');
+  await typeIntoCell(page, 'Write spec', 'Notes', 'Before lock');
+  const main = page.getByRole('main');
+  const actions = main.getByRole('button', { name: 'Page actions' });
+
+  await actions.click();
+  await page.getByRole('menuitemcheckbox', { name: 'Lock content' }).click();
+  await expect(title(page)).toHaveAttribute('readonly', '');
+
+  await typeIntoCell(page, 'Write spec', 'Notes', 'Content stays editable');
+  await addProperty(page, 'Number', 'Hours');
+  await addRow(page, 'Build it');
+  await page.getByRole('button', { name: 'Add a view' }).click();
+  await page.getByRole('menuitem', { name: 'Table' }).click();
+  await expect(page.getByRole('tab', { name: 'Table', exact: true })).toBeVisible();
+
+  await actions.click();
+  await page.getByRole('menuitemcheckbox', { name: 'Lock everything' }).click();
+  await expect(title(page)).toHaveAttribute('readonly', '');
+  await expect(page.getByRole('button', { name: 'Add a property' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add a view' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New row' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New', exact: true })).toBeDisabled();
+  await expect(header(page, 'Notes').getByRole('button', { name: 'Notes' })).toBeDisabled();
+
+  await (await cell(page, 'Write spec', 'Notes')).click({ force: true });
+  await expect(grid(page).getByRole('textbox', { name: 'Notes' })).toHaveCount(0);
+  await (await cell(page, 'Write spec', 'Name')).click({ force: true });
+  await expect(titleEditor(page)).toHaveCount(0);
+
+  await row(page, 'Write spec').hover();
+  await row(page, 'Write spec').getByRole('link', { name: 'Open' }).click({ force: true });
+  await expect(title(page)).toHaveValue('Write spec');
+  await expect(title(page)).toHaveAttribute('readonly', '');
+  await expect(main.locator('.bn-editor')).toHaveAttribute('contenteditable', 'false');
+  const properties = page.getByRole('group', { name: 'Properties' });
+  await expect(properties.getByText('Content stays editable')).toBeVisible();
+  await expect(properties.getByRole('button', { name: /^Notes/ })).toHaveCount(0);
+
+  await page.goBack();
+  await main.getByRole('button', { name: 'Unlock page' }).click();
+  await expect(title(page)).toBeEditable();
+  const unlockedCell = await cell(page, 'Write spec', 'Notes');
+  await unlockedCell.click({ force: true });
+  const unlockedEditor = grid(page).getByRole('textbox', { name: 'Notes' });
+  await expect(unlockedEditor).toBeFocused();
+  await page.keyboard.type('Editable after unlock');
+  await unlockedEditor.press('Enter');
+  await expect(unlockedEditor).toHaveCount(0);
+});
+
+test('locking immediately after a view change saves its configuration first', async ({ page }) => {
+  await createDatabase(page, 'Tasks');
+  await addProperty(page, 'Text', 'Notes');
+  await addProperty(page, 'Number', 'Hours');
+
+  await page.getByRole('button', { name: /^View settings/ }).click();
+  const settings = page.getByRole('dialog', { name: 'View settings' });
+  await settings.getByRole('button', { name: /^Property visibility/ }).click();
+  await settings.getByRole('checkbox', { name: 'Hours' }).click();
+  await expect(header(page, 'Hours')).toHaveCount(0);
+
+  const main = page.getByRole('main');
+  await main.getByRole('button', { name: 'Page actions' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Lock everything' }).click();
+  await expect(main.getByRole('button', { name: 'Unlock page' })).toBeVisible();
+
+  await restart(page);
+  await expect(header(page, 'Hours')).toHaveCount(0);
+  await expect(header(page, 'Notes')).toBeVisible();
+});
+
 test('the keyboard reaches the header and edits cells', async ({ page }) => {
   await createDatabase(page, 'Tasks');
   await addProperty(page, 'Text', 'Notes');

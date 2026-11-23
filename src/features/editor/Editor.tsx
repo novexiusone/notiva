@@ -23,27 +23,40 @@ import { commands, type Block, type CommandError } from '@/lib/commands';
 import { displayImageUrl } from '@/lib/imageUrl';
 import { useColorScheme } from '@/lib/useColorScheme';
 
-export type EditorHandle = { focus: () => void };
+export type EditorHandle = { focus: () => void; flush: () => Promise<boolean> };
 
-type EditorProps = { pageId: string; ref?: Ref<EditorHandle> };
+type EditorProps = { pageId: string; readOnly?: boolean; ref?: Ref<EditorHandle> };
 
 /** The content of a page. */
-export function Editor({ pageId, ref }: EditorProps) {
+export function Editor({ pageId, readOnly = false, ref }: EditorProps) {
   const blocks = useBlocks(pageId);
 
   if (!blocks.isSuccess) return null;
   // A fresh editor per page: undo history and selection do not carry over.
-  return <LoadedEditor key={pageId} pageId={pageId} initialBlocks={blocks.data} ref={ref} />;
+  return (
+    <LoadedEditor
+      key={pageId}
+      pageId={pageId}
+      readOnly={readOnly}
+      initialBlocks={blocks.data}
+      ref={ref}
+    />
+  );
 }
 
 /** What inside an embedded database takes clicks of its own. */
 const CONTROLS =
   'button, a, input, textarea, select, [role="tab"], [role="gridcell"], [role="columnheader"], [role="menuitem"]';
 
-function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlocks: Block[] }) {
+function LoadedEditor({
+  pageId,
+  readOnly = false,
+  initialBlocks,
+  ref,
+}: EditorProps & { initialBlocks: Block[] }) {
   const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme();
-  const autosave = useAutosave(useSaveBlocks(pageId));
+  const autosave = useAutosave(useSaveBlocks(pageId), 500, !readOnly);
   const [slashQuery, setSlashQuery] = useState('');
   const pages = usePages().data ?? [];
   // What went wrong with the last image or block that was to be added.
@@ -112,7 +125,10 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
     initialContent: initialBlocks.length > 0 ? (initialBlocks as never) : undefined,
   });
 
-  useImperativeHandle(ref, () => ({ focus: () => editor.focus() }), [editor]);
+  useImperativeHandle(ref, () => ({ focus: () => editor.focus(), flush: autosave.flush }), [
+    editor,
+    autosave.flush,
+  ]);
 
   // A block that was selected through its handle stays selected until the
   // selection moves; a click anywhere else on the page ends it too.
@@ -143,7 +159,10 @@ function LoadedEditor({ pageId, initialBlocks, ref }: EditorProps & { initialBlo
           editor={editor}
           theme={colorScheme}
           slashMenu={false}
-          onChange={() => autosave.schedule(() => editor.document as unknown as Block[])}
+          editable={!readOnly}
+          onChange={() => {
+            if (!readOnly) autosave.schedule(() => editor.document as unknown as Block[]);
+          }}
         >
           <SuggestionMenuController<(query: string) => Promise<SlashMenuItem[]>>
             triggerCharacter="/"

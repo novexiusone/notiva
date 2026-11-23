@@ -91,6 +91,31 @@ export function useSetFavorite() {
   };
 }
 
+export function useSetLock() {
+  const queryClient = useQueryClient();
+  const setPages = useSetPages();
+
+  const mutation = useMutation({
+    mutationKey: ['lock-page'],
+    scope: { id: 'lock-page' },
+    mutationFn: ({ id, lock }: { id: string; lock: Page['lock'] }) => commands.setLock(id, lock),
+    onSettled: () => {
+      if (queryClient.isMutating({ mutationKey: ['lock-page'] }) <= 1) {
+        return queryClient.invalidateQueries({ queryKey: pagesKey });
+      }
+    },
+  });
+
+  return (id: string, lock: Page['lock']) => {
+    setPages((pages) => pages.map((page) => (page.id === id ? { ...page, lock } : page)));
+    queryClient.setQueryData<Database>(
+      databaseKeys.database(id),
+      (database) => database && { ...database, page: { ...database.page, lock } },
+    );
+    mutation.mutate({ id, lock });
+  };
+}
+
 export function useUpdateAppearance() {
   const queryClient = useQueryClient();
   const setPages = useSetPages();
