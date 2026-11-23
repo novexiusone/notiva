@@ -75,6 +75,85 @@ describe('CalendarView', () => {
     });
   });
 
+  it('opens the row when its entry is clicked', async () => {
+    const { user } = renderApp(seed());
+
+    await user.click(await screen.findByRole('link', { name: 'Write spec' }));
+
+    expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveValue('Write spec');
+  });
+
+  it('creates a row with the clicked day as its date', async () => {
+    const { user } = renderApp(seed());
+    const grid = await screen.findByRole('grid', { name: 'November 2026' });
+
+    const day = grid.querySelector<HTMLElement>('[data-calendar-date="2026-11-17"]');
+    expect(day).not.toBeNull();
+    await user.click(day!);
+
+    await waitFor(async () => {
+      const rows = await commands.listRows('db');
+      expect(rows).toHaveLength(3);
+      expect(rows[2].cells.due).toBe('2026-11-17');
+    });
+  });
+
+  it('treats a deleted stored date property as unchosen', async () => {
+    renderApp(seed({ ...calendar, datePropertyId: 'deleted' }));
+
+    await screen.findByRole('grid', { name: 'November 2026' });
+    expect(screen.getByRole('combobox', { name: 'Date property' })).toHaveValue('');
+    expect(screen.getByRole('button', { name: /Create a row on.*November 17/ })).toBeDisabled();
+    expect(screen.queryByText(/rows? without a date/)).toBeNull();
+  });
+
+  it('disables calendar and entry writes when everything is locked', async () => {
+    renderApp({
+      ...seed(),
+      pages: seed().pages.map((entry) =>
+        entry.id === 'db' ? { ...entry, lock: 'all' as const } : entry,
+      ),
+    });
+
+    await screen.findByRole('grid', { name: 'November 2026' });
+    expect(screen.getByRole('combobox', { name: 'Date property' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Create a row on.*November 17/ })).toBeDisabled();
+    expect(screen.getByRole('link', { name: 'Write spec' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('does not let an everything lock on a row write its date', async () => {
+    renderApp({
+      ...seed(),
+      pages: seed().pages.map((entry) =>
+        entry.id === 'r1' ? { ...entry, lock: 'all' as const } : entry,
+      ),
+    });
+
+    await screen.findByRole('grid', { name: 'November 2026' });
+    expect(screen.getByRole('link', { name: 'Write spec' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /Create a row on.*November 17/ })).toBeEnabled();
+  });
+
+  it('keeps cells, day creation and the date property editable under content locks', async () => {
+    renderApp({
+      ...seed(),
+      pages: seed().pages.map((entry) =>
+        entry.id === 'db' || entry.id === 'r1' ? { ...entry, lock: 'content' as const } : entry,
+      ),
+    });
+
+    await screen.findByRole('grid', { name: 'November 2026' });
+    expect(screen.getByRole('combobox', { name: 'Date property' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Create a row on.*November 17/ })).toBeEnabled();
+    expect(screen.getByRole('link', { name: 'Write spec' })).not.toHaveAttribute('aria-disabled');
+  });
+
   it('changes and saves the date property', async () => {
     const { user } = renderApp(seed());
 

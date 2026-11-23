@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router';
+import { usePages } from '@/features/pages/api';
 import {
   addMonths,
   eachDayOfInterval,
@@ -13,12 +13,14 @@ import {
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useCreateRow, useSetCell } from '@/features/databases/api';
 import { dateLocale } from '@/features/databases/properties/format';
 import { TABLE_INSET, TABLE_MAX_HEIGHT } from '@/features/databases/table/layout';
 import { useDatabaseTable } from '@/features/databases/useDatabaseTable';
 import type { ViewRendererProps } from '@/features/databases/viewTypes';
 import type { ViewConfig } from '@/lib/commands';
 import { cn } from '@/lib/utils';
+import { CalendarEntry } from './CalendarEntry';
 import { toCalendarEntries } from './toCalendarEntries';
 
 const emptyCalendar: Extract<ViewConfig, { type: 'calendar' }> = {
@@ -40,11 +42,19 @@ export function CalendarView({
   const { t, i18n } = useTranslation();
   const config = view?.config.type === 'calendar' ? view.config : emptyCalendar;
   const { table } = useDatabaseTable(database.properties, rows, config);
+  const createRow = useCreateRow(database.page.id);
+  const setCell = useSetCell(database.page.id);
+  const pages = usePages().data;
+  const rowLocks = new Map((pages ?? []).map((page) => [page.id, page.lock]));
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
+  const [dropDate, setDropDate] = useState<string | null>(null);
   const locale = dateLocale(i18n.language);
   const dateProperties = database.properties.filter((property) => property.type === 'date');
+  const datePropertyId = dateProperties.some((property) => property.id === config.datePropertyId)
+    ? config.datePropertyId
+    : null;
   const visibleRows = table.getRowModel().rows.map((row) => row.original);
-  const { entries, withoutDate } = toCalendarEntries(visibleRows, config.datePropertyId);
+  const { entries, withoutDate } = toCalendarEntries(visibleRows, datePropertyId);
   const byDate = useMemo(() => {
     const grouped = new Map<string, typeof entries>();
     for (const entry of entries) {
@@ -60,6 +70,14 @@ export function CalendarView({
   });
   const weekdays = days.slice(0, 7);
   const title = format(month, 'LLLL yyyy', { locale });
+
+  const createOn = (date: string) => {
+    if (readOnly || datePropertyId === null) return;
+    const propertyId = datePropertyId;
+    createRow.mutate(undefined, {
+      onSuccess: (created) => setCell(created.id, propertyId, date),
+    });
+  };
 
   return (
     <section
@@ -96,14 +114,14 @@ export function CalendarView({
         </div>
         <select
           aria-label={t('databases.calendar.dateProperty')}
-          value={config.datePropertyId ?? ''}
+          value={datePropertyId ?? ''}
           disabled={readOnly || dateProperties.length === 0}
           onChange={(event) =>
             onConfigChange({ ...config, datePropertyId: event.target.value || null })
           }
           className="border-input bg-background h-7 max-w-48 rounded-md border px-2 text-xs"
         >
-          {config.datePropertyId === null ? (
+          {datePropertyId === null ? (
             <option value="">{t('databases.calendar.chooseDate')}</option>
           ) : null}
           {dateProperties.map((property) => (
@@ -119,7 +137,7 @@ export function CalendarView({
         </p>
       ) : (
         <div className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
-          <div role="grid" aria-label={title} className="min-w-[700px]">
+          <div role="grid" aria-label={title} className="min-w-[560px]">
             <div role="row" className="grid grid-cols-7">
               {weekdays.map((day) => (
                 <div
@@ -140,26 +158,45 @@ export function CalendarView({
                       role="gridcell"
                       key={stored}
                       data-calendar-date={stored}
+                      onClick={(event) => {
+                        if (!(event.target as Element).closest('a')) createOn(stored);
+                      }}
                       className={cn(
                         'border-border min-h-24 border-r border-b p-1',
                         !isSameMonth(day, month) && 'bg-muted/40 text-muted-foreground',
+                        dropDate === stored && 'bg-accent',
                       )}
                     >
-                      <div
-                        className={cn('px-1 text-xs', isToday(day) && 'text-primary font-semibold')}
+                      <button
+                        type="button"
+                        aria-label={t('databases.calendar.createOn', {
+                          date: format(day, 'PPPP', { locale }),
+                        })}
+                        disabled={readOnly || datePropertyId === null}
+                        className={cn(
+                          'hover:bg-accent flex size-6 items-center justify-center rounded-full px-1 text-xs disabled:hover:bg-transparent',
+                          isToday(day) && 'text-primary font-semibold',
+                        )}
                       >
                         {format(day, 'd')}
-                      </div>
+                      </button>
                       <div className="mt-1 flex flex-col gap-0.5">
                         {(byDate.get(stored) ?? []).map((entry) => (
-                          <Link
+                          <CalendarEntry
                             key={entry.id}
-                            to="/page/$pageId"
-                            params={{ pageId: entry.id }}
-                            className="bg-primary text-primary-foreground block truncate rounded-sm px-1.5 py-1 text-left text-xs"
-                          >
-                            {entry.title || t('pages.untitled')}
-                          </Link>
+                            entry={entry}
+                            editable={
+                              !readOnly &&
+                              datePropertyId !== null &&
+                              rowLocks.get(entry.id) !== 'all'
+                            }
+                            onMove={(date) => {
+                              if (datePropertyId !== null) {
+                                setCell(entry.id, datePropertyId, date);
+                              }
+                            }}
+                            onTargetChange={setDropDate}
+                          />
                         ))}
                       </div>
                     </div>
@@ -170,7 +207,7 @@ export function CalendarView({
           </div>
         </div>
       )}
-      {withoutDate > 0 && config.datePropertyId !== null ? (
+      {withoutDate > 0 && datePropertyId !== null ? (
         <p className="text-muted-foreground px-1 pt-2 text-xs">
           {t('databases.calendar.withoutDate', { count: withoutDate })}
         </p>
