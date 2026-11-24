@@ -77,6 +77,21 @@ export function KanbanDragProvider({
           return true;
         };
 
+        const unchangedSource =
+          source.index === source.initialIndex &&
+          source.sortable.group === source.sortable.initialGroup;
+        if (unchangedSource && event.nativeEvent instanceof PointerEvent) {
+          const { clientX, clientY } = event.nativeEvent;
+          if (event.operation.shape?.initial.containsPoint({ x: clientX, y: clientY })) return;
+        }
+        if (
+          unchangedSource &&
+          !(event.nativeEvent instanceof PointerEvent) &&
+          isSortable(target) &&
+          target.id === source.id
+        ) {
+          return;
+        }
         if (moveTo(target)) return;
         if (!source.manager || !(event.nativeEvent instanceof PointerEvent)) return;
         const pointer = event.nativeEvent;

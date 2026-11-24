@@ -434,3 +434,28 @@ test('sorted locks allow cell edits without allowing position moves or all-locke
   expect((await storedDatabase(page)).cells.three?.status).toBe('done');
   expect(await storedRowIds(page)).toEqual(before);
 });
+
+test('a real pointer drag away and back onto the same card leaves order unchanged', async ({
+  page,
+}) => {
+  await seed(page);
+  const todo = column(page, 'Todo');
+  const before = await storedRowIds(page);
+  const columnBox = (await todo.boundingBox())!;
+  const cardBox = (await todo.getByRole('link', { name: 'Write spec' }).boundingBox())!;
+  const handle = todo.getByRole('button', { name: 'Drag Write spec' });
+  const handleBox = (await handle.boundingBox())!;
+  const start = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
+  const target = { x: cardBox.x + 24, y: cardBox.y + cardBox.height / 2 };
+  await handle.hover();
+  await page.mouse.move(start.x, start.y, { steps: 3 });
+  await page.mouse.down();
+  await page.mouse.move(start.x + 5, start.y + 5, { steps: 2 });
+  await page.mouse.move(columnBox.x - 24, start.y, { steps: 8 });
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await page.mouse.up();
+
+  await page.waitForTimeout(700);
+  expect(await cardTitles(todo)).toEqual(['Write spec', 'Build it']);
+  expect(await storedRowIds(page)).toEqual(before);
+});
