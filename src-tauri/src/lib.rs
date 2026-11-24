@@ -76,6 +76,7 @@ pub fn run() {
             commands::databases::update_property,
             commands::databases::list_rows,
             commands::databases::create_row,
+            commands::databases::move_row,
             commands::databases::set_cell,
             commands::databases::delete_property,
             commands::databases::delete_select_option,

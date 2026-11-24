@@ -318,6 +318,9 @@ export const commands = {
   /** The rows of a database in their manual order. */
   listRows: (databaseId: string) => invoke<Row[]>('list_rows', { databaseId }),
   createRow: (databaseId: string) => invoke<Row>('create_row', { databaseId }),
+  /** Moves a row after another row of its database, or to the start for `null`. */
+  moveRow: (rowId: string, afterRowId: string | null) =>
+    invoke<void>('move_row', { rowId, afterRowId }),
   /** `null` empties the cell. */
   setCell: (rowId: string, propertyId: string, value: CellValue) =>
     invoke<void>('set_cell', { rowId, propertyId, value }),

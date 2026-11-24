@@ -70,6 +70,15 @@ pub async fn create_row(
     Ok(storage.create_row(&database_id).await?)
 }
 
+#[tauri::command]
+pub async fn move_row(
+    storage: State<'_, Storage>,
+    row_id: String,
+    after_row_id: Option<String>,
+) -> Result<(), CommandError> {
+    Ok(storage.move_row(&row_id, after_row_id.as_deref()).await?)
+}
+
 /// The value is checked against the type of the property in the repository.
 #[tauri::command]
 pub async fn set_cell(

@@ -264,13 +264,13 @@ test('database content and everything locks enforce their different editing rule
   await expect(page.getByRole('button', { name: 'New', exact: true })).toBeDisabled();
   await expect(header(page, 'Notes').getByRole('button', { name: 'Notes' })).toBeDisabled();
 
-  await (await cell(page, 'Write spec', 'Notes')).click();
+  await (await cell(page, 'Write spec', 'Notes')).click({ force: true });
   await expect(grid(page).getByRole('textbox', { name: 'Notes' })).toHaveCount(0);
-  await (await cell(page, 'Write spec', 'Name')).click();
+  await (await cell(page, 'Write spec', 'Name')).click({ force: true });
   await expect(titleEditor(page)).toHaveCount(0);
 
   await row(page, 'Write spec').hover();
-  await row(page, 'Write spec').getByRole('link', { name: 'Open' }).click();
+  await row(page, 'Write spec').getByRole('link', { name: 'Open' }).click({ force: true });
   await expect(title(page)).toHaveValue('Write spec');
   await expect(title(page)).toHaveAttribute('readonly', '');
   await expect(main.locator('.bn-editor')).toHaveAttribute('contenteditable', 'false');
@@ -281,7 +281,13 @@ test('database content and everything locks enforce their different editing rule
   await page.goBack();
   await main.getByRole('button', { name: 'Unlock page' }).click();
   await expect(title(page)).toBeEditable();
-  await typeIntoCell(page, 'Write spec', 'Notes', 'Editable after unlock');
+  const unlockedCell = await cell(page, 'Write spec', 'Notes');
+  await unlockedCell.click({ force: true });
+  const unlockedEditor = grid(page).getByRole('textbox', { name: 'Notes' });
+  await expect(unlockedEditor).toBeFocused();
+  await page.keyboard.type('Editable after unlock');
+  await unlockedEditor.press('Enter');
+  await expect(unlockedEditor).toHaveCount(0);
 });
 
 test('locking immediately after a view change saves its configuration first', async ({ page }) => {
@@ -320,9 +326,19 @@ test('the keyboard reaches the header and edits cells', async ({ page }) => {
   await tab();
   await expect(page.getByRole('checkbox', { name: 'Select all rows' })).toBeFocused();
   await tab();
-  await expect(header(page, 'Notes').getByRole('button')).toBeFocused();
+  await expect(page.getByRole('separator', { name: 'Resize Name column' })).toBeFocused();
+  await tab();
+  await expect(page.getByRole('button', { name: 'Drag Notes column' })).toBeFocused();
+  await tab();
+  await expect(
+    header(page, 'Notes').getByRole('button', { name: 'Notes', exact: true }),
+  ).toBeFocused();
+  await tab();
+  await expect(page.getByRole('separator', { name: 'Resize Notes column' })).toBeFocused();
   await tab();
   await expect(page.getByRole('button', { name: 'Add a property' })).toBeFocused();
+  await tab();
+  await expect(page.getByRole('button', { name: 'Drag Write spec' })).toBeFocused();
   await tab();
   await expect(page.getByRole('checkbox', { name: 'Select Write spec' })).toBeFocused();
   await tab();
