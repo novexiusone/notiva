@@ -26,9 +26,17 @@ export function moveCard(
   if (fromIndex === -1 || target.index < 0 || target.index > to.rowIds.length) return null;
 
   if (from.key === to.key) {
-    if (sorted || fromIndex === target.index || target.index === from.rowIds.length) return null;
+    if (sorted || fromIndex === target.index) return null;
     const reordered = [...from.rowIds];
     reordered.splice(fromIndex, 1);
+    if (target.index === from.rowIds.length) {
+      if (fromIndex === from.rowIds.length - 1) return null;
+      return {
+        rowId: source.rowId,
+        value: from.value,
+        position: { afterRowId: reordered[reordered.length - 1] ?? null },
+      };
+    }
     reordered.splice(target.index, 0, source.rowId);
     return {
       rowId: source.rowId,

@@ -31,8 +31,8 @@ export function useKanbanCardSortable({
     type: KANBAN_CARD_TYPE,
     accept: (source) => acceptsCard(source, group, sorted),
     disabled: { draggable: !canDrag, droppable: readOnly },
-    // Sorted boards keep React's sorted DOM; the first default plugin handles keyboard targeting.
-    plugins: sorted ? ([keyboard]) => (keyboard ? [keyboard] : []) : undefined,
+    // React owns card order; the first default plugin handles keyboard targeting.
+    plugins: ([keyboard]) => (keyboard ? [keyboard] : []),
     transition: null,
   });
 }

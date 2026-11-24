@@ -390,3 +390,47 @@ test('sort suppresses same-column positioning but still allows a value-only move
   await expect.poll(async () => (await storedDatabase(page)).cells.one?.status).toBe('done');
   expect(await storedRowIds(page)).toEqual(before);
 });
+
+test('a real pointer drop on the empty bottom of a column appends the card', async ({ page }) => {
+  await seed(page);
+  const todo = column(page, 'Todo');
+  const columnBox = (await todo.boundingBox())!;
+  const newBox = (await todo.getByRole('button', { name: 'New', exact: true }).boundingBox())!;
+  const handle = todo.getByRole('button', { name: 'Drag Write spec' });
+  const handleBox = (await handle.boundingBox())!;
+  const start = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
+  const target = { x: columnBox.x + columnBox.width - 16, y: newBox.y + newBox.height / 2 };
+  await handle.hover();
+  await page.mouse.move(start.x, start.y, { steps: 3 });
+  await page.mouse.down();
+  await page.mouse.move(start.x + 5, start.y + 5, { steps: 2 });
+  await page.mouse.move(columnBox.x - 24, start.y, { steps: 6 });
+  await page.mouse.move(columnBox.x - 24, target.y, { steps: 8 });
+  await page.mouse.move(target.x, target.y, { steps: 4 });
+  await page.mouse.up();
+
+  await expect.poll(() => cardTitles(todo)).toEqual(['Build it', 'Write spec']);
+  await expect.poll(() => storedRowIds(page)).toEqual(['two', 'one', 'three']);
+});
+
+test('sorted locks allow cell edits without allowing position moves or all-locked sources', async ({
+  page,
+}) => {
+  await seed(page, { sorted: true });
+  await setLock(page, 'two', 'content');
+  await setLock(page, 'three', 'all');
+  const before = await storedRowIds(page);
+
+  await expect(column(page, 'Todo').getByRole('button', { name: 'Drag Build it' })).toBeVisible();
+  await expect(column(page, 'Done').getByRole('button', { name: 'Drag Test it' })).toHaveCount(0);
+  await dragBefore(
+    page,
+    column(page, 'Todo').getByRole('button', { name: 'Drag Build it' }),
+    column(page, 'Done').getByRole('link', { name: 'Test it' }),
+  );
+
+  await expect(column(page, 'Done').getByRole('link', { name: 'Build it' })).toBeVisible();
+  await expect.poll(async () => (await storedDatabase(page)).cells.two?.status).toBe('done');
+  expect((await storedDatabase(page)).cells.three?.status).toBe('done');
+  expect(await storedRowIds(page)).toEqual(before);
+});

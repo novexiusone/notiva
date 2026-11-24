@@ -27,6 +27,15 @@ describe('moveCard', () => {
     );
   });
 
+  it('appends after the last remaining card for the column end sentinel', () => {
+    expect(moveCard(columns, { rowId: 'one', group: 'todo' }, { group: 'todo', index: 3 })).toEqual(
+      { rowId: 'one', value: 'todo', position: { afterRowId: 'three' } },
+    );
+    expect(
+      moveCard(columns, { rowId: 'three', group: 'todo' }, { group: 'todo', index: 3 }),
+    ).toBeNull();
+  });
+
   it('moves a card to the start when reordered up a column', () => {
     expect(
       moveCard(columns, { rowId: 'three', group: 'todo' }, { group: 'todo', index: 0 }),

@@ -43,8 +43,8 @@ export function KanbanView({
   const setCell = useSetCell(databaseId);
   const pages = usePages();
   const queryClient = useQueryClient();
-  const unlockedRowIds = useMemo(
-    () => new Set(pages.data?.filter((page) => page.lock === 'none').map((page) => page.id)),
+  const rowLocks = useMemo(
+    () => new Map((pages.data ?? []).map((page) => [page.id, page.lock])),
     [pages.data],
   );
   const sorted = readSorts(config, database.properties).length > 0;
@@ -153,8 +153,11 @@ export function KanbanView({
   const move = ({ source, target }: KanbanDrag) => {
     const change = moveCard(moveColumns, source, target, { sorted });
     const row = change && rows.find((candidate) => candidate.id === change.rowId);
-    if (!change || !row || readOnly || !unlockedRowIds.has(row.id)) return;
+    if (!change || !row || readOnly) return;
+    const lock = rowLocks.get(row.id);
+    if (lock === undefined) return;
     const changeValue = change.value !== (row.cells[groupProperty.id] ?? null);
+    if ((changeValue && lock === 'all') || (change.position && lock !== 'none')) return;
     if (!changeValue && !change.position) return;
     return cardMutation.mutateAsync({
       rowId: row.id,
@@ -163,6 +166,10 @@ export function KanbanView({
       changeValue,
       position: change.position,
     });
+  };
+  const canDrag = (rowId: string) => {
+    const lock = rowLocks.get(rowId);
+    return !readOnly && (lock === 'none' || (sorted && lock === 'content'));
   };
 
   return (
@@ -204,7 +211,7 @@ export function KanbanView({
               group={group.key}
               sorted={sorted}
               readOnly={readOnly}
-              canDrag={(rowId) => !readOnly && unlockedRowIds.has(rowId)}
+              canDrag={canDrag}
               onNew={() => addRow(group.value)}
             />
           ))}
