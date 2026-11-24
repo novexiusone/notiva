@@ -260,7 +260,8 @@
       "setup": "Wähle eine Auswahl-Property, um dieses Board zu gruppieren.",
       "createSelect": "Auswahl-Property anlegen",
       "selectName": "Status",
-      "columns": "Spalten"
+      "columns": "Spalten",
+      "dragCard": "{{title}} ziehen"
     },
     "row": {
       "properties": "Eigenschaften",

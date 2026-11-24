@@ -1,15 +1,56 @@
 import { Link } from '@tanstack/react-router';
+import { GripVertical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useKanbanCardSortable } from '@/features/databases/dnd/useKanbanSortable';
 import type { TableColumn } from '@/features/databases/useDatabaseTable';
 import type { Row } from '@/lib/commands';
 import { cn } from '@/lib/utils';
 
-export function KanbanCard({ row, properties }: { row: Row; properties: readonly TableColumn[] }) {
+export function KanbanCard({
+  row,
+  properties,
+  index,
+  group,
+  canDrag,
+  sorted,
+  readOnly,
+}: {
+  row: Row;
+  properties: readonly TableColumn[];
+  index: number;
+  group: string;
+  canDrag: boolean;
+  sorted: boolean;
+  readOnly: boolean;
+}) {
   const { t } = useTranslation();
   const title = row.title || t('pages.untitled');
+  const { ref, handleRef, isDragging } = useKanbanCardSortable({
+    id: row.id,
+    index,
+    group,
+    canDrag,
+    sorted,
+    readOnly,
+  });
 
   return (
-    <div role="listitem" data-row-id={row.id} className="group relative">
+    <div
+      ref={ref}
+      role="listitem"
+      data-row-id={row.id}
+      className={cn('group relative', isDragging && 'z-10 opacity-60')}
+    >
+      {canDrag ? (
+        <button
+          ref={handleRef}
+          type="button"
+          aria-label={t('databases.kanban.dragCard', { title })}
+          className="border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring/60 absolute top-2 right-2 z-10 flex size-6 cursor-grab items-center justify-center rounded-sm border opacity-0 outline-none group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 active:cursor-grabbing"
+        >
+          <GripVertical size={14} aria-hidden />
+        </button>
+      ) : null}
       <Link
         to="/page/$pageId"
         params={{ pageId: row.id }}
