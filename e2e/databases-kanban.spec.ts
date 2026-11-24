@@ -220,19 +220,17 @@ test('cards show visible properties, open rows, and New uses the column value', 
   await column(page, 'Todo').getByRole('button', { name: 'New', exact: true }).click();
   await expect(column(page, 'Todo').getByRole('link', { name: 'Untitled' })).toBeVisible();
   await expect.poll(async () => (await storedRowIds(page)).length).toBe(4);
-  expect(
-    Object.values((await storedDatabase(page)).cells).some((cells) => cells.status === 'todo'),
-  ).toBe(true);
+  const todoRowId = (await storedRowIds(page)).find((id) => !['one', 'two', 'three'].includes(id))!;
+  await expect.poll(async () => (await storedDatabase(page)).cells[todoRowId]?.status).toBe('todo');
 
   await column(page, 'No Status').getByRole('button', { name: 'New', exact: true }).click();
   await expect(column(page, 'No Status').getByRole('link', { name: 'Untitled' })).toBeVisible();
   await expect.poll(async () => (await storedRowIds(page)).length).toBe(5);
-  const rowIds = await storedRowIds(page);
-  const stored = await storedDatabase(page);
-  const emptyRowId = rowIds.find(
-    (id) => !['one', 'two', 'three'].includes(id) && stored.cells[id] === undefined,
+  const emptyRowId = (await storedRowIds(page)).find(
+    (id) => !['one', 'two', 'three', todoRowId].includes(id),
   )!;
-  expect(stored.cells[emptyRowId]).toBeUndefined();
+  const stored = await storedDatabase(page);
+  expect(stored.cells[emptyRowId]?.status).toBeUndefined();
 
   await column(page, 'Todo').getByRole('link', { name: 'Write spec' }).click();
   await expect(page.getByRole('main').getByRole('textbox', { name: 'Page title' })).toHaveValue(

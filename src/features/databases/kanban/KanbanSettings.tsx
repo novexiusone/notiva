@@ -1,4 +1,5 @@
 import { Columns3 } from 'lucide-react';
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -56,6 +57,7 @@ export function KanbanColumnsSetting({
   onConfigChange: (config: ViewConfig) => void;
 }) {
   const { t } = useTranslation();
+  const id = useId();
   const groups = [
     ...property.options.map((option) => ({ key: option.id, name: option.name })),
     { key: '', name: t('databases.group.empty', { name: property.name }) },
@@ -86,11 +88,11 @@ export function KanbanColumnsSetting({
               className="hover:bg-accent flex items-center gap-2 rounded-sm px-1.5 py-1"
             >
               <Checkbox
-                id={`kanban-column-${group.key || 'empty'}`}
+                id={`${id}-${group.key || 'empty'}`}
                 checked={!hidden.has(group.key)}
                 onCheckedChange={(checked) => setHidden(group.key, checked !== true)}
               />
-              <label htmlFor={`kanban-column-${group.key || 'empty'}`} className="flex-1 text-sm">
+              <label htmlFor={`${id}-${group.key || 'empty'}`} className="flex-1 text-sm">
                 {group.name}
               </label>
             </li>

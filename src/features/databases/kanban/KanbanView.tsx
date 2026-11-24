@@ -43,8 +43,8 @@ export function KanbanView({
   const setCell = useSetCell(databaseId);
   const pages = usePages();
   const queryClient = useQueryClient();
-  const rowLocks = useMemo(
-    () => new Map((pages.data ?? []).map((page) => [page.id, page.lock])),
+  const unlockedRowIds = useMemo(
+    () => new Set(pages.data?.filter((page) => page.lock === 'none').map((page) => page.id)),
     [pages.data],
   );
   const sorted = readSorts(config, database.properties).length > 0;
@@ -153,7 +153,7 @@ export function KanbanView({
   const move = ({ source, target }: KanbanDrag) => {
     const change = moveCard(moveColumns, source, target, { sorted });
     const row = change && rows.find((candidate) => candidate.id === change.rowId);
-    if (!change || !row || readOnly || (rowLocks.get(row.id) ?? 'none') !== 'none') return;
+    if (!change || !row || readOnly || !unlockedRowIds.has(row.id)) return;
     const changeValue = change.value !== (row.cells[groupProperty.id] ?? null);
     if (!changeValue && !change.position) return;
     return cardMutation.mutateAsync({
@@ -174,7 +174,7 @@ export function KanbanView({
       <div
         role="group"
         aria-label={t('databases.kanban.settings')}
-        className="flex items-center gap-2"
+        className="flex flex-wrap items-center gap-2"
       >
         <KanbanGroupSelect
           config={config}
@@ -204,7 +204,7 @@ export function KanbanView({
               group={group.key}
               sorted={sorted}
               readOnly={readOnly}
-              canDrag={(rowId) => !readOnly && (rowLocks.get(rowId) ?? 'none') === 'none'}
+              canDrag={(rowId) => !readOnly && unlockedRowIds.has(rowId)}
               onNew={() => addRow(group.value)}
             />
           ))}

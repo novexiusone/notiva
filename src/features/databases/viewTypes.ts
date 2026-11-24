@@ -30,8 +30,7 @@ type ViewTypeDefinition = {
 
 /**
  * The view types this version can show. A stored view of another type is
- * listed in the tabs but shows a notice. #65 (kanban) and #66 (calendar) add
- * one entry each.
+ * listed in the tabs but shows a notice. #66 (calendar) adds its entry separately.
  */
 const definitions: Partial<Record<ViewType, ViewTypeDefinition>> = {
   table: { Renderer: TableView, grouping: true },
