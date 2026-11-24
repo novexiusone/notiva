@@ -253,6 +253,15 @@
       "collapse": "Zuklappen",
       "expand": "Aufklappen"
     },
+    "kanban": {
+      "board": "Kanban-Board",
+      "settings": "Board-Einstellungen",
+      "chooseGroup": "Auswahl-Property wählen",
+      "setup": "Wähle eine Auswahl-Property, um dieses Board zu gruppieren.",
+      "createSelect": "Auswahl-Property anlegen",
+      "selectName": "Status",
+      "columns": "Spalten"
+    },
     "row": {
       "properties": "Eigenschaften",
       "empty": "Leer",

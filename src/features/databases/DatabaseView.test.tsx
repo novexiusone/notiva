@@ -788,7 +788,10 @@ describe('the views of a database', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add a view' }));
     // Only the types this version can show are offered.
-    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Table']);
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Table',
+      'Board',
+    ]);
     await user.click(screen.getByRole('menuitem', { name: 'Table' }));
 
     await waitFor(async () => expect(await tab('Table')).toHaveAttribute('aria-selected', 'true'));
@@ -835,19 +838,18 @@ describe('the views of a database', () => {
   });
 
   it('shows a notice for a view type this version cannot show yet', async () => {
-    const kanban: ViewConfig = {
+    const calendar: ViewConfig = {
       version: 1,
-      type: 'kanban',
+      type: 'calendar',
       filters: [],
       sorts: [],
       properties: [],
-      groupPropertyId: 'status',
-      hiddenGroups: [],
+      datePropertyId: 'due',
     };
     renderApp({
       ...withViews,
-      views: [view('v1', 'All', 0), view('k', 'Board', 1, kanban)],
-      path: '/page/db?view=k',
+      views: [view('v1', 'All', 0), view('c', 'Calendar', 1, calendar)],
+      path: '/page/db?view=c',
     });
 
     expect(await screen.findByRole('status')).toHaveTextContent(
