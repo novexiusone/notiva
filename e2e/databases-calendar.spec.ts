@@ -24,8 +24,11 @@ const tab = (page: Page, name: string) =>
 
 async function cell(page: Page, rowName: string, column: string) {
   const grid = page.getByRole('grid', { name: 'Tasks' });
-  await expect(grid.getByRole('columnheader', { name: column, exact: true })).toBeVisible();
-  const index = (await grid.getByRole('columnheader').allTextContents()).indexOf(column);
+  const property = grid.getByRole('button', { name: column, exact: true });
+  await expect(property).toBeVisible();
+  const index = await property.evaluate(
+    (button) => Number(button.closest('[role="columnheader"]')?.getAttribute('aria-colindex')) - 1,
+  );
   expect(index, `column ${column}`).toBeGreaterThanOrEqual(0);
   return grid.getByRole('row', { name: rowName, exact: true }).getByRole('gridcell').nth(index);
 }
