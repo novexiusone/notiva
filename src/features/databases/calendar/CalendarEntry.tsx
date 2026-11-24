@@ -36,7 +36,7 @@ export function CalendarEntry({
       const date = dateAt(event);
       if (date != null && date !== entry.date) onMove(date);
     }
-    didDrag.current = current.moved;
+    didDrag.current = move && current.moved;
     drag.current = null;
     setDragging(false);
     onTargetChange(null);
@@ -49,7 +49,6 @@ export function CalendarEntry({
     <Link
       to="/page/$pageId"
       params={{ pageId: entry.id }}
-      aria-disabled={!editable || undefined}
       draggable={false}
       onDragStart={(event) => event.preventDefault()}
       onClick={(event) => {

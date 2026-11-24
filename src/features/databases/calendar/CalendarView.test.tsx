@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { commands, type ViewConfig } from '@/lib/commands';
 import { database, renderApp, row } from '@/test/renderApp';
 
@@ -83,6 +83,25 @@ describe('CalendarView', () => {
     expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveValue('Write spec');
   });
 
+  it('does not suppress keyboard activation after a cancelled drag', async () => {
+    const { user } = renderApp(seed());
+    const entry = await screen.findByRole('link', { name: 'Write spec' });
+
+    const nativeElementFromPoint = document.elementFromPoint;
+    document.elementFromPoint = () => null;
+    try {
+      fireEvent.pointerDown(entry, { pointerId: 1, button: 0, clientX: 0, clientY: 0 });
+      fireEvent.pointerMove(entry, { pointerId: 1, clientX: 20, clientY: 20 });
+      fireEvent.pointerCancel(entry, { pointerId: 1 });
+      entry.focus();
+      await user.keyboard('{Enter}');
+
+      expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveValue('Write spec');
+    } finally {
+      document.elementFromPoint = nativeElementFromPoint;
+    }
+  });
+
   it('creates a row with the clicked day as its date', async () => {
     const { user } = renderApp(seed());
     const grid = await screen.findByRole('grid', { name: 'November 2026' });
@@ -107,21 +126,25 @@ describe('CalendarView', () => {
     expect(screen.queryByText(/rows? without a date/)).toBeNull();
   });
 
-  it('disables calendar and entry writes when everything is locked', async () => {
-    renderApp({
+  it('disables calendar and entry writes but not row navigation when everything is locked', async () => {
+    const { user } = renderApp({
       ...seed(),
       pages: seed().pages.map((entry) =>
         entry.id === 'db' ? { ...entry, lock: 'all' as const } : entry,
       ),
     });
 
-    await screen.findByRole('grid', { name: 'November 2026' });
+    const entry = await screen.findByRole('link', { name: 'Write spec' });
     expect(screen.getByRole('combobox', { name: 'Date property' })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Create a row on.*November 17/ })).toBeDisabled();
-    expect(screen.getByRole('link', { name: 'Write spec' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    expect(entry).not.toHaveAttribute('aria-disabled');
+    fireEvent.pointerDown(entry, { pointerId: 1, button: 0 });
+    fireEvent.pointerMove(entry, { pointerId: 1, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(entry, { pointerId: 1 });
+    expect((await commands.listRows('db'))[0].cells.due).toBe('2026-11-14');
+
+    await user.click(entry);
+    expect(await screen.findByRole('textbox', { name: 'Page title' })).toHaveValue('Write spec');
   });
 
   it('does not let an everything lock on a row write its date', async () => {
@@ -132,12 +155,13 @@ describe('CalendarView', () => {
       ),
     });
 
-    await screen.findByRole('grid', { name: 'November 2026' });
-    expect(screen.getByRole('link', { name: 'Write spec' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    const entry = await screen.findByRole('link', { name: 'Write spec' });
+    expect(entry).not.toHaveAttribute('aria-disabled');
     expect(screen.getByRole('button', { name: /Create a row on.*November 17/ })).toBeEnabled();
+    fireEvent.pointerDown(entry, { pointerId: 1, button: 0 });
+    fireEvent.pointerMove(entry, { pointerId: 1, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(entry, { pointerId: 1 });
+    expect((await commands.listRows('db'))[0].cells.due).toBe('2026-11-14');
   });
 
   it('keeps cells, day creation and the date property editable under content locks', async () => {
