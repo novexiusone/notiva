@@ -788,7 +788,10 @@ describe('the views of a database', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add a view' }));
     // Only the types this version can show are offered.
-    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Table']);
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Table',
+      'Calendar',
+    ]);
     await user.click(screen.getByRole('menuitem', { name: 'Table' }));
 
     await waitFor(async () => expect(await tab('Table')).toHaveAttribute('aria-selected', 'true'));
