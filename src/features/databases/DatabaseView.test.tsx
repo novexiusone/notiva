@@ -791,6 +791,7 @@ describe('the views of a database', () => {
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Table',
       'Board',
+      'Calendar',
     ]);
     await user.click(screen.getByRole('menuitem', { name: 'Table' }));
 

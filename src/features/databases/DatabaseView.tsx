@@ -160,10 +160,15 @@ function DatabaseViews({
 
   const add = (type: ViewType) => {
     if (readOnly) return;
+    const config = emptyViewConfig(type);
+    if (config.type === 'calendar') {
+      config.datePropertyId =
+        database.properties.find((property) => property.type === 'date')?.id ?? null;
+    }
     createView.mutate(
       {
         name: newViewName(views, t(`databases.views.types.${type}`)),
-        config: emptyViewConfig(type),
+        config,
       },
       { onSuccess: (view) => select(view.id) },
     );

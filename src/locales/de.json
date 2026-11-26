@@ -129,6 +129,17 @@
       "createOption": "„{{name}}“ anlegen",
       "noOptions": "Noch keine Optionen"
     },
+    "calendar": {
+      "dateProperty": "Datums-Eigenschaft",
+      "chooseDate": "Datums-Eigenschaft wählen",
+      "noDateProperties": "Füge in der Tabelle eine Datums-Eigenschaft hinzu, um den Kalender zu nutzen.",
+      "previousMonth": "Voriger Monat",
+      "nextMonth": "Nächster Monat",
+      "today": "Heute",
+      "createOn": "Zeile am {{date}} anlegen",
+      "withoutDate_one": "{{count}} Zeile ohne Datum",
+      "withoutDate_other": "{{count}} Zeilen ohne Datum"
+    },
     "table": {
       "selectRow": "{{title}} auswählen",
       "dragRow": "{{title}} ziehen",
