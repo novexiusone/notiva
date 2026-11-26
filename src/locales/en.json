@@ -264,6 +264,16 @@
       "collapse": "Collapse",
       "expand": "Expand"
     },
+    "kanban": {
+      "board": "Kanban board",
+      "settings": "Board settings",
+      "chooseGroup": "Choose a select property",
+      "setup": "Choose a select property to group this board.",
+      "createSelect": "Create select property",
+      "selectName": "Status",
+      "columns": "Columns",
+      "dragCard": "Drag {{title}}"
+    },
     "row": {
       "properties": "Properties",
       "empty": "Empty",

@@ -1,5 +1,6 @@
 import { CalendarDays, SquareKanban, Table2, type LucideIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
+import { KanbanView } from '@/features/databases/kanban/KanbanView';
 import { CalendarView } from '@/features/databases/calendar/CalendarView';
 import { TableView } from '@/features/databases/table/TableView';
 import type { Database, Row, View, ViewConfig } from '@/lib/commands';
@@ -30,11 +31,11 @@ type ViewTypeDefinition = {
 
 /**
  * The view types this version can show. A stored view of another type is
- * listed in the tabs but shows a notice. #65 (kanban) and #66 (calendar) add
- * one entry each.
+ * listed in the tabs but shows a notice. #66 (calendar) adds its entry separately.
  */
 const definitions: Partial<Record<ViewType, ViewTypeDefinition>> = {
   table: { Renderer: TableView, grouping: true },
+  kanban: { Renderer: KanbanView, grouping: false },
   calendar: { Renderer: CalendarView, grouping: false },
 };
 
